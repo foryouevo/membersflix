@@ -41,6 +41,16 @@ export function formatBytes(bytes: number) {
   return `${i === 0 ? valor : valor.toFixed(1)} ${unidades[i]}`;
 }
 
+/**
+ * Remove o prefixo numérico de ordenação (ex: "05 - ", "12- ") do início de
+ * títulos de curso/módulo/aula antes de exibir — só na camada visual. Os
+ * dados no banco continuam com o prefixo (nome_original, ordem etc.), usados
+ * normalmente para ordenação e navegação; isso afeta apenas o texto exibido.
+ */
+export function formatTitulo(titulo: string) {
+  return titulo.replace(/^\d+\s*-\s*/, '');
+}
+
 export function initials(name: string) {
   return name
     .split(' ')

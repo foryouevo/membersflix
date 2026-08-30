@@ -1,10 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
+  Check,
   Play,
   Download,
   FileText,
@@ -16,7 +18,8 @@ import {
   File as FileIcon,
 } from 'lucide-react';
 import VideoPlayer from '@/components/membros/VideoPlayer';
-import { formatDuration, formatBytes } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/client';
+import { formatDuration, formatBytes, formatTitulo } from '@/lib/utils';
 import type { Aula, Curso, Documento, Modulo } from '@/types';
 
 // Ícone por tipo de arquivo (doc.tipo guarda o mimetype, ex: "application/pdf",
@@ -59,12 +62,66 @@ export default function PlayerPageClient({
   proximaAulaId: string | null;
   posicaoInicial: number;
 }) {
+  const supabase = createClient();
+
+  // `concluida` chega do servidor no carregamento da página; `overrides` guarda
+  // só o que o aluno mudou nesta sessão marcando/desmarcando manualmente pelo
+  // check da sidebar, pra refletir na hora — checkbox, riscado no título e %
+  // do módulo — sem esperar um reload. `salvandoIds` controla o estado de
+  // "gravando" por aula, pra não disparar cliques duplicados enquanto o
+  // upsert no Supabase ainda não voltou.
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [salvandoIds, setSalvandoIds] = useState<Record<string, boolean>>({});
+
+  function estaConcluida(a: { id: string; concluida: boolean }) {
+    return overrides[a.id] ?? a.concluida;
+  }
+
+  // Grava o novo status em `progresso_aulas` (upsert, protegido pela RLS
+  // `progresso_own` — só mexe na linha do próprio aluno). Aplica otimista no
+  // estado local antes de esperar a resposta e reverte se a gravação falhar.
+  // Não envia `segundo_atual`: marcar/desmarcar manualmente não deve
+  // sobrescrever a posição de reprodução salva pelo VideoPlayer.
+  async function alternarConcluida(aulaAlvo: { id: string }, novoValor: boolean) {
+    const valorAnterior = overrides[aulaAlvo.id];
+    setOverrides((prev) => ({ ...prev, [aulaAlvo.id]: novoValor }));
+    setSalvandoIds((prev) => ({ ...prev, [aulaAlvo.id]: true }));
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { error } = user
+      ? await supabase.from('progresso_aulas').upsert(
+          {
+            aluno_id: user.id,
+            aula_id: aulaAlvo.id,
+            curso_id: curso.id,
+            concluida: novoValor,
+            atualizado_em: new Date().toISOString(),
+          },
+          { onConflict: 'aluno_id,aula_id' }
+        )
+      : { error: new Error('Sessão expirada.') };
+
+    setSalvandoIds((prev) => {
+      const { [aulaAlvo.id]: _omit, ...resto } = prev;
+      return resto;
+    });
+
+    if (error) {
+      setOverrides((prev) => ({ ...prev, [aulaAlvo.id]: valorAnterior ?? !novoValor }));
+      return false;
+    }
+    return true;
+  }
+
   // A barra lateral mostra só o módulo da aula atual (não a lista completa
   // de módulos do curso) — pra navegar entre módulos diferentes, o aluno usa
   // o botão "← {curso.titulo}" no topo do vídeo, que volta pra tela do curso.
   const moduloAtual = modulos.find((m) => m.id === modulo.id);
   const aulasDoModulo = moduloAtual?.aulas ?? [];
-  const assistidasModulo = aulasDoModulo.filter((a) => a.concluida).length;
+  const assistidasModulo = aulasDoModulo.filter(estaConcluida).length;
   const progressoModulo = aulasDoModulo.length > 0 ? Math.round((assistidasModulo / aulasDoModulo.length) * 100) : 0;
 
   // "MÓDULO X • Aula X de Y": posição do módulo entre os módulos do curso
@@ -101,10 +158,16 @@ export default function PlayerPageClient({
 
           <div className="mt-4 flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                Módulo {numeroModulo} • Aula {numeroAulaNoModulo} de {aulasDoModulo.length}
-              </p>
-              <h1 className="mt-1 text-2xl font-bold text-white">{aula.titulo}</h1>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-surface-high px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-on-variant">
+                  Módulo {numeroModulo}
+                </span>
+                <span className="px-1 text-xs text-on-variant">•</span>
+                <span className="text-[0.7rem] font-semibold tracking-wide text-on-variant">
+                  Aula {numeroAulaNoModulo} de {aulasDoModulo.length}
+                </span>
+              </div>
+              <h1 className="mt-1 text-[1.9rem] font-bold text-white">{formatTitulo(aula.titulo)}</h1>
               {aula.descricao && <p className="mt-1 max-w-2xl text-sm text-on-variant">{aula.descricao}</p>}
             </div>
             <div className="flex shrink-0 gap-2">
@@ -125,12 +188,15 @@ export default function PlayerPageClient({
             </div>
           </div>
 
-          {documentos.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-base font-bold text-white">Documentos e Anexos</h2>
-              <div className="mb-4 mt-2 h-0.5 w-full bg-primary" />
+          {/* Sempre visível, mesmo sem documentos — mantém o espaçamento
+              consistente com o resto da página em vez de deixar um vazio
+              abaixo da descrição. */}
+          <div className="mt-8">
+            <h2 className="text-base font-bold text-white">Documentos e Anexos</h2>
+            <div className="mb-4 mt-2 h-0.5 w-full max-w-[11rem] bg-primary" />
 
-              <div className="space-y-2">
+            {documentos.length > 0 ? (
+              <div className="max-w-[20rem] space-y-2">
                 {documentos.map((doc) => {
                   const Icone = iconeParaDocumento(doc.tipo);
                   return (
@@ -139,7 +205,7 @@ export default function PlayerPageClient({
                       href={doc.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-3 rounded-lg bg-card px-4 py-3 text-sm text-on-surface transition-colors hover:bg-surface-container"
+                      className="group flex items-center gap-3 rounded-[0.6rem] border border-transparent bg-card px-4 py-3 text-sm text-on-surface transition-colors hover:border-primary hover:bg-surface-container"
                     >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-surface-high text-primary">
                         <Icone size={18} />
@@ -150,27 +216,31 @@ export default function PlayerPageClient({
                           <p className="text-xs text-on-variant">{formatBytes(doc.tamanho_bytes)}</p>
                         )}
                       </span>
-                      <Download size={18} className="shrink-0 text-on-variant" />
+                      <Download size={18} className="shrink-0 text-on-variant transition-colors group-hover:text-primary" />
                     </a>
                   );
                 })}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-on-variant">Nenhum documento disponível para esta aula.</p>
+            )}
+          </div>
         </div>
 
-        <aside className="flex w-full shrink-0 flex-col border-t border-border/60 p-6 lg:w-80 lg:overflow-hidden lg:border-l lg:border-t-0">
-          <div className="mb-4 shrink-0 border-b border-border/40 p-6">
-            <p className="truncate text-sm font-bold text-white">{modulo.titulo}</p>
-            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface-high">
+        <aside className="flex w-full shrink-0 flex-col border-t border-border/60 lg:w-80 lg:overflow-hidden lg:border-l lg:border-t-0">
+          <div className="shrink-0 border-b border-border/40 p-6">
+            <p className="truncate text-2xl font-bold text-white">{formatTitulo(modulo.titulo)}</p>
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-high">
               <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressoModulo}%` }} />
             </div>
             <p className="mt-1.5 text-xs text-on-variant">{progressoModulo}% Concluído</p>
           </div>
 
-          <div className="divide-y divide-border/40 p-0 lg:flex-1 lg:overflow-y-auto">
+          <div className="p-0 lg:flex-1 lg:overflow-y-auto">
             {aulasDoModulo.map((a, idx) => {
               const ativa = a.id === aula.id;
+              const concluida = estaConcluida(a);
+              const tituloExibido = formatTitulo(a.titulo);
               // "Tempo restante" usa a última posição salva (posicaoInicial),
               // não a posição ao vivo do player — não temos esse estado aqui,
               // só uma estimativa a partir do progresso salvo até a página
@@ -181,33 +251,59 @@ export default function PlayerPageClient({
               const restante = ativa && a.duracao_segundos > 0 ? Math.max(a.duracao_segundos - posicaoInicial, 0) : 0;
 
               return (
-                <Link
+                <div
                   key={a.id}
-                  href={`/membros/player/${a.id}`}
-                  className={`flex items-center gap-3 border-l-4 px-3 py-3 text-sm transition-colors ${
-                    ativa ? 'border-primary bg-surface-high' : 'border-transparent hover:bg-surface-container'
+                  className={`flex items-start gap-3 border-l-4 px-3 py-3 text-sm transition-colors ${
+                    // !border-* (important): o container pai já usou `divide-y
+                    // divide-border/40` no passado, cujo utilitário `divide-{color}`
+                    // gera uma regra `border-color` (shorthand, as 4 bordas) em todo
+                    // item que tenha um irmão anterior — com especificidade maior que
+                    // uma classe simples, o que sobrescrevia a cor da borda esquerda
+                    // em qualquer item que não fosse o 1º. O `divide-y`/`divide-border/40`
+                    // foi removido do container (não há mais linhas entre os itens),
+                    // mas o !important continua aqui como garantia contra qualquer
+                    // outra classe de borda que venha a ser adicionada no futuro.
+                    ativa ? '!border-primary bg-surface-high' : '!border-transparent hover:bg-surface-container'
                   }`}
                 >
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-container text-xs font-semibold text-on-variant">
-                    {a.concluida ? (
+                  {/* Checkbox sempre clicável, pra qualquer aula da lista (não só a
+                      atual) — é a garantia de que o aluno controla o próprio
+                      progresso manualmente, independente do avanço automático.
+                      É um <button> irmão do <Link> abaixo (não um filho dele) pra
+                      não aninhar elemento interativo dentro de outro. */}
+                  <button
+                    type="button"
+                    onClick={() => alternarConcluida(a, !concluida)}
+                    disabled={!!salvandoIds[a.id]}
+                    aria-pressed={concluida}
+                    aria-label={concluida ? `Desmarcar "${tituloExibido}" como concluída` : `Marcar "${tituloExibido}" como concluída`}
+                    className="group/check relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-container text-xs font-semibold text-on-variant transition-colors hover:bg-surface-high disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {concluida ? (
                       <CheckCircle2 size={18} className="text-primary" />
-                    ) : ativa ? (
-                      <Play size={14} className="text-primary" />
                     ) : (
-                      idx + 1
+                      <>
+                        <span className="group-hover/check:opacity-0">{ativa ? <Play size={14} className="text-primary" /> : idx + 1}</span>
+                        {/* Ícone de check que aparece no hover, convidando a marcar como concluída */}
+                        <Check size={14} className="absolute inset-0 m-auto opacity-0 transition-opacity group-hover/check:opacity-100" />
+                      </>
                     )}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <p className={`truncate font-medium ${ativa ? 'text-primary' : 'text-white'}`}>{a.titulo}</p>
+                  </button>
+                  <Link href={`/membros/player/${a.id}`} className="min-w-0 flex-1">
+                    <p
+                      className={`break-words font-medium ${concluida ? 'text-on-variant line-through' : ativa ? 'text-primary' : 'text-white'}`}
+                    >
+                      {tituloExibido}
+                    </p>
                     {ativa ? (
                       <p className="text-xs text-primary">
-                        Assistindo agora{a.duracao_segundos > 0 ? ` · restam ${formatDuration(restante)}` : ''}
+                        Assistindo agora{a.duracao_segundos > 0 ? ` • ${formatDuration(a.duracao_segundos)}` : ''}
                       </p>
                     ) : (
                       a.duracao_segundos > 0 && <p className="text-xs text-on-variant">{formatDuration(a.duracao_segundos)}</p>
                     )}
-                  </span>
-                </Link>
+                  </Link>
+                </div>
               );
             })}
           </div>

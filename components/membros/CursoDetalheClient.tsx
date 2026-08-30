@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Lock, PlayCircle } from 'lucide-react';
 import AccessModal from '@/components/membros/AccessModal';
 import { useDificultarInspecao } from '@/hooks/useDificultarInspecao';
+import { formatTitulo } from '@/lib/utils';
 import type { Aula, Curso, Documento, Modulo } from '@/types';
 
 type ModuloComAulas = Modulo & { aulas: (Aula & { documentos: Documento[]; concluida: boolean })[] };
@@ -103,10 +104,12 @@ function ModulosCarousel({
 
   return (
     <div className="group/carousel relative">
-      {/* As setas ficam numa faixa própria (px-10 no container de scroll reserva o
-          espaço), nunca coincidindo com a borda de um card, e com z-index acima
-          do z-10 que os cards ganham no hover — senão um card hover perto da
-          borda cobria a seta. */}
+      {/* A seta da direita fica numa faixa própria (pr-10 no container de scroll
+          reserva o espaço), nunca coincidindo com a borda do último card, e com
+          z-index acima do z-10 que os cards ganham no hover — senão um card
+          hover perto da borda cobria a seta. À esquerda não há mais essa faixa
+          (pl-0, de propósito) — a seta esquerda fica sobreposta ao 1º card
+          quando ele existe (canScrollLeft). */}
       {canScrollLeft && (
         <button
           onClick={() => scrollByPage(-1)}
@@ -122,7 +125,7 @@ function ModulosCarousel({
           sem essa folga vertical o hover:scale dos cards ficava cortado em
           cima/embaixo. O container não tem altura fixa, então esse padding só
           dá espaço — não cria scroll vertical. */}
-      <div ref={scrollRef} className="no-scrollbar flex scroll-smooth gap-4 overflow-x-auto px-10 py-4">
+      <div ref={scrollRef} className="no-scrollbar flex scroll-smooth gap-4 overflow-x-auto pl-0 pr-10 py-4">
         {modulos.map((modulo) => (
           <div key={modulo.id} className="w-36 shrink-0 sm:w-44 lg:w-48">
             <ModuloCard
@@ -193,7 +196,7 @@ function ModuloCard({
           </div>
         )}
 
-        <p className="absolute inset-x-0 bottom-2 px-3 text-sm font-semibold leading-tight text-white">{modulo.titulo}</p>
+        <p className="absolute inset-x-0 bottom-2 px-3 text-sm font-semibold leading-tight text-white">{formatTitulo(modulo.titulo)}</p>
 
         {/* Barra de progresso fina na borda inferior do card */}
         <div className="absolute inset-x-0 bottom-0 h-1 bg-surface-high">

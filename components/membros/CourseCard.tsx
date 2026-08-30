@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Lock, Play } from 'lucide-react';
+import { formatTitulo } from '@/lib/utils';
 import type { Curso } from '@/types';
 
 export default function CourseCard({
@@ -42,7 +43,7 @@ export default function CourseCard({
         </div>
       )}
 
-      <p className="mt-1.5 truncate text-xs font-medium text-on-variant group-hover:text-white">{curso.titulo}</p>
+      <p className="mt-1.5 truncate text-xs font-medium text-on-variant group-hover:text-white">{formatTitulo(curso.titulo)}</p>
     </div>
   );
 

@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
-  Instagram,
   MessageCircle,
   ChevronUp,
   ChevronLeft,
@@ -18,7 +17,6 @@ import { cn, initials, buildSupportWhatsappLink } from '@/lib/utils';
 import type { Profile } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 
-const INSTAGRAM_URL = 'https://www.instagram.com/pktoledoo/';
 const COLLAPSE_KEY = 'membros_sidebar_collapsed';
 
 export default function MembrosSidebar({
@@ -131,16 +129,6 @@ export default function MembrosSidebar({
           <Home size={18} />
           Início
         </Link>
-
-        <a
-          href={INSTAGRAM_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 rounded px-3 py-2.5 text-sm font-medium text-on-variant transition-colors hover:bg-surface-container hover:text-white"
-        >
-          <Instagram size={18} />
-          Instagram
-        </a>
 
         {suporteLink ? (
           <a

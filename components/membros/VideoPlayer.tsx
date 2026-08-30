@@ -89,6 +89,19 @@ export default function VideoPlayer(props: Omit<VideoPlayerProps, 'videoUrl'>) {
   return <CustomVideoPlayer {...props} videoUrl={videoUrl} />;
 }
 
+// Avanço automático ao terminar o vídeo (marcar concluída + ir pra próxima
+// aula): implementado abaixo, via `onEnded`, só pra `CustomVideoPlayer`
+// (origem 'upload'/'url_externa', que usa o <ReactPlayer/> e expõe esse
+// evento de verdade). Para o Drive (`DriveIframePlayer`, embaixo) isso NÃO
+// existe: é um <iframe> cross-origin de .../preview, sem nenhuma API
+// postMessage documentada/pública pra "play", "pause" ou "ended" — só o que
+// o próprio Google usa internamente entre os frames dele, sem contrato
+// estável (pode mudar sem aviso, e não dá pra confiar nem verificar que
+// veio de fato do player de vídeo). Também não dá pra simular isso com
+// setTimeout(duracao_segundos): dispararia mesmo se o aluno pausar, voltar
+// o vídeo, ou nem chegar a dar play — seria pior que não ter a funcionalidade.
+// Por isso, pra aulas de origem Drive, a conclusão continua manual: o check
+// clicável de cada aula na sidebar (PlayerPageClient.tsx).
 function DriveIframePlayer({ videoUrl }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const embedUrl = toDriveEmbedUrl(videoUrl) ?? videoUrl;
@@ -119,11 +132,11 @@ function DriveIframePlayer({ videoUrl }: VideoPlayerProps) {
           interferir nos controles do próprio player do Drive (que ficam
           embaixo, fora dessa área). Mesma posição/tamanho/z-index de antes —
           só o preenchimento mudou de preto sólido pra essa marca d'água
-          (favicon.png é quadrado, então cover e contain dão o mesmo
+          (faviconmenor.png é quadrado, então cover e contain dão o mesmo
           resultado aqui: preenche o quadrado de ponta a ponta sem sobra). */}
       <div
         onClick={(e) => e.preventDefault()}
-        style={{ backgroundImage: "url('/favicon.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}
+        style={{ backgroundImage: "url('/faviconmenor.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}
         className="absolute right-0 top-0 z-20 h-[60px] w-[60px] cursor-default"
         aria-hidden
       />
