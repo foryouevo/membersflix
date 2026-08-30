@@ -250,21 +250,23 @@ export default function PlayerPageClient({
               // isso não há estado de cadeado aqui, só concluída/atual/pendente.
               const restante = ativa && a.duracao_segundos > 0 ? Math.max(a.duracao_segundos - posicaoInicial, 0) : 0;
 
+              // Linha divisória entre aulas consecutivas (não depois da última).
+              // Importante: usamos `border-l-{cor}` (só o lado esquerdo, pro
+              // destaque da aula ativa) e `border-b-{cor}` (só o lado de baixo,
+              // pro separador) como utilitários DIRECIONAIS separados — nunca o
+              // atalho `divide-y`/`divide-{cor}` do Tailwind, que gera uma regra
+              // `border-color` (shorthand, as 4 bordas de uma vez) em cada item;
+              // isso já causou um bug aqui antes, sobrescrevendo a cor da borda
+              // esquerda do destaque ativo. Com as duas bordas endereçadas
+              // separadamente, uma nunca pisa na cor da outra.
+              const naoUltima = idx !== aulasDoModulo.length - 1;
+
               return (
                 <div
                   key={a.id}
                   className={`flex items-start gap-3 border-l-4 px-3 py-3 text-sm transition-colors ${
-                    // !border-* (important): o container pai já usou `divide-y
-                    // divide-border/40` no passado, cujo utilitário `divide-{color}`
-                    // gera uma regra `border-color` (shorthand, as 4 bordas) em todo
-                    // item que tenha um irmão anterior — com especificidade maior que
-                    // uma classe simples, o que sobrescrevia a cor da borda esquerda
-                    // em qualquer item que não fosse o 1º. O `divide-y`/`divide-border/40`
-                    // foi removido do container (não há mais linhas entre os itens),
-                    // mas o !important continua aqui como garantia contra qualquer
-                    // outra classe de borda que venha a ser adicionada no futuro.
-                    ativa ? '!border-primary bg-surface-high' : '!border-transparent hover:bg-surface-container'
-                  }`}
+                    ativa ? 'border-l-primary bg-surface-high' : 'border-l-transparent hover:bg-surface-container'
+                  } ${naoUltima ? 'border-b border-b-border/40' : ''}`}
                 >
                   {/* Checkbox sempre clicável, pra qualquer aula da lista (não só a
                       atual) — é a garantia de que o aluno controla o próprio
