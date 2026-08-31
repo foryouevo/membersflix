@@ -34,12 +34,19 @@ export default async function PlayerPage({ params }: { params: { aulaId: string 
   // outras aulas do curso (que também apareceriam na lista lateral se não
   // fossem removidos). O VideoPlayer busca a URL sob demanda via
   // /api/membros/aulas/[aulaId]/video só quando precisa tocar o vídeo.
-  const modulosComStatus = (todosModulos ?? []).map((m) => ({
-    ...m,
-    aulas: (m.aulas ?? [])
-      .sort((a: any, b: any) => a.ordem - b.ordem)
-      .map(({ video_url, ...a }: any) => ({ ...a, concluida: progressoPorAula.get(a.id)?.concluida ?? false })),
-  }));
+  // Módulo "pai" (guarda-chuva) nunca tem aula própria — filtrado aqui pra
+  // não contar como uma posição a mais em "Módulo X" no cabeçalho do player
+  // (ver numeroModulo em PlayerPageClient) nem aparecer com uma lista de
+  // aulas vazia em lugar nenhum.
+  const idsComFilho = new Set((todosModulos ?? []).map((m: any) => m.modulo_pai_id).filter(Boolean));
+  const modulosComStatus = (todosModulos ?? [])
+    .filter((m: any) => !idsComFilho.has(m.id))
+    .map((m) => ({
+      ...m,
+      aulas: (m.aulas ?? [])
+        .sort((a: any, b: any) => a.ordem - b.ordem)
+        .map(({ video_url, ...a }: any) => ({ ...a, concluida: progressoPorAula.get(a.id)?.concluida ?? false })),
+    }));
 
   const todasAulasOrdenadas = modulosComStatus.flatMap((m) => m.aulas);
   const indiceAtual = todasAulasOrdenadas.findIndex((a) => a.id === aula.id);

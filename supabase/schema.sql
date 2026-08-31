@@ -73,8 +73,13 @@ create table if not exists public.modulos (
   capa_url text,
   ordem int not null default 0,
   drive_folder_id text,
+  -- Hierarquia de 2 níveis: um módulo "pai" (guarda-chuva, sem aula própria)
+  -- pode agrupar vários módulos "filho" (que têm aulas de verdade) — ver
+  -- migrations/007_modulo_pai.sql pro contexto completo.
+  modulo_pai_id uuid references public.modulos(id) on delete cascade,
   created_at timestamptz not null default now()
 );
+create index if not exists modulos_modulo_pai_id_idx on public.modulos (modulo_pai_id);
 
 create table if not exists public.aulas (
   id uuid primary key default gen_random_uuid(),
@@ -239,13 +244,21 @@ security definer
 set search_path = public
 stable
 as $$
+  -- Um módulo "pai" (guarda-chuva, sem aula própria — ver modulo_pai_id)
+  -- nunca conta como candidato ao "Módulo 1 liberado no trial": o menor
+  -- `ordem` é escolhido só entre módulos-FOLHA (que não são pai de ninguém),
+  -- senão o aluno em trial podia acabar "liberado" pra um módulo vazio.
   select
     public.is_admin(uid)
     or (select status_pagamento from public.profiles where id = uid) = 'pago'
     or exists (
       select 1 from public.modulos m
       where m.id = mid
-        and m.ordem = (select min(ordem) from public.modulos where curso_id = m.curso_id)
+        and m.ordem = (
+          select min(m2.ordem) from public.modulos m2
+          where m2.curso_id = m.curso_id
+            and not exists (select 1 from public.modulos filho where filho.modulo_pai_id = m2.id)
+        )
     );
 $$;
 

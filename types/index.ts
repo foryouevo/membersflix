@@ -49,6 +49,10 @@ export interface Modulo {
   capa_url: string | null;
   ordem: number;
   drive_folder_id: string | null;
+  // Hierarquia de 2 níveis: null = módulo raiz (ou "pai"/guarda-chuva);
+  // preenchido = este módulo é filho do módulo com esse id. Um módulo pai
+  // nunca tem aula própria — as aulas ficam sempre nos filhos.
+  modulo_pai_id: string | null;
   created_at: string;
 }
 

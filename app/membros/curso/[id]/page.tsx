@@ -57,17 +57,12 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
         .sort((a: any, b: any) => a.ordem - b.ordem)
         .map((a: any) => ({ ...a, concluida: concluidaPorAula.get(a.id) ?? false })),
     }));
-
-    const { data: profile } = await supabase.from('profiles').select('status_pagamento').eq('id', user!.id).maybeSingle();
-    if (profile?.status_pagamento === 'pendente' && modulos.length > 0) {
-      trialModuloUnicoId = modulos.reduce((min: any, m: any) => (m.ordem < min.ordem ? m : min), modulos[0]).id;
-    }
   } else {
     // Estrutura só com títulos (sem video_url/documentos) para exibir o índice mesmo sem acesso.
     const admin = createAdminClient();
     const { data } = await admin
       .from('modulos')
-      .select('id, curso_id, titulo, capa_url, ordem, aulas(id, titulo, ordem, duracao_segundos)')
+      .select('id, curso_id, titulo, capa_url, ordem, modulo_pai_id, aulas(id, titulo, ordem, duracao_segundos)')
       .eq('curso_id', params.id)
       .order('ordem');
     modulos = (data ?? []).map((m: any) => ({
@@ -76,6 +71,21 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
         .sort((a: any, b: any) => a.ordem - b.ordem)
         .map((a: any) => ({ ...a, documentos: [], concluida: false })),
     }));
+  }
+
+  // Módulo "pai" (guarda-chuva, ex: "[02] Filmmaking Avançado") nunca tem
+  // aula própria — as aulas ficam nos filhos — então ele nunca aparece como
+  // card no carrossel: só os módulos-folha (que não são pai de mais
+  // ninguém) aparecem, na mesma sequência de sempre, sem indicação visual
+  // extra de que vieram de dentro de um agrupador.
+  const idsComFilho = new Set(modulos.map((m) => m.modulo_pai_id).filter(Boolean));
+  modulos = modulos.filter((m) => !idsComFilho.has(m.id));
+
+  if (hasAccess) {
+    const { data: profile } = await supabase.from('profiles').select('status_pagamento').eq('id', user!.id).maybeSingle();
+    if (profile?.status_pagamento === 'pendente' && modulos.length > 0) {
+      trialModuloUnicoId = modulos.reduce((min: any, m: any) => (m.ordem < min.ordem ? m : min), modulos[0]).id;
+    }
   }
 
   const todasAulas = modulos.flatMap((m) => m.aulas);
