@@ -38,6 +38,17 @@ export default function CourseCard({
             <Lock size={26} className="text-white" />
           </div>
         )}
+
+        {/* Nome do instrutor, discreto, canto inferior direito da thumbnail
+            — fundo escuro semi-transparente só por trás do texto (não a
+            imagem toda) pra garantir legibilidade sobre qualquer capa, sem
+            depender de gradiente. Some sozinho se o curso não tiver
+            instrutor cadastrado (campo opcional). */}
+        {curso.instrutor_nome && (
+          <span className="absolute bottom-1.5 right-1.5 max-w-[80%] truncate rounded bg-black/65 px-1.5 py-0.5 text-[0.7rem] font-medium text-white/90">
+            {curso.instrutor_nome}
+          </span>
+        )}
       </div>
 
       {hasAccess && typeof progresso === 'number' && (

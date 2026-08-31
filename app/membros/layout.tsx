@@ -19,7 +19,12 @@ export default async function MembrosLayout({ children }: { children: React.Reac
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <MembrosSidebar profile={profile} numeroWhatsapp={config?.numero_whatsapp ?? null} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      {/* pb-24 só no mobile: espaço pra bottom nav flutuante (fixed,
+          ~h-11 de ícone + padding + bottom-4 de respiro) não cobrir o fim do
+          conteúdo ao rolar até o fim da página. md:pb-0 porque lá o menu é
+          o <aside> lateral (MembrosSidebar), sem nada fixo por cima do
+          conteúdo. */}
+      <main className="flex-1 overflow-y-auto pb-24 md:pb-0">{children}</main>
     </div>
   );
 }

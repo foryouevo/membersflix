@@ -56,7 +56,11 @@ export default async function VitrinePage() {
   } = await supabase.auth.getUser();
 
   const [{ data: cursos }, { data: acessosRaw }, { data: aulas }, { data: progresso }, config] = await Promise.all([
-    supabase.from('cursos').select('*').eq('status', 'active').order('ordem'),
+    // categoria:categorias(*) — mesmo padrão de join já usado em
+    // app/membros/curso/[id]/page.tsx e app/admin/cursos/page.tsx. Sem isso
+    // curso.categoria vem undefined (só categoria_id, o uuid cru) e não dá
+    // pra agrupar "Todos os Cursos" por categoria na Home.
+    supabase.from('cursos').select('*, categoria:categorias(*)').eq('status', 'active').order('ordem'),
     supabase.from('acessos_curso').select('curso_id, bloqueado').eq('aluno_id', user!.id),
     supabase.from('aulas').select('id, modulo:modulos(curso_id)'),
     // aula_id/atualizado_em a mais (antes só curso_id/concluida): usados

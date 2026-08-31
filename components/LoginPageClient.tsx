@@ -8,6 +8,10 @@ import { createClient } from '@/lib/supabase/client';
 import { verificarStatusPorEmail } from '@/app/login/actions';
 import TrocarSenhaModal from '@/components/TrocarSenhaModal';
 
+// TESTE VISUAL: true = fundo em degradê (padrão da Home); false = volta pra
+// imagem estática original (/imagens/telalogin.png). Ver bloco no JSX abaixo.
+const USE_GRADIENT_BACKGROUND = true;
+
 export default function LoginPageClient({
   desenvolvidoPor,
   emailContato,
@@ -101,21 +105,38 @@ export default function LoginPageClient({
 
   return (
     <div className="relative flex min-h-screen flex-col bg-background">
-      {/* Imagem cobre a tela inteira (cover/center/no-repeat, sem distorcer —
-          cover preserva a proporção original, só recorta o que sobra). Os
-          elementos geométricos da arte ficam nos cantos opostos (topo-direito
-          e inferior-esquerdo) com o centro praticamente limpo — por isso
-          bg-center funciona bem tanto no card centralizado (desktop) quanto
-          recortando as bordas em telas estreitas (mobile), sem cortar nada
-          de especialmente importante bem no meio. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/imagens/telalogin.png')" }}
-      />
-      {/* Overlay escuro por cima da imagem — garante contraste do texto que
-          fica direto sobre a imagem (logo, subtítulo, rodapé), sem um card
-          atrás. O formulário em si já tem bg-card opaco (abaixo). */}
+      {/* TESTE VISUAL: fundo em degradê (mesmo padrão do banner da Home —
+          VitrinePageClient — bg-gradient-to-br from-primary/25 via-background
+          to-background, + glow radial vermelho no canto superior) no lugar da
+          imagem estática, usando a paleta do tema (background #0f0f0f /
+          primary #e50914). Pra reverter, é só trocar USE_GRADIENT_BACKGROUND
+          pra false abaixo — o bloco da imagem original foi mantido intacto,
+          só fica oculto enquanto a flag estiver true. */}
+      {USE_GRADIENT_BACKGROUND ? (
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-background">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/25 via-background to-background" />
+          <div
+            className="absolute inset-0"
+            style={{ background: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(229,9,20,0.35), transparent 70%)' }}
+          />
+        </div>
+      ) : (
+        /* Imagem cobre a tela inteira (cover/center/no-repeat, sem distorcer —
+           cover preserva a proporção original, só recorta o que sobra). Os
+           elementos geométricos da arte ficam nos cantos opostos (topo-direito
+           e inferior-esquerdo) com o centro praticamente limpo — por isso
+           bg-center funciona bem tanto no card centralizado (desktop) quanto
+           recortando as bordas em telas estreitas (mobile), sem cortar nada
+           de especialmente importante bem no meio. */
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: "url('/imagens/telalogin.png')" }}
+        />
+      )}
+      {/* Overlay escuro por cima do fundo — garante contraste do texto que
+          fica direto sobre ele (logo, subtítulo, rodapé), sem um card atrás.
+          O formulário em si já tem bg-card opaco (abaixo). */}
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-black/45" />
 
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-12">
