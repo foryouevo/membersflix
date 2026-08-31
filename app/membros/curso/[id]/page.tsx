@@ -9,7 +9,10 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: curso } = await supabase.from('cursos').select('*').eq('id', params.id).maybeSingle();
+  // categoria:categorias(*) — junta a categoria real do curso (usada no badge
+  // do hero); antes a query só trazia categoria_id, então curso.categoria
+  // nunca vinha preenchido apesar do tipo Curso já prever esse campo.
+  const { data: curso } = await supabase.from('cursos').select('*, categoria:categorias(*)').eq('id', params.id).maybeSingle();
   if (!curso) notFound();
 
   const { data: acesso } = await supabase

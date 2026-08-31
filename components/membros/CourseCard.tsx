@@ -17,7 +17,10 @@ export default function CourseCard({
   progresso?: number;
   onClickLocked: (curso: Curso) => void;
 }) {
-  const imagemCard = curso.capa_url || curso.thumbnail_url;
+  // thumbnail_url é a imagem certa pra card pequeno (cadastrada como tal no
+  // admin); capa_url é o banner 16:9 do hero de /membros/curso/[id] — só
+  // entra aqui como fallback se o curso não tiver thumbnail cadastrada.
+  const imagemCard = curso.thumbnail_url || curso.capa_url;
 
   const content = (
     <div className="group relative w-full shrink-0 cursor-pointer transition-transform duration-200 hover:z-10 hover:scale-105">

@@ -106,7 +106,7 @@ export default function CursoFormModal({
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-on-variant">Descrição</label>
+          <label className="mb-1 block text-xs font-medium text-on-variant">Resumo do curso</label>
           <textarea
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}

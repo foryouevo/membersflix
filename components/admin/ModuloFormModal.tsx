@@ -42,7 +42,15 @@ export default function ModuloFormModal({
     setErro(null);
     setLoading(true);
     try {
-      const input = { titulo, capa_url: capaUrl || null };
+      // Sanitiza antes de salvar: tira emoji/símbolo decorativo colado no
+      // título (ex: colar "🔸Exercícios" sem querer) e o espaço duplo que
+      // sobra depois de removê-lo — é o mesmo tipo de sujeira que já achamos
+      // salva em alguns módulos direto no banco.
+      const tituloLimpo = titulo
+        .replace(/\p{Extended_Pictographic}/gu, '')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim();
+      const input = { titulo: tituloLimpo, capa_url: capaUrl || null };
       if (isEdit && modulo) {
         await atualizarModulo(modulo.id, cursoId, input);
       } else {

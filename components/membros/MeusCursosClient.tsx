@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import CourseCard from '@/components/membros/CourseCard';
 import AccessModal from '@/components/membros/AccessModal';
 import type { Curso } from '@/types';
@@ -23,7 +24,12 @@ export default function MeusCursosClient({
       <h1 className="mb-6 text-2xl font-bold text-white">Meus Cursos</h1>
 
       {cursos.length === 0 ? (
-        <p className="text-sm text-on-variant">Você ainda não tem cursos liberados.</p>
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-sm text-on-variant">Você ainda não possui cursos.</p>
+          <Link href="/membros/vitrine" className="btn-primary">
+            Explorar catálogo
+          </Link>
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {cursos.map((curso) => (

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
+import { Play } from 'lucide-react';
 import CourseCard from '@/components/membros/CourseCard';
 import AccessModal from '@/components/membros/AccessModal';
 import type { Curso } from '@/types';
@@ -14,29 +16,61 @@ export default function VitrinePageClient({
   acessos,
   progressoPorCurso,
   numeroWhatsapp,
-  bannerPlataformaUrl,
+  bannerCapaUrl,
+  bannerBadge,
+  bannerResumo,
+  continuarAssistindoHref,
+  temProgresso,
 }: {
   meusCursos: Curso[];
   todosCursos: Curso[];
   acessos: Record<string, boolean>;
   progressoPorCurso: Record<string, number>;
   numeroWhatsapp: string | null;
-  bannerPlataformaUrl: string | null;
+  bannerCapaUrl: string | null;
+  bannerBadge: string | null;
+  bannerResumo: string | null;
+  continuarAssistindoHref: string;
+  temProgresso: boolean;
 }) {
   const [modalCurso, setModalCurso] = useState<Curso | null>(null);
 
   return (
     <div className="pb-12">
-      {bannerPlataformaUrl && (
-        <div className="relative mb-8 aspect-[21/6] w-full overflow-hidden">
-          <Image src={bannerPlataformaUrl} alt="MembersFlix" fill priority quality={100} className="object-cover" />
-          {/* Fade suave na base do banner, dissolvendo na cor de fundo da página
-              (#0f0f0f, mesma do body/bg-background) em vez de um corte seco. */}
-          <div className="absolute inset-x-0 bottom-0 h-[35%] bg-gradient-to-b from-transparent to-background" />
-        </div>
-      )}
+      {/* Banner da Home: capa (Configurações > Banner da Página Inicial) sem
+          texto embutido — badge, logo e resumo são renderizados aqui, por
+          cima da imagem, não fazem mais parte do arquivo enviado pelo admin.
+          Sem capa configurada ainda, cai num gradiente vermelho/preto em vez
+          de ficar sem fundo nenhum. Altura vem do padding do conteúdo (não
+          de aspect-ratio fixo), então acomoda o botão novo sem espremer. */}
+      <div className="relative w-full overflow-hidden bg-gradient-to-br from-primary/25 via-background to-background">
+        {bannerCapaUrl && <Image src={bannerCapaUrl} alt="" fill priority quality={100} className="object-cover" />}
+        {/* Overlay: mais escuro embaixo/esquerda (onde o texto fica), mais
+            claro pro resto — garante legibilidade sobre qualquer capa,
+            mesmo variante clara. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/50 to-black/10" />
 
-      <div className="px-4 sm:px-16">
+        <div className="relative flex flex-col items-start gap-4 px-4 py-14 sm:px-16 sm:py-20">
+          {/* Mesma classe do badge de categoria em CursoDetalheClient.tsx
+              (ex: "FIGMA") — consistência visual entre os dois banners. */}
+          {bannerBadge && (
+            <span className="rounded-full bg-surface-high px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-on-variant">
+              {bannerBadge}
+            </span>
+          )}
+
+          <Image src="/logo.png" alt="MembersFlix" width={420} height={84} priority className="h-14 w-auto object-contain sm:h-20" />
+
+          {bannerResumo && <p className="max-w-xl text-sm text-on-variant sm:text-base">{bannerResumo}</p>}
+
+          <Link href={continuarAssistindoHref} className="btn-primary mt-2 flex items-center gap-2">
+            <Play size={18} className="fill-white" />
+            {temProgresso ? 'Continuar assistindo' : 'Assistir Agora'}
+          </Link>
+        </div>
+      </div>
+
+      <div className="px-4 sm:px-16" style={{ background: 'linear-gradient(0deg,rgba(15, 15, 15, 1) 0%, rgba(1, 1, 1, 1) 100%)' }}>
         <section className="mb-10">
           <h2 className="mb-4 text-lg font-semibold text-white">Meus Cursos</h2>
           {meusCursos.length > 0 ? (

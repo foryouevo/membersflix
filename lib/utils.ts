@@ -46,9 +46,17 @@ export function formatBytes(bytes: number) {
  * títulos de curso/módulo/aula antes de exibir — só na camada visual. Os
  * dados no banco continuam com o prefixo (nome_original, ordem etc.), usados
  * normalmente para ordenação e navegação; isso afeta apenas o texto exibido.
+ *
+ * Também remove qualquer emoji/símbolo decorativo que sobre logo no início
+ * depois do prefixo (ex: "03 - 🔸Exercicios e Desafios" → "Exercicios e
+ * Desafios") — alguns módulos tinham isso salvo direto no título no banco
+ * (já corrigido lá também), mas essa é uma rede de segurança pra não
+ * depender só da limpeza manual se algo parecido acontecer de novo.
  */
 export function formatTitulo(titulo: string) {
-  return titulo.replace(/^\d+\s*-\s*/, '');
+  return titulo
+    .replace(/^\d+\s*-\s*/, '')
+    .replace(/^\p{Extended_Pictographic}+\s*/u, '');
 }
 
 export function initials(name: string) {

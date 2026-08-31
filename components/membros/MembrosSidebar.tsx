@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
+  PlaySquare,
   MessageCircle,
   ChevronUp,
   ChevronLeft,
@@ -73,9 +74,35 @@ export default function MembrosSidebar({
 
   const suporteLink = numeroWhatsapp ? buildSupportWhatsappLink(numeroWhatsapp) : null;
 
+  // Estilo compartilhado por todo item de navegação (expandido e recolhido):
+  // hover em cinza mais claro que o fundo da sidebar, cantos arredondados,
+  // transição suave (transition-colors já cobre background-color). O
+  // border-l-4 existe sempre (mesmo inativo, só transparente) — assim o
+  // ícone/texto não "pula" de posição quando o item vira o ativo. O item
+  // ativo mantém fundo + borda vermelha sempre; o inativo só mostra os
+  // dois enquanto o mouse está em cima (hover:border-l-primary junto com
+  // hover:bg-surface-container) — puro CSS via Tailwind, some sozinho
+  // quando o mouse sai, sem precisar de state/JS pra isso.
+  function itemClasses(active: boolean) {
+    return cn(
+      'flex items-center gap-3 rounded border-l-4 px-3 py-2.5 text-sm font-medium transition-colors',
+      active
+        ? 'border-l-primary bg-surface-container text-white'
+        : 'border-l-transparent text-on-variant hover:border-l-primary hover:bg-surface-container hover:text-white'
+    );
+  }
+  function itemClassesCollapsed(active: boolean) {
+    return cn(
+      'flex h-9 w-9 items-center justify-center rounded border-l-4 transition-colors',
+      active
+        ? 'border-l-primary bg-surface-container text-white'
+        : 'border-l-transparent text-on-variant hover:border-l-primary hover:bg-surface-container hover:text-white'
+    );
+  }
+
   if (collapsed) {
     return (
-      <aside className="flex h-full w-14 shrink-0 flex-col items-center gap-1 border-r border-border/60 bg-surface-lowest py-4">
+      <aside className="flex h-screen w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border/60 bg-surface-lowest py-4">
         <button
           onClick={toggleCollapsed}
           title="Expandir menu"
@@ -84,24 +111,40 @@ export default function MembrosSidebar({
           <ChevronRight size={18} />
         </button>
         <div className="my-2 h-px w-8 bg-border/60" />
-        <Link
-          href="/membros/vitrine"
-          title="Início"
-          className={cn(
-            'flex h-9 w-9 items-center justify-center rounded',
-            pathname.startsWith('/membros/vitrine')
-              ? 'bg-surface-high text-white'
-              : 'text-on-variant hover:bg-surface-container hover:text-white'
-          )}
-        >
+        <Link href="/membros/vitrine" title="Início" className={itemClassesCollapsed(pathname.startsWith('/membros/vitrine'))}>
           <Home size={18} />
         </Link>
+        <Link
+          href="/membros/meus-cursos"
+          title="Meus Cursos"
+          className={itemClassesCollapsed(pathname.startsWith('/membros/meus-cursos'))}
+        >
+          <PlaySquare size={18} />
+        </Link>
+        {suporteLink ? (
+          <a
+            href={suporteLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Suporte"
+            className={itemClassesCollapsed(false)}
+          >
+            <MessageCircle size={18} />
+          </a>
+        ) : (
+          <span
+            title="Número de suporte não configurado pelo admin"
+            className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded border-l-4 border-l-transparent text-on-variant/50"
+          >
+            <MessageCircle size={18} />
+          </span>
+        )}
       </aside>
     );
   }
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border/60 bg-surface-lowest">
+    <aside className="flex h-screen w-60 shrink-0 flex-col overflow-y-auto border-r border-border/60 bg-surface-lowest">
       <div className="flex items-center justify-between px-6 py-6">
         <Link href="/membros/vitrine" className="shrink-0">
           <Image src="/logo.png" alt="MembersFlix" width={140} height={28} priority className="h-8 w-auto object-contain" />
@@ -117,17 +160,14 @@ export default function MembrosSidebar({
       <div className="border-t border-border/60" />
 
       <nav className="flex-1 space-y-1 px-4 py-4">
-        <Link
-          href="/membros/vitrine"
-          className={cn(
-            'flex items-center gap-3 rounded px-3 py-2.5 text-sm font-medium transition-colors',
-            pathname.startsWith('/membros/vitrine')
-              ? 'bg-surface-high text-white'
-              : 'text-on-variant hover:bg-surface-container hover:text-white'
-          )}
-        >
+        <Link href="/membros/vitrine" className={itemClasses(pathname.startsWith('/membros/vitrine'))}>
           <Home size={18} />
           Início
+        </Link>
+
+        <Link href="/membros/meus-cursos" className={itemClasses(pathname.startsWith('/membros/meus-cursos'))}>
+          <PlaySquare size={18} />
+          Meus Cursos
         </Link>
 
         {suporteLink ? (
@@ -135,7 +175,7 @@ export default function MembrosSidebar({
             href={suporteLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-3 rounded px-3 py-2.5 text-sm font-medium text-on-variant transition-colors hover:bg-surface-container hover:text-white"
+            className={itemClasses(false)}
           >
             <MessageCircle size={18} />
             Suporte
@@ -143,7 +183,7 @@ export default function MembrosSidebar({
         ) : (
           <span
             title="Número de suporte não configurado pelo admin"
-            className="flex cursor-not-allowed items-center gap-3 rounded px-3 py-2.5 text-sm font-medium text-on-variant/50"
+            className="flex cursor-not-allowed items-center gap-3 rounded border-l-4 border-l-transparent px-3 py-2.5 text-sm font-medium text-on-variant/50"
           >
             <MessageCircle size={18} />
             Suporte

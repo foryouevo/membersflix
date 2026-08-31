@@ -4,6 +4,10 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
+.transition-colors {
+  align-items: center;
+}
+
 * {
   border-color: #333333;
 }
@@ -43,6 +47,38 @@ body {
 
 .locked-card {
   filter: grayscale(1);
+}
+
+/* Campos de Email/Senha da tela de login: fundo #131313 explícito (mais
+   escuro que o bg-card padrão de .input-field), texto digitado claro e
+   placeholder em cinza médio — só nesses dois campos, não em .input-field
+   como um todo (usado em telas de admin também). Inclui o hack do
+   -webkit-autofill: o Chrome/Edge ignoram background-color normal em campo
+   autopreenchido e forçam um fundo claro (branco/amarelo) por conta
+   própria — só um box-shadow inset gigante (efetivamente pintando por
+   cima) consegue sobrescrever isso; o transition com delay enorme evita um
+   "flash" da cor clara antes do fundo escuro ser aplicado.
+   border-color aqui é a mesma cor do fundo do card (#1c1c1c, bg-card) — não
+   preta/transparente à toa: isso faz o input se fundir com o card ao redor
+   em vez de sumir estranhamente por cima do fundo mais escuro do próprio
+   campo (#131313). O foco continua vermelho — .input-field já define
+   `focus:border-primary`, que tem :focus na seletor (mais específico que
+   essa regra) e por isso sempre vence quando o campo está focado. */
+.login-input-dark {
+  background-color: #131313 !important;
+  border-color: #1c1c1c;
+  color: #e5e2e1;
+}
+.login-input-dark::placeholder {
+  color: #a0a0a0;
+}
+.login-input-dark:-webkit-autofill,
+.login-input-dark:-webkit-autofill:hover,
+.login-input-dark:-webkit-autofill:focus {
+  -webkit-text-fill-color: #e5e2e1;
+  -webkit-box-shadow: 0 0 0px 1000px #131313 inset;
+  box-shadow: 0 0 0px 1000px #131313 inset;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 @layer components {

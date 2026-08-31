@@ -1,110 +1,71 @@
-'use client';
+import { createClient } from '@/lib/supabase/server';
+import LoginPageClient from '@/components/LoginPageClient';
 
-import { useState } from 'react';
-import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+type LoginConfig = {
+  desenvolvido_por: string | null;
+  email_contato: string | null;
+  telefone_contato: string | null;
+  termos_uso_url: string | null;
+  numero_whatsapp: string | null;
+};
 
-export default function LoginPage() {
-  const router = useRouter();
-  const supabase = createClient();
-  const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
-  const [lembrar, setLembrar] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+// Busca a config da tela de login: o rodapé (Configurações > Rodapé da Tela
+// de Login) e o número de WhatsApp do suporte (Configurações > Integração
+// com WhatsApp — mesmo campo já usado em outros lugares do sistema, ex.
+// MembrosSidebar/AccessModal), usado no modal de "Precisa trocar sua
+// senha?". Isolada num try/catch próprio e nunca propaga erro pra fora: se
+// a migration das colunas novas ainda não rodou no banco, se a query
+// falhar, ou se a criação do client do Supabase der problema por qualquer
+// motivo, a tela de login não pode ficar em branco por causa disso — todo
+// mundo precisa conseguir logar mesmo sem essa config.
+async function buscarLoginConfig(): Promise<LoginConfig> {
+  const vazio: LoginConfig = {
+    desenvolvido_por: null,
+    email_contato: null,
+    telefone_contato: null,
+    termos_uso_url: null,
+    numero_whatsapp: null,
+  };
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErro(null);
-    setLoading(true);
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('configuracoes')
+      .select('desenvolvido_por, email_contato, telefone_contato, termos_uso_url, numero_whatsapp')
+      .eq('id', 1)
+      .maybeSingle();
 
     if (error) {
-      setErro('Email ou senha inválidos.');
-      setLoading(false);
-      return;
+      console.error('[login] Falha ao buscar configuracoes (seguindo com fallback vazio):', error.message);
+      return vazio;
     }
 
-    router.replace('/');
-    router.refresh();
+    return {
+      desenvolvido_por: data?.desenvolvido_por ?? null,
+      email_contato: data?.email_contato ?? null,
+      telefone_contato: data?.telefone_contato ?? null,
+      termos_uso_url: data?.termos_uso_url ?? null,
+      numero_whatsapp: data?.numero_whatsapp ?? null,
+    };
+  } catch (err) {
+    console.error('[login] Erro inesperado ao buscar configuracoes (seguindo com fallback vazio):', err);
+    return vazio;
   }
+}
+
+// Server Component: essa config é só um extra (rodapé + modal), então busca
+// ela isolada (buscarLoginConfig nunca lança) antes de renderizar — o form
+// em si (estado/submit) mora no client component.
+export default async function LoginPage() {
+  const config = await buscarLoginConfig();
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-background">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-20"
-        style={{
-          backgroundImage:
-            "url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect width=%22100%22 height=%22100%22 fill=%22%230f0f0f%22/></svg>')",
-        }}
-      />
-
-      <header className="relative z-10 px-6 py-6 sm:px-16">
-        <Image src="/logo.png" alt="MembersFlix" width={180} height={36} priority className="h-8 w-auto object-contain" />
-      </header>
-
-      <main className="relative z-10 flex flex-1 items-center justify-center px-4 pb-16">
-        <div className="w-full max-w-md rounded-lg border-t-2 border-t-primary bg-card p-8 shadow-overlay">
-          <h1 className="mb-6 text-2xl font-bold text-white">Entrar</h1>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <input
-              type="email"
-              required
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input-field"
-              autoComplete="email"
-            />
-            <input
-              type="password"
-              required
-              placeholder="Senha"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              className="input-field"
-              autoComplete="current-password"
-            />
-
-            {erro && <p className="text-sm text-error">{erro}</p>}
-
-            <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base">
-              {loading ? 'Entrando...' : 'Entrar'}
-            </button>
-
-            <div className="flex items-center justify-between pt-1 text-sm">
-              <label className="flex items-center gap-2 text-on-variant">
-                <input
-                  type="checkbox"
-                  checked={lembrar}
-                  onChange={(e) => setLembrar(e.target.checked)}
-                  className="h-4 w-4 rounded border-border bg-card accent-primary"
-                />
-                Lembrar-me
-              </label>
-              <a href="#" className="text-on-variant hover:text-white">
-                Precisa de ajuda?
-              </a>
-            </div>
-          </form>
-        </div>
-      </main>
-
-      <footer className="relative z-10 flex flex-col items-center justify-between gap-2 border-t border-border/50 px-6 py-4 text-xs text-on-variant sm:flex-row sm:px-16">
-        <span>Dúvidas? Ligue para 0800 123 4567</span>
-        <div className="flex gap-6">
-          <a href="#" className="hover:text-white">
-            Termos de Uso
-          </a>
-          <a href="#" className="hover:text-white">
-            Privacidade
-          </a>
-        </div>
-      </footer>
-    </div>
+    <LoginPageClient
+      desenvolvidoPor={config.desenvolvido_por}
+      emailContato={config.email_contato}
+      telefoneContato={config.telefone_contato}
+      termosUsoUrl={config.termos_uso_url}
+      numeroWhatsapp={config.numero_whatsapp}
+    />
   );
 }

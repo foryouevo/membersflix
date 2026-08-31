@@ -101,6 +101,13 @@ export interface Configuracoes {
   id: number;
   numero_whatsapp: string | null;
   banner_plataforma_url: string | null;
+  desenvolvido_por: string | null;
+  email_contato: string | null;
+  telefone_contato: string | null;
+  termos_uso_url: string | null;
+  banner_capa_url: string | null;
+  banner_badge: string | null;
+  banner_resumo: string | null;
 }
 
 export interface VitrineSecao {
