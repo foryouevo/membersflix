@@ -36,7 +36,23 @@ const config: Config = {
         error: '#ffb4ab',
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        // var(--font-poppins): a custom property que next/font gera em
+        // app/layout.tsx — mesma fonte referenciada em app/globals.css
+        // (regra `body`), então `font-sans`/o preflight do Tailwind e o
+        // `body` explícito nunca ficam dessincronizados.
+        sans: ['var(--font-poppins)', 'sans-serif'],
+      },
+      fontWeight: {
+        // Redefine o PESO que `font-bold` aplica (era 700, o padrão do
+        // Tailwind) — não troca o nome da classe. Feito aqui em vez de
+        // trocar `font-bold` por `font-semibold` em cada um dos ~20
+        // arquivos que já usam a classe hoje: fonte única de verdade, sem
+        // risco de esquecer alguma ocorrência (inclusive as que ficam
+        // dentro de template strings condicionais, tipo `${ativo ?
+        // 'font-bold' : ...}`, que um find/replace no código poderia não
+        // pegar direito). Qualquer `font-bold` novo que alguém escrever
+        // depois também já nasce com 600, sem precisar lembrar da regra.
+        bold: '600',
       },
       borderRadius: {
         sm: '0.25rem',

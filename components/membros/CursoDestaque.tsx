@@ -33,16 +33,17 @@ export default function CursoDestaque({
   onClickComprar: () => void;
 }) {
   return (
-    // h-[85vh] (era h-[480px]/md:h-[600px], dois valores fixos por
-    // breakpoint — agora um só, relativo à altura da viewport, igual em
-    // mobile e desktop): o texto continua ancorado embaixo (bottom-0 mais
-    // abaixo), então uma altura maior só mostra mais da imagem acima dele,
-    // sem ficar "vazio" nem desproporção nenhuma. rounded-xl de volta
-    // (cantos arredondados) — o wrapper em VitrinePageClient voltou a ter
-    // padding lateral, então o card não é mais edge-to-edge; cantos retos
-    // não faziam mais sentido com respiro visível nas laterais. object-cover
-    // cobre essa caixa do jeito que for, sem depender de proporção nenhuma.
-    <div className="relative h-[85vh] w-full overflow-hidden rounded-xl bg-surface-high">
+    // h-[60vh] no mobile (abaixo de 640px) / sm:h-[85vh] no desktop/tablet
+    // — mais baixo numa tela pequena, senão o card sozinho ocupa quase a
+    // tela inteira antes do aluno ver qualquer curso da lista. O texto
+    // continua ancorado embaixo (bottom-0 mais abaixo), então a altura
+    // menor só mostra menos da imagem acima dele, sem cortar nada do
+    // conteúdo (logo/categoria/título/botão continuam com o mesmo
+    // posicionamento). rounded-xl (cantos arredondados) — o wrapper em
+    // VitrinePageClient tem padding lateral (px-4/sm:px-14), então o card
+    // não é edge-to-edge em nenhuma tela. object-cover cobre essa caixa do
+    // jeito que for, sem depender de proporção nenhuma.
+    <div className="relative h-[60vh] w-full overflow-hidden rounded-xl bg-surface-high sm:h-[85vh]">
       {/* Capa (16:9) — o mesmo campo já configurado no admin (Cursos >
           editar curso > Capa), não a thumbnail (essa é pro card pequeno de
           CourseCard). object-cover + object-center: preenche o card sem

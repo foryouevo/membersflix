@@ -100,14 +100,13 @@ export default function VitrinePageClient({
               detalhes de responsividade). Substituiu o banner antigo
               inteiro em desktop/tablet (tag "CURSOS ONLINE", wordmark
               "MEMBERSFLIX", descrição e botão "Continuar assistindo" —
-              nenhum dos quatro existe mais). px-14 (3.5rem, sem
-              qualificação de breakpoint — vale em qualquer tela): volta a
-              dar respiro lateral pro card, que ganhou rounded-xl de novo
-              (cantos arredondados só fazem sentido com algum espaço em
-              volta, não mais edge-to-edge). pb-6/sm:pb-14 continuam pro
+              nenhum dos quatro existe mais). px-4 no mobile (1rem, abaixo
+              de 640px) / sm:px-14 (3.5rem) no desktop/tablet — o respiro
+              lateral do card é bem menor numa tela pequena, senão sobra
+              pouca largura útil pro card. pb-6/sm:pb-14 continuam pro
               espaço embaixo do card antes de "Meus Cursos"/"Todos os
               Cursos". */}
-          <div className="px-14 pb-6 pt-0 sm:pb-14">
+          <div className="px-4 pb-6 pt-0 sm:px-14 sm:pb-14">
             {cursoDestaque && (
               <CursoDestaque
                 curso={cursoDestaque}

@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
 .transition-colors {
   align-items: center;
 }
@@ -19,7 +17,12 @@ body {
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  /* var(--font-poppins): fonte carregada via next/font em app/layout.tsx
+     (auto-hospedada, sem @import externo pro Google Fonts) — não dá pra
+     usar 'Poppins' como string literal aqui, porque o next/font gera um
+     @font-face com um nome interno próprio, não literalmente "Poppins";
+     a variável é o jeito de referenciar esse font-face de verdade. */
+  font-family: var(--font-poppins), sans-serif;
 }
 
 ::-webkit-scrollbar {

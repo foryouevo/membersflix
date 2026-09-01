@@ -1,8 +1,8 @@
 'use client';
 
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import UserAvatarMenu from '@/components/membros/UserAvatarMenu';
 import { useHeaderScrolled } from '@/hooks/useHeaderScrolled';
 import type { Profile } from '@/types';
@@ -29,15 +29,16 @@ export const MOBILE_HEADER_HEIGHT_PX = 56;
  * controles do vídeo, então o header simplesmente não renderiza nessa rota
  * (o DesktopHeader faz o mesmo, pelo mesmo motivo).
  *
- * Conteúdo da linha principal depende da rota:
- * - Home (/membros/vitrine): logo "M" + texto "Início", como sempre foi.
- * - Qualquer outra página: seta de voltar (mesmo componente/estilo/lógica
- *   — router.back() — que já existia solto em CursoDetalheClient antes
- *   desse header virar global; removido de lá pra não duplicar o mesmo
- *   botão duas vezes na mesma tela).
+ * Logo "M" é sempre um link pra Home (/membros/vitrine), em qualquer
+ * página — não tem mais seta de voltar separada; o próprio logo faz esse
+ * papel (era assim antes o botão de voltar em CursoDetalheClient, removido
+ * de lá quando esse header virou global). Na Home, "Início" continua ao
+ * lado do logo; nas demais páginas, só o logo mesmo. Clicar no logo estando
+ * já na Home não causa reload nem nada estranho — é um <Link> normal do
+ * Next pra rota atual, o App Router simplesmente não faz nada.
  *
  * Fundo transparente no topo (deixa a página por trás aparecer atrás do
- * logo/seta) / sólido preto com um brilho vermelho radial sutil ao rolar —
+ * logo) / sólido preto com um brilho vermelho radial sutil ao rolar —
  * mesma técnica usada no glow do login (LoginPageClient.tsx). Estado de
  * scroll vem de useHeaderScrolled (hooks/useHeaderScrolled.ts — extraído
  * daqui, reaproveitado também pelo DesktopHeader).
@@ -51,7 +52,6 @@ export default function MobileHeader({
   profile: Pick<Profile, 'nome' | 'avatar_url'> | null;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const scrolled = useHeaderScrolled();
 
   if (pathname.startsWith('/membros/player')) return null;
@@ -78,26 +78,13 @@ export default function MobileHeader({
       }
     >
       <div className="flex items-center justify-between gap-2 px-4 py-3">
-        {/* Logo "M" sempre visível, em qualquer página — só o que vem ao
-            lado dele muda: "Início" na Home, seta de voltar nas demais. */}
-        <div className="flex items-center gap-2">
+        {/* Logo "M" sempre visível E sempre clicável, em qualquer página —
+            leva pra Home. "Início" ao lado só na própria Home (nas demais,
+            só o logo). */}
+        <Link href="/membros/vitrine" aria-label="Início" className="flex items-center gap-2">
           <Image src="/imagens/logohome.png" alt="" width={32} height={32} className="h-7 w-auto object-contain" />
-          {isHome ? (
-            <span className="text-base font-bold text-white">Início</span>
-          ) : (
-            // Mesmo padrão visual/lógica do botão de voltar que já existia
-            // em CursoDetalheClient (router.back() — volta pra de onde o
-            // aluno realmente veio, já que várias telas levam pra cá).
-            <button
-              type="button"
-              onClick={() => router.back()}
-              aria-label="Voltar"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white"
-            >
-              <ChevronLeft size={20} strokeWidth={1.5} />
-            </button>
-          )}
-        </div>
+          {isHome && <span className="text-base font-bold text-white">Início</span>}
+        </Link>
 
         <UserAvatarMenu profile={profile} />
       </div>
