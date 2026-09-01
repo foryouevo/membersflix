@@ -55,20 +55,26 @@ export default async function VitrinePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: cursos }, { data: acessosRaw }, { data: aulas }, { data: progresso }, config] = await Promise.all([
-    // categoria:categorias(*) — mesmo padrão de join já usado em
-    // app/membros/curso/[id]/page.tsx e app/admin/cursos/page.tsx. Sem isso
-    // curso.categoria vem undefined (só categoria_id, o uuid cru) e não dá
-    // pra agrupar "Todos os Cursos" por categoria na Home.
-    supabase.from('cursos').select('*, categoria:categorias(*)').eq('status', 'active').order('ordem'),
-    supabase.from('acessos_curso').select('curso_id, bloqueado').eq('aluno_id', user!.id),
-    supabase.from('aulas').select('id, modulo:modulos(curso_id)'),
-    // aula_id/atualizado_em a mais (antes só curso_id/concluida): usados
-    // pra achar em qual aula o aluno estava mais recentemente, pro botão
-    // "Continuar assistindo" do banner — ver bloco abaixo.
-    supabase.from('progresso_aulas').select('curso_id, aula_id, concluida, atualizado_em').eq('aluno_id', user!.id),
-    buscarBannerConfig(supabase),
-  ]);
+  const [{ data: cursos }, { data: acessosRaw }, { data: aulas }, { data: progresso }, config, { data: categorias }] =
+    await Promise.all([
+      // categoria:categorias(*) — mesmo padrão de join já usado em
+      // app/membros/curso/[id]/page.tsx e app/admin/cursos/page.tsx. Sem isso
+      // curso.categoria vem undefined (só categoria_id, o uuid cru) e não dá
+      // pra agrupar "Todos os Cursos" por categoria na Home.
+      supabase.from('cursos').select('*, categoria:categorias(*)').eq('status', 'active').order('ordem'),
+      supabase.from('acessos_curso').select('curso_id, bloqueado').eq('aluno_id', user!.id),
+      supabase.from('aulas').select('id, modulo:modulos(curso_id)'),
+      // aula_id/atualizado_em a mais (antes só curso_id/concluida): usados
+      // pra achar em qual aula o aluno estava mais recentemente, pro botão
+      // "Continuar assistindo" do banner — ver bloco abaixo.
+      supabase.from('progresso_aulas').select('curso_id, aula_id, concluida, atualizado_em').eq('aluno_id', user!.id),
+      buscarBannerConfig(supabase),
+      // Tabela crua (não via join de cursos) — usada só pela fileira de
+      // chips de categoria da Home mobile (CategoriaChipsMobile), pra
+      // aparecer mesmo categoria sem nenhum curso vinculado ainda (ex:
+      // "Idiomas"), o que o join acima nunca traria.
+      supabase.from('categorias').select('*').order('ordem'),
+    ]);
 
   const acessos = new Map<string, boolean>((acessosRaw ?? []).map((a) => [a.curso_id, !a.bloqueado]));
 
@@ -96,11 +102,20 @@ export default async function VitrinePage() {
   // Botão "Continuar assistindo" do banner — lógica extraída pra
   // lib/membros/continuar-assistindo.ts (mesma função usada na tela de
   // perfil, pra não duplicar isso nos dois lugares).
-  const { href: continuarAssistindoHref, temProgresso } = await calcularContinuarAssistindo(
-    supabase,
-    user!.id,
-    meusCursos.map((c) => c.id)
-  );
+  const {
+    href: continuarAssistindoHref,
+    temProgresso,
+    cursoId: cursoContinuarId,
+  } = await calcularContinuarAssistindo(supabase, user!.id, meusCursos.map((c) => c.id));
+
+  // Curso em destaque do card hero mobile (logo abaixo dos chips de
+  // categoria): reaproveita o MESMO critério de "o que importa agora pra
+  // esse aluno" que o botão do banner já usa — o curso com atividade mais
+  // recente, ou o primeiro de "Meus Cursos" sem nenhum progresso ainda.
+  // Sem curso nenhum vinculado (aluno novo, ainda não comprou nada), cai no
+  // primeiro curso da vitrine (mesma ordem de "Todos os Cursos") — sempre
+  // mostra algo pra promover, nunca fica sem card.
+  const cursoDestaque = todosCursos.find((c) => c.id === cursoContinuarId) ?? todosCursos[0] ?? null;
 
   return (
     <VitrinePageClient
@@ -114,6 +129,8 @@ export default async function VitrinePage() {
       bannerResumo={config?.banner_resumo ?? null}
       continuarAssistindoHref={continuarAssistindoHref}
       temProgresso={temProgresso}
+      todasCategorias={categorias ?? []}
+      cursoDestaque={cursoDestaque}
     />
   );
 }

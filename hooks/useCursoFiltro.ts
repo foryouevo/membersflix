@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { Curso } from '@/types';
+import type { Categoria, Curso } from '@/types';
 
 type GrupoCategoria = { id: string; nome: string; ordem: number; cursos: Curso[] };
 
@@ -11,7 +11,15 @@ type GrupoCategoria = { id: string; nome: string; ordem: number; cursos: Curso[]
 // filtra o mesmo `todosCursos` só que sempre com a busca/filtro ativos (na
 // Home eles só entram em jogo quando o usuário usa a busca flutuante sobre
 // o banner, no desktop/tablet).
-export function useCursoFiltro(todosCursos: Curso[]) {
+//
+// `todasCategorias` (opcional): a tabela `categorias` crua, sem passar pelos
+// cursos — diferente de `categoriasDisponiveis` (abaixo), que só enxerga
+// categoria que já tem curso vinculado. É o que permite um chip de categoria
+// aparecer mesmo com 0 cursos ainda (ex: "Idiomas", na fileira mobile da
+// Home). Default `[]`: quem não passar (BuscarPageClient, por ex.) simplesmente
+// não ganha `categoriasAgrupadas`/`toggleGrupoCategoria` populados — o resto
+// do hook funciona igual.
+export function useCursoFiltro(todosCursos: Curso[], todasCategorias: Categoria[] = []) {
   const [busca, setBusca] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string[]>([]);
   const [instrutorFiltro, setInstrutorFiltro] = useState<string[]>([]);
@@ -28,6 +36,16 @@ export function useCursoFiltro(todosCursos: Curso[]) {
     setInstrutorFiltro([]);
   }
 
+  // Seleção ÚNICA por nome de categoria (não soma com o que já estava
+  // marcado, ao contrário de toggleCategoriaFiltro acima) — pensado pra
+  // fileira de chips da Home mobile: tocar num chip troca o filtro pro dele;
+  // tocar de novo no chip já ativo limpa. `ids` (plural) porque duas linhas
+  // da tabela `categorias` podem ter o mesmo nome (dado duplicado — ver
+  // categoriasAgrupadas abaixo); tratamos como uma coisa só.
+  function toggleGrupoCategoria(ids: string[]) {
+    setCategoriaFiltro((prev) => (ids.some((id) => prev.includes(id)) ? [] : ids));
+  }
+
   // Opções do painel de filtro: derivadas do todosCursos "cru" (não do já
   // filtrado) — assim escolher uma categoria não faz a lista de instrutores
   // encolher e vice-versa, o usuário sempre vê todas as combinações
@@ -39,6 +57,27 @@ export function useCursoFiltro(todosCursos: Curso[]) {
     }
     return Array.from(porId.values()).sort((a, b) => a.nome.localeCompare(b.nome));
   }, [todosCursos]);
+
+  // Igual a categoriasDisponiveis, mas a partir de `todasCategorias` (a
+  // tabela crua) em vez dos cursos — inclui categoria sem curso nenhum
+  // ainda. Agrupada por nome (case/espaço-insensível) pra não listar
+  // duplicata visual quando existem 2+ linhas com o mesmo nome cadastradas
+  // (dado legado) — `ids` guarda todas as linhas daquele nome, então filtrar
+  // por esse grupo bate com qualquer curso vinculado a QUALQUER uma delas.
+  const categoriasAgrupadas = useMemo(() => {
+    const porNome = new Map<string, { nome: string; ordem: number; ids: string[] }>();
+    for (const cat of todasCategorias) {
+      const chave = cat.nome.trim().toLowerCase();
+      const grupo = porNome.get(chave);
+      if (grupo) {
+        grupo.ids.push(cat.id);
+        grupo.ordem = Math.min(grupo.ordem, cat.ordem);
+      } else {
+        porNome.set(chave, { nome: cat.nome.trim(), ordem: cat.ordem, ids: [cat.id] });
+      }
+    }
+    return Array.from(porNome.values()).sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome));
+  }, [todasCategorias]);
 
   const instrutoresDisponiveis = useMemo(() => {
     const nomes = new Set<string>();
@@ -101,11 +140,13 @@ export function useCursoFiltro(todosCursos: Curso[]) {
     setBusca,
     categoriaFiltro,
     toggleCategoriaFiltro,
+    toggleGrupoCategoria,
     instrutorFiltro,
     toggleInstrutorFiltro,
     limparFiltros,
     filtroAtivo,
     categoriasDisponiveis,
+    categoriasAgrupadas,
     instrutoresDisponiveis,
     todosCursosFiltrados,
     gruposPorCategoria,

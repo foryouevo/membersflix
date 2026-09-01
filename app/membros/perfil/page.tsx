@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation';
 import Image from 'next/image';
-import { GraduationCap, PlayCircle, TrendingUp, MessageCircle, UserRound } from 'lucide-react';
+import { GraduationCap, TrendingUp, MessageCircle, UserRound, LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { initials, buildSupportWhatsappLink } from '@/lib/utils';
 import AlterarSenhaButton from '@/components/membros/AlterarSenhaButton';
 import EditarPerfilModal from '@/components/membros/EditarPerfilModal';
+import LogoutButton from '@/components/LogoutButton';
 
 export default async function PerfilPage() {
   const supabase = createClient();
@@ -24,9 +25,10 @@ export default async function PerfilPage() {
   const [{ data: acessosRaw }, { data: aulas }, { data: progresso }] = await Promise.all([
     supabase.from('acessos_curso').select('curso_id, bloqueado').eq('aluno_id', user.id),
     supabase.from('aulas').select('id, modulo:modulos(curso_id)'),
-    // atualizado_em a mais (antes só concluida): usado pra calcular "aulas
-    // concluídas este mês", o badge do card de estatísticas — ver abaixo.
-    supabase.from('progresso_aulas').select('concluida, atualizado_em').eq('aluno_id', user.id),
+    // Só concluida: sem o card "Aulas Concluídas" (removido), atualizado_em
+    // não é mais usado em lugar nenhum da tela (era só pro badge "+N este
+    // mês" desse card) — não busca à toa.
+    supabase.from('progresso_aulas').select('concluida').eq('aluno_id', user.id),
   ]);
 
   const meusCursoIds = (acessosRaw ?? []).filter((a) => !a.bloqueado).map((a) => a.curso_id);
@@ -43,16 +45,6 @@ export default async function PerfilPage() {
   const progressoRows = progresso ?? [];
   const aulasConcluidas = progressoRows.filter((p) => p.concluida).length;
   const progressoGeralPct = totalAulasDosMeusCursos > 0 ? Math.round((aulasConcluidas / totalAulasDosMeusCursos) * 100) : 0;
-
-  // Badge "+N este mês" no card de aulas concluídas — real, calculado a
-  // partir de atualizado_em (não fabricado). Os outros dois cards não têm
-  // um "delta" que dê pra calcular de verdade sem guardar um histórico que
-  // não existe hoje (nº de cursos e % geral são "estado atual", não um
-  // total acumulado ao longo do tempo), por isso ficam sem badge.
-  const inicioDoMes = new Date();
-  inicioDoMes.setDate(1);
-  inicioDoMes.setHours(0, 0, 0, 0);
-  const aulasConcluidasEsteMes = progressoRows.filter((p) => p.concluida && new Date(p.atualizado_em) >= inicioDoMes).length;
 
   // numero_whatsapp isolado com checagem de erro (mesmo padrão já usado em
   // app/login/page.tsx e app/membros/vitrine/page.tsx) — sem suporte
@@ -179,40 +171,39 @@ export default async function PerfilPage() {
           </div>
         </div>
 
-        {/* Estatísticas: ícone num círculo vermelho translúcido, badge
-            opcional ao lado, label em maiúsculas, número grande embaixo. */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-lg bg-card p-5">
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
+        {/* Estatísticas: ícone num círculo vermelho translúcido, label em
+            maiúsculas, número grande embaixo. Só 2 cards (Cursos e
+            Progresso Geral — "Aulas Concluídas" foi removido): cabem lado
+            a lado em qualquer largura de tela sem precisar de
+            scroll/carrossel, então é um grid de 2 colunas simples em todo
+            breakpoint, dividindo o espaço igualmente. */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-lg bg-card p-3">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
               <GraduationCap size={22} />
             </div>
             <p className="text-xs font-semibold uppercase tracking-wide text-on-variant">Cursos</p>
             <p className="mt-1 text-3xl font-bold text-white">{meusCursoIds.length}</p>
           </div>
 
-          <div className="rounded-lg bg-card p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
-                <PlayCircle size={22} />
-              </div>
-              {aulasConcluidasEsteMes > 0 && (
-                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[0.65rem] font-semibold text-primary">
-                  +{aulasConcluidasEsteMes} este mês
-                </span>
-              )}
-            </div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-on-variant">Aulas Concluídas</p>
-            <p className="mt-1 text-3xl font-bold text-white">{aulasConcluidas}</p>
-          </div>
-
-          <div className="rounded-lg bg-card p-5">
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <div className="rounded-lg bg-card p-3">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
               <TrendingUp size={22} />
             </div>
             <p className="text-xs font-semibold uppercase tracking-wide text-on-variant">Progresso Geral</p>
             <p className="mt-1 text-3xl font-bold text-primary">{progressoGeralPct}%</p>
           </div>
         </div>
+
+        {/* Sair — só no mobile (md:hidden, mesmo breakpoint em que a
+            sidebar com o "Sair" original vira a bottom nav — ver
+            MembrosSidebar.tsx). No mobile a sidebar fica escondida/
+            colapsada, então esse é o único jeito de fazer logout por lá sem
+            precisar caçar a barra inferior por ícone. Mesmo estilo visual
+            do botão da sidebar (ícone + texto em vermelho, mesmo hover). */}
+        <LogoutButton className="flex w-full items-center justify-center gap-2 rounded-lg bg-card px-4 py-3 text-sm font-medium text-error hover:bg-surface-container md:hidden">
+          <LogOut size={18} /> Sair da conta
+        </LogoutButton>
       </div>
     </div>
   );

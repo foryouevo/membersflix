@@ -7,6 +7,7 @@ import { Mail, Lock, ArrowRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { verificarStatusPorEmail } from '@/app/login/actions';
 import TrocarSenhaModal from '@/components/TrocarSenhaModal';
+import { preloadLoginIntro, playLoginIntro } from '@/lib/loginIntro';
 
 // TESTE VISUAL: true = fundo em degradê (padrão da Home); false = volta pra
 // imagem estática original (/imagens/telalogin.png). Ver bloco no JSX abaixo.
@@ -48,6 +49,10 @@ export default function LoginPageClient({
     e.preventDefault();
     setErro(null);
     setLoading(true);
+    // Começa a baixar o vídeo de intro já aqui (em paralelo com a chamada de
+    // auth abaixo), pra minimizar o delay entre "login confirmado" e o
+    // vídeo de fato começar a tocar — só fica invisível até o login passar.
+    preloadLoginIntro();
 
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
 
@@ -57,8 +62,13 @@ export default function LoginPageClient({
       return;
     }
 
-    router.replace('/');
-    router.refresh();
+    // O redirect só acontece depois da tela de intro terminar (vídeo
+    // "ended", ou o timeout de segurança dela) — ver LoginIntroOverlay, que
+    // agora vive fora daqui (no layout raiz) pra sobreviver à troca de rota.
+    playLoginIntro(() => {
+      router.replace('/');
+      router.refresh();
+    });
   }
 
   async function handleEsqueceuSenha() {

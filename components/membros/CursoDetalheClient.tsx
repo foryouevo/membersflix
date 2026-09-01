@@ -36,16 +36,14 @@ export default function CursoDetalheClient({
   useDificultarInspecao();
 
   return (
-    // Página inteira trava na altura da viewport e não rola verticalmente —
-    // hero e seção de módulos dividem esse espaço fixo entre si (flex-col).
-    // Só o carrossel, lá dentro, tem scroll (horizontal, tipo Netflix).
-    // h-dvh (não h-screen/100vh): no mobile, 100vh conta a área atrás da
-    // barra de endereço do navegador, que nem sempre está visível — isso
-    // fazia o fim da página (parte do card de módulo) ficar cortado sem
-    // aviso, mesmo com as contas de altura batendo "no papel". dvh é a
-    // altura realmente visível; em desktop se comporta igual a vh (não muda
-    // nada lá).
-    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+    // A página agora rola verticalmente de novo (deixou de travar em h-dvh):
+    // com módulo-pai virando uma seção própria (título + carrossel), o
+    // número de linhas é variável por curso (de 0 a N seções de pai, mais a
+    // leva de módulos soltos) — não dá mais pra garantir que tudo cabe numa
+    // tela só, como quando era sempre exatamente 1 carrossel. O scroll em si
+    // já vem de graça do <main overflow-y-auto> do layout (app/membros/layout.tsx)
+    // que envolve esta página — só precisava parar de brigar com ele.
+    <div className="flex min-h-full flex-col bg-background">
       {/* Hero: capa do curso, conteúdo (voltar/badge/título/descrição/botão)
           ancorado embaixo e à esquerda, sobre um gradiente — mesmo padrão
           reutilizado pra qualquer curso, tudo vindo de `curso` (nada fixo
@@ -77,12 +75,15 @@ export default function CursoDetalheClient({
               realmente veio, não força ele pra Home se veio de outro lugar.
               Mesmo padrão visual dos botões de seta do carrossel (Carousel.tsx
               — bg-surface-high, hover vermelho) pra ficar consistente com o
-              resto da UI. */}
+              resto da UI. Só aparece no mobile (md:hidden — mesmo breakpoint
+              que MembrosSidebar usa pra trocar bottom nav por sidebar fixa):
+              em telas md+ o aluno já tem a sidebar lateral pra navegar, essa
+              seta ali ficaria redundante. */}
           <button
             type="button"
             onClick={() => router.back()}
             aria-label="Voltar"
-            className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white sm:mb-4"
+            className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white sm:mb-4 md:hidden"
           >
             <ChevronLeft size={20} strokeWidth={1.5} />
           </button>
@@ -127,18 +128,26 @@ export default function CursoDetalheClient({
         </div>
       </div>
 
-      {/* Seção de módulos: ocupa exatamente o espaço vertical restante
-          (flex-1). `min-h-0` é essencial aqui — sem isso, o flexbox usa
-          min-height:auto por padrão, que ignora o flex-1 e deixa o conteúdo
-          "vazar" (voltando a criar scroll na página) sempre que o carrossel
-          intrinsecamente quiser mais altura do que sobrou — típico em telas
-          baixas tipo 1366x768. Com min-h-0, é essa seção (e o carrossel
-          dentro dela) que encolhe pra caber, não a página que estica. */}
+      {/* Seção de módulos: altura natural agora (não mais flex-1/min-h-0
+          travando num "resto de tela") — cresce com o conteúdo, e quem rola
+          é a página (via o <main> do layout). shrink-0 pra não ser
+          espremida pelo flex-col do container quando o conteúdo é curto. */}
       <div
-        className="min-h-0 flex-1 px-4 py-0 sm:px-12 sm:py-8"
+        className="shrink-0 space-y-8 px-4 py-8 sm:space-y-10 sm:px-12"
         style={{ background: 'linear-gradient(0deg,rgba(15, 15, 15, 1) 0%, rgba(1, 1, 1, 1) 100%)' }}
       >
-        <ModulosCarousel
+        {/* "Módulos do curso" não é mais renderizado como <h2> solto aqui em
+            cima — isso deixava uma caixa vazia entre o título e a linha de
+            setas logo abaixo (duas linhas por causa do space-y do
+            container, quando cabiam numa só). Agora o texto entra DENTRO da
+            mesma div flex que já tem as setas — ver SecoesDeModulos, onde
+            "Módulos do curso" vira o `titulo` passado pro Carousel quando o
+            curso não tem módulo-pai nenhum (uma seção só, título + setas na
+            mesma linha). Com módulo-pai, cada seção já tem o próprio título
+            real (nome do pai/módulo) nessa mesma linha com as setas dela —
+            não haveria onde encaixar um "Módulos do curso" genérico sem
+            duplicar/atropelar um título que já é específico. */}
+        <SecoesDeModulos
           modulos={modulos}
           hasAccess={hasAccess}
           trialModuloUnicoId={trialModuloUnicoId}
@@ -151,7 +160,29 @@ export default function CursoDetalheClient({
   );
 }
 
-function ModulosCarousel({
+/**
+ * Agrupa a lista flat de módulos em seções, cada uma na sua própria posição
+ * na página seguindo a `ordem` do item de nível raiz (a mesma ordem definida
+ * no admin), MAS só quando existe pelo menos um módulo-pai de verdade no
+ * curso. Dois comportamentos possíveis, decididos por `temAlgumPai`:
+ *
+ * - Nenhum módulo-pai (ex: "UI UX DESIGN PRO", onde todo módulo é raiz solto)
+ *   -> comportamento original, anterior a essa hierarquia toda: uma fileira
+ *   só com todos os módulos, com "Módulos do curso" como título dessa
+ *   fileira (na mesma linha das setas — é a única seção, então não há
+ *   título por módulo individual).
+ * - Pelo menos um módulo-pai (ex: "FAW School", onde a maioria dos módulos
+ *   tem submódulo mas alguns — "Dominando o Premiere", "BÔNUS e Extras" —
+ *   são exceções soltas) -> cada entrada de nível raiz vira sua própria
+ *   seção, todas no mesmo estilo visual (mesmo tamanho de título, mesmo
+ *   espaçamento): módulo-pai mostra o nome dele + carrossel só com os
+ *   filhos; módulo raiz solto mostra o próprio nome + "carrossel" de 1 card
+ *   só (o Carousel genérico já esconde as setas sozinho com 1 item).
+ *
+ * 100% genérico: a decisão é sempre "existe pai neste curso?", nunca o nome
+ * de um curso/módulo específico.
+ */
+function SecoesDeModulos({
   modulos,
   hasAccess,
   trialModuloUnicoId,
@@ -162,72 +193,110 @@ function ModulosCarousel({
   trialModuloUnicoId: string | null;
   onClickLocked: () => void;
 }) {
+  const filhosPorPai = new Map<string, ModuloComAulas[]>();
+  for (const m of modulos) {
+    if (m.modulo_pai_id) {
+      const lista = filhosPorPai.get(m.modulo_pai_id) ?? [];
+      lista.push(m);
+      filhosPorPai.set(m.modulo_pai_id, lista);
+    }
+  }
+  for (const lista of filhosPorPai.values()) lista.sort((a, b) => a.ordem - b.ordem);
+
+  const raizOrdenada = modulos.filter((m) => !m.modulo_pai_id).sort((a, b) => a.ordem - b.ordem);
+
+  if (raizOrdenada.length === 0) {
+    return <p className="text-sm text-on-variant">Nenhum módulo publicado ainda.</p>;
+  }
+
+  const temAlgumPai = raizOrdenada.some((item) => (filhosPorPai.get(item.id)?.length ?? 0) > 0);
+
+  if (!temAlgumPai) {
+    return (
+      <ModuloCarrosselSecao
+        modulos={raizOrdenada}
+        // Sem nenhum módulo-pai no curso, essa é a ÚNICA seção — o título
+        // geral "Módulos do curso" (fixo, não vem de curso.titulo nem de
+        // nenhum campo do banco) entra direto aqui, na mesma linha das
+        // setas, em vez de um <h2> solto acima sobrando espaço.
+        titulo="Módulos do curso"
+        titleClassName="ml-[10px] text-[1.6rem] font-bold text-white"
+        hasAccess={hasAccess}
+        trialModuloUnicoId={trialModuloUnicoId}
+        onClickLocked={onClickLocked}
+      />
+    );
+  }
+
+  return (
+    <>
+      {raizOrdenada.map((item) => {
+        const filhos = filhosPorPai.get(item.id) ?? [];
+        return (
+          <ModuloCarrosselSecao
+            key={item.id}
+            // Pai: os filhos dele. Solto: ele mesmo, sozinho na lista — o
+            // Carousel trata isso normal, só sem setas (só 1 item).
+            modulos={filhos.length > 0 ? filhos : [item]}
+            titulo={formatTitulo(item.titulo)}
+            titleClassName="ml-[10px] text-xl font-bold text-white"
+            hasAccess={hasAccess}
+            trialModuloUnicoId={trialModuloUnicoId}
+            onClickLocked={onClickLocked}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function ModuloCarrosselSecao({
+  modulos,
+  titulo,
+  titleClassName,
+  hasAccess,
+  trialModuloUnicoId,
+  onClickLocked,
+}: {
+  modulos: ModuloComAulas[];
+  titulo: string;
+  titleClassName: string;
+  hasAccess: boolean;
+  trialModuloUnicoId: string | null;
+  onClickLocked: () => void;
+}) {
   return (
     // Carrossel genérico (components/membros/Carousel.tsx — Embla: drag com
     // mouse, swipe de touch, wrap manual nas pontas em vez do loop infinito
-    // nativo). Os *ClassName abaixo são os defaults do componente, repetidos
-    // aqui só pra documentar o motivo de cada um (o componente em si não
-    // sabe nada de curso/módulo — a única coisa curso-específica aqui é o
-    // ModuloCard passado em renderItem).
+    // nativo). Diferente da versão de página única (h-dvh, card com altura
+    // vindo do espaço restante): agora pode haver várias dessas seções
+    // empilhadas na página (uma por módulo-pai), então a página rola e cada
+    // carrossel tem card de LARGURA fixa (não mais altura calculada a partir
+    // do "resto da tela") — mesmo padrão usado nos carrosséis da Home
+    // (VitrinePageClient).
     <Carousel
       items={modulos}
       getKey={(modulo) => modulo.id}
-      // Fixo, de propósito — não vem de curso.titulo nem de nenhum outro
-      // campo do banco. É o mesmo texto em toda página de curso da
-      // plataforma, independente de qual curso for exibido.
-      title="Módulos do curso"
-      prevLabel="Módulos anteriores"
-      nextLabel="Próximos módulos"
+      title={titulo}
+      titleClassName={titleClassName}
+      prevLabel={`${titulo}: anteriores`}
+      nextLabel={`${titulo}: próximos`}
       emptyMessage="Nenhum módulo publicado ainda."
-      // h-full: recebe a altura exata que a seção de módulos calculou pra ela
-      // (o "resto" do 100vh depois do hero) e reparte entre o título (linha
-      // fixa) e a área do carrossel (o resto disso, de novo).
-      outerClassName="flex h-full min-h-0 flex-col"
-      // Título + setas lado a lado, alinhados à direita na mesma linha — não
-      // ficam mais sobrepostos aos cards nas laterais do carrossel. As setas
-      // nunca somem: o wrap manual (dentro do Carousel) garante que sempre
-      // há uma próxima ação, mesmo nas pontas da lista. shrink-0: essa linha
-      // nunca perde altura — só a área do carrossel abaixo encolhe quando a
-      // tela é baixa. mb-6 no mobile (mais respiro antes dos cards) —
-      // sm:mb-2 restaura o valor original a partir daí.
-      headerClassName="mb-[1.8rem] flex shrink-0 items-center justify-between gap-4 sm:mb-2"
-      // `overflow-hidden` é a "janela" do carrossel (ref do Embla), com
-      // altura relativa (flex-1 min-h-0 — o resto do espaço depois do
-      // título) em vez de "altura do conteúdo": é isso que faz ela encolher
-      // em telas baixas em vez de empurrar a página pra baixo. Continua
-      // `overflow-hidden` nos dois eixos (não `overflow-x-auto` +
-      // `overflow-y-visible` como poderia parecer o caminho óbvio pra não
-      // cortar o hover): o CSS normaliza isso sozinho — quando um eixo é
-      // "visible" e o outro não, o "visible" vira "auto" — ou seja, ainda
-      // cortaria, só que sem avisar. Também precisamos do overflow-hidden
-      // nos dois eixos aqui mesmo: é ele que esconde os cards fora da área
-      // visível do carrossel (senão a lista inteira apareceria de uma vez,
-      // sem o efeito de "janela" rolável). A solução real é dar folga de
-      // verdade (abaixo) — grande o suficiente pra cobrir não só o
-      // scale-[1.04] (2% do card) mas também o shadow-overlay do hover, que
-      // se espalha até 24px pra fora da borda do card.
-      viewportClassName="min-h-0 flex-1 overflow-hidden"
-      // px-2 py-6 no track: a altura/largura de cada card (abaixo) vem
-      // daqui — 100% do espaço, menos essa folga. py-6 (24px) cobre o
-      // scale-[1.04] + a sombra do hover sem cortar em cima/embaixo; px-2 dá
-      // uma margem pros cards das pontas (1º e último), que antes não
-      // tinham nenhuma folga lateral pro hover. py-2 no mobile (hover de
-      // mouse não acontece em touch, então a folga extra pro scale/sombra
-      // importa menos ali) — sm:py-6 restaura o valor original a partir daí.
-      trackClassName="flex h-full gap-4 px-2 py-2 sm:py-6"
-      // aspect-[3/4] + h-full: a largura normalmente vem calculada a partir
-      // da altura disponível, pra encolher em telas baixas sem nunca criar
-      // scroll de página. max-h-[24.5rem] só no mobile: card mais alto,
-      // pedido explícito — combinado com o hero agora intrínseco (sem
-      // h-[Xvh] forçado) e o h-dvh no container principal, isso cabe sem
-      // gerar scroll na maioria dos aparelhos. min-w-32 continua como piso
-      // (card não fica fino demais em telas muito baixas); sem max-w no
-      // mobile (o max-w-64 antigo virou só sm:) — com o teto de altura em
-      // 24.5rem, a proporção 3:4 já limita a largura sozinha a ~18.4rem,
-      // então um teto de largura separado só cortaria essa proporção sem
-      // necessidade. sm:max-h-none/sm:min-w-40/sm:max-w-64 restauram o
-      // comportamento original a partir daí (desktop/tablet).
-      itemClassName="aspect-[3/4] h-full max-h-[26rem] min-w-32 shrink-0 sm:max-h-none sm:min-w-40 sm:max-w-64"
+      outerClassName="flex flex-col"
+      headerClassName="mb-3 flex shrink-0 items-center justify-between gap-4"
+      // Só o eixo X esconde overflow (a "janela" horizontal do carrossel);
+      // sem trava de altura aqui — cada linha ocupa a altura natural do seu
+      // conteúdo, e é a página como um todo que rola quando várias seções
+      // juntas passam da tela.
+      viewportClassName="overflow-hidden"
+      // py-6 (24px) cobre o scale-[1.04] do hover + a sombra sem cortar em
+      // cima/embaixo; px-2 dá margem pros cards das pontas.
+      trackClassName="flex gap-4 px-2 py-6"
+      // Largura fixa por breakpoint (w-36/sm:w-44/lg:w-48), com aspect-[3/4]
+      // definindo a altura a partir dela — o padrão de antes de existir
+      // hierarquia de módulos, quando também não havia trava de altura na
+      // página.
+      itemClassName="aspect-[3/4] w-36 shrink-0 sm:w-44 lg:w-48"
       renderItem={(modulo) => (
         <ModuloCard
           modulo={modulo}

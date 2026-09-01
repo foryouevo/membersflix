@@ -18,7 +18,7 @@ export async function calcularContinuarAssistindo(
   alunoId: string,
   meusCursoIds: string[],
   fallbackHref = '/membros/vitrine'
-): Promise<{ href: string; temProgresso: boolean }> {
+): Promise<{ href: string; temProgresso: boolean; cursoId: string | null }> {
   const { data: progresso } = await supabase
     .from('progresso_aulas')
     .select('curso_id, aula_id, concluida, atualizado_em')
@@ -34,7 +34,7 @@ export async function calcularContinuarAssistindo(
   }, null);
 
   const cursoAlvoId = cursoMaisRecente?.curso_id ?? meusCursoIds[0] ?? null;
-  if (!cursoAlvoId) return { href: fallbackHref, temProgresso };
+  if (!cursoAlvoId) return { href: fallbackHref, temProgresso, cursoId: null };
 
   const { data: modulosAlvo } = await supabase
     .from('modulos')
@@ -51,5 +51,6 @@ export async function calcularContinuarAssistindo(
   return {
     href: proximaAula ? `/membros/player/${proximaAula.id}` : fallbackHref,
     temProgresso,
+    cursoId: cursoAlvoId,
   };
 }

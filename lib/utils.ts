@@ -42,19 +42,23 @@ export function formatBytes(bytes: number) {
 }
 
 /**
- * Remove o prefixo numérico de ordenação (ex: "05 - ", "12- ") do início de
- * títulos de curso/módulo/aula antes de exibir — só na camada visual. Os
- * dados no banco continuam com o prefixo (nome_original, ordem etc.), usados
+ * Remove o prefixo numérico de ordenação do início de títulos de
+ * curso/módulo/aula antes de exibir — só na camada visual. Os dados no
+ * banco continuam com o prefixo (nome_original, ordem etc.), usados
  * normalmente para ordenação e navegação; isso afeta apenas o texto exibido.
+ * Dois formatos de prefixo, vindos direto do nome das pastas do Drive:
+ * "05 - Título" (aulas/submódulos, ex: "01 - Boas-vindas") e "[05] Título"
+ * (pastas de módulo de nível raiz, ex: "[05] Dominando o Premiere").
  *
  * Também remove qualquer emoji/símbolo decorativo que sobre logo no início
- * depois do prefixo (ex: "03 - 🔸Exercicios e Desafios" → "Exercicios e
- * Desafios") — alguns módulos tinham isso salvo direto no título no banco
+ * depois do prefixo (ex: "[02] 📽️ Filmmaking Avançado" → "Filmmaking
+ * Avançado") — alguns módulos tinham isso salvo direto no título no banco
  * (já corrigido lá também), mas essa é uma rede de segurança pra não
  * depender só da limpeza manual se algo parecido acontecer de novo.
  */
 export function formatTitulo(titulo: string) {
   return titulo
+    .replace(/^\[\d+\]\s*/, '')
     .replace(/^\d+\s*-\s*/, '')
     .replace(/^\p{Extended_Pictographic}+\s*/u, '');
 }

@@ -73,6 +73,12 @@ export default function PlayerPageClient({
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [salvandoIds, setSalvandoIds] = useState<Record<string, boolean>>({});
 
+  // Abas "Aula"/"Anexos" — só existem no mobile (lg:hidden); no desktop a
+  // descrição e os documentos continuam em seções separadas, sem abas (ver
+  // os blocos `hidden lg:block` mais abaixo). "Aula" vem selecionada por
+  // padrão.
+  const [abaMobile, setAbaMobile] = useState<'aula' | 'anexos'>('aula');
+
   function estaConcluida(a: { id: string; concluida: boolean }) {
     return overrides[a.id] ?? a.concluida;
   }
@@ -129,6 +135,96 @@ export default function PlayerPageClient({
   const numeroModulo = [...modulos].sort((a, b) => a.ordem - b.ordem).findIndex((m) => m.id === modulo.id) + 1;
   const numeroAulaNoModulo = aulasDoModulo.findIndex((a) => a.id === aula.id) + 1;
 
+  // Título do módulo + barra de progresso + lista de aulas: no desktop é o
+  // conteúdo fixo da <aside> (sempre visível, ver mais abaixo). No mobile
+  // esse MESMO bloco (não uma cópia) é o conteúdo da aba "Aulas" — por isso
+  // vive numa variável só, montada nos dois lugares, em vez de duplicado.
+  const blocoModulo = (
+    <>
+      <div className="shrink-0 border-b border-border/40 p-6">
+        <p className="truncate text-2xl font-bold text-white">{formatTitulo(modulo.titulo)}</p>
+        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-high">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressoModulo}%` }} />
+        </div>
+        <p className="mt-1.5 text-xs text-on-variant">{progressoModulo}% Concluído</p>
+      </div>
+
+      <div className="p-0 lg:flex-1 lg:overflow-y-auto">
+        {aulasDoModulo.map((a, idx) => {
+          const ativa = a.id === aula.id;
+          const concluida = estaConcluida(a);
+          const tituloExibido = formatTitulo(a.titulo);
+          // "Tempo restante" usa a última posição salva (posicaoInicial),
+          // não a posição ao vivo do player — não temos esse estado aqui,
+          // só uma estimativa a partir do progresso salvo até a página
+          // carregar. Também não existe, no modelo de dados atual, um
+          // conceito de aula "bloqueada"/não liberada dentro de um módulo
+          // (só o curso inteiro pode estar bloqueado pro aluno) — por
+          // isso não há estado de cadeado aqui, só concluída/atual/pendente.
+          const restante = ativa && a.duracao_segundos > 0 ? Math.max(a.duracao_segundos - posicaoInicial, 0) : 0;
+
+          // Linha divisória entre aulas consecutivas (não depois da última).
+          // Importante: usamos `border-l-{cor}` (só o lado esquerdo, pro
+          // destaque da aula ativa) e `border-b-{cor}` (só o lado de baixo,
+          // pro separador) como utilitários DIRECIONAIS separados — nunca o
+          // atalho `divide-y`/`divide-{cor}` do Tailwind, que gera uma regra
+          // `border-color` (shorthand, as 4 bordas de uma vez) em cada item;
+          // isso já causou um bug aqui antes, sobrescrevendo a cor da borda
+          // esquerda do destaque ativo. Com as duas bordas endereçadas
+          // separadamente, uma nunca pisa na cor da outra.
+          const naoUltima = idx !== aulasDoModulo.length - 1;
+
+          return (
+            <div
+              key={a.id}
+              className={`flex items-start gap-3 border-l-4 px-3 py-3 text-sm transition-colors ${
+                ativa ? 'border-l-primary bg-surface-high' : 'border-l-transparent hover:bg-surface-container'
+              } ${naoUltima ? 'border-b border-b-border/40' : ''}`}
+            >
+              {/* Checkbox sempre clicável, pra qualquer aula da lista (não só a
+                  atual) — é a garantia de que o aluno controla o próprio
+                  progresso manualmente, independente do avanço automático.
+                  É um <button> irmão do <Link> abaixo (não um filho dele) pra
+                  não aninhar elemento interativo dentro de outro. */}
+              <button
+                type="button"
+                onClick={() => alternarConcluida(a, !concluida)}
+                disabled={!!salvandoIds[a.id]}
+                aria-pressed={concluida}
+                aria-label={concluida ? `Desmarcar "${tituloExibido}" como concluída` : `Marcar "${tituloExibido}" como concluída`}
+                className="group/check relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-container text-xs font-semibold text-on-variant transition-colors hover:bg-surface-high disabled:cursor-wait disabled:opacity-60"
+              >
+                {concluida ? (
+                  <CheckCircle2 size={18} className="text-primary" />
+                ) : (
+                  <>
+                    <span className="group-hover/check:opacity-0">{ativa ? <Play size={14} className="text-primary" /> : idx + 1}</span>
+                    {/* Ícone de check que aparece no hover, convidando a marcar como concluída */}
+                    <Check size={14} className="absolute inset-0 m-auto opacity-0 transition-opacity group-hover/check:opacity-100" />
+                  </>
+                )}
+              </button>
+              <Link href={`/membros/player/${a.id}`} className="min-w-0 flex-1">
+                <p
+                  className={`break-words font-medium ${concluida ? 'text-on-variant line-through' : ativa ? 'text-primary' : 'text-white'}`}
+                >
+                  {tituloExibido}
+                </p>
+                {ativa ? (
+                  <p className="text-xs text-primary">
+                    Assistindo agora{a.duracao_segundos > 0 ? ` • ${formatDuration(a.duracao_segundos)}` : ''}
+                  </p>
+                ) : (
+                  a.duracao_segundos > 0 && <p className="text-xs text-on-variant">{formatDuration(a.duracao_segundos)}</p>
+                )}
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       {/* Mobile: a fileira inteira rola como uma página só (empilhado).
@@ -167,10 +263,23 @@ export default function PlayerPageClient({
                   Aula {numeroAulaNoModulo} de {aulasDoModulo.length}
                 </span>
               </div>
-              <h1 className="mt-1 text-[1.9rem] font-bold text-white">{formatTitulo(aula.titulo)}</h1>
-              {aula.descricao && <p className="mt-1 max-w-2xl text-sm text-on-variant">{aula.descricao}</p>}
+              {/* Menor e com menos respiro no mobile (cabe em 1-2 linhas sem
+                  ocupar tanto espaço vertical); volta ao tamanho/espaçamento
+                  original a partir de lg:. */}
+              <h1 className="mt-3 text-xl font-bold leading-tight text-white lg:mt-1 lg:text-[1.9rem] lg:leading-normal">
+                {formatTitulo(aula.titulo)}
+              </h1>
+              {/* Descrição: só no desktop aqui embaixo do título — no mobile
+                  ela mora dentro da aba "Aula" logo abaixo (ver bloco
+                  lg:hidden mais adiante), pra não somar mais espaço vertical
+                  nessa área. */}
+              {aula.descricao && <p className="mt-1 hidden max-w-2xl text-sm text-on-variant lg:block">{aula.descricao}</p>}
             </div>
-            <div className="flex shrink-0 gap-2">
+            {/* Aula Anterior / Próxima Aula: só no desktop — no mobile essa
+                fileira cortava na borda direita da tela junto com o título.
+                Navegar entre aulas no mobile continua possível pela lista de
+                aulas do módulo, na aside abaixo. */}
+            <div className="hidden shrink-0 gap-2 lg:flex">
               <Link
                 href={aulaAnteriorId ? `/membros/player/${aulaAnteriorId}` : '#'}
                 aria-disabled={!aulaAnteriorId}
@@ -188,10 +297,75 @@ export default function PlayerPageClient({
             </div>
           </div>
 
-          {/* Sempre visível, mesmo sem documentos — mantém o espaçamento
-              consistente com o resto da página em vez de deixar um vazio
-              abaixo da descrição. */}
-          <div className="mt-8">
+          {/* Mobile: abas "Aulas"/"Anexos" no lugar da seção "Documentos e
+              Anexos" com título sublinhado (essa continua igual, só no
+              desktop, no bloco `hidden lg:block` logo abaixo). Abas em texto
+              simples (sem fundo/borda de card): ativa em branco com
+              underline na cor de destaque (primary), inativa em cinza
+              (on-variant). Borda inferior de 1px branco bem transparente
+              atravessa toda a largura, colada embaixo da fileira de abas.
+
+              Conteúdo abaixo troca de verdade por aba — é um ternário (não
+              CSS de visibilidade), então o lado escondido é DESMONTADO, não
+              só invisível ocupando espaço. "Aulas" mostra `blocoModulo`
+              (título do módulo + progresso + lista — o mesmo conteúdo da
+              <aside> do desktop, que fica `hidden` aqui no mobile, ver
+              abaixo); "Anexos" mostra só os documentos. Nenhum salto de
+              scroll ao trocar: o que muda é só o miolo deste bloco — vídeo,
+              linha "Módulo X • Aula Y de Z", título e a própria fileira de
+              abas continuam exatamente onde estavam antes do clique. */}
+          <div className="mt-6 lg:hidden">
+            <div className="flex gap-6 text-sm font-semibold">
+              <button type="button" onClick={() => setAbaMobile('aula')} className="relative pb-3">
+                <span className={abaMobile === 'aula' ? 'text-white' : 'text-on-variant'}>Aulas</span>
+                {abaMobile === 'aula' && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />}
+              </button>
+              <button type="button" onClick={() => setAbaMobile('anexos')} className="relative pb-3">
+                <span className={abaMobile === 'anexos' ? 'text-white' : 'text-on-variant'}>Anexos</span>
+                {abaMobile === 'anexos' && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-primary" />}
+              </button>
+            </div>
+            <div className="border-b border-white/10" />
+
+            <div className={abaMobile === 'aula' ? '' : 'pt-4'}>
+              {abaMobile === 'aula' ? (
+                blocoModulo
+              ) : documentos.length > 0 ? (
+                <div className="space-y-2">
+                  {documentos.map((doc) => {
+                    const Icone = iconeParaDocumento(doc.tipo);
+                    return (
+                      <a
+                        key={doc.id}
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex items-center gap-3 rounded-[0.6rem] border border-transparent bg-card px-4 py-3 text-sm text-on-surface transition-colors hover:border-primary hover:bg-surface-container"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-surface-high text-primary">
+                          <Icone size={18} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-white">{doc.nome}</p>
+                          {doc.tamanho_bytes != null && (
+                            <p className="text-xs text-on-variant">{formatBytes(doc.tamanho_bytes)}</p>
+                          )}
+                        </span>
+                        <Download size={18} className="shrink-0 text-on-variant transition-colors group-hover:text-primary" />
+                      </a>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-on-variant">Nenhum documento disponível para esta aula.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Desktop: seção "Documentos e Anexos" original, com título
+              sublinhado — sempre visível mesmo sem documentos, mantém o
+              espaçamento consistente com o resto da página. */}
+          <div className="mt-8 hidden lg:block">
             <h2 className="text-base font-bold text-white">Documentos e Anexos</h2>
             <div className="mb-4 mt-2 h-0.5 w-full max-w-[11rem] bg-primary" />
 
@@ -227,88 +401,11 @@ export default function PlayerPageClient({
           </div>
         </div>
 
-        <aside className="flex w-full shrink-0 flex-col border-t border-border/60 lg:w-80 lg:overflow-hidden lg:border-l lg:border-t-0">
-          <div className="shrink-0 border-b border-border/40 p-6">
-            <p className="truncate text-2xl font-bold text-white">{formatTitulo(modulo.titulo)}</p>
-            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-high">
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressoModulo}%` }} />
-            </div>
-            <p className="mt-1.5 text-xs text-on-variant">{progressoModulo}% Concluído</p>
-          </div>
-
-          <div className="p-0 lg:flex-1 lg:overflow-y-auto">
-            {aulasDoModulo.map((a, idx) => {
-              const ativa = a.id === aula.id;
-              const concluida = estaConcluida(a);
-              const tituloExibido = formatTitulo(a.titulo);
-              // "Tempo restante" usa a última posição salva (posicaoInicial),
-              // não a posição ao vivo do player — não temos esse estado aqui,
-              // só uma estimativa a partir do progresso salvo até a página
-              // carregar. Também não existe, no modelo de dados atual, um
-              // conceito de aula "bloqueada"/não liberada dentro de um módulo
-              // (só o curso inteiro pode estar bloqueado pro aluno) — por
-              // isso não há estado de cadeado aqui, só concluída/atual/pendente.
-              const restante = ativa && a.duracao_segundos > 0 ? Math.max(a.duracao_segundos - posicaoInicial, 0) : 0;
-
-              // Linha divisória entre aulas consecutivas (não depois da última).
-              // Importante: usamos `border-l-{cor}` (só o lado esquerdo, pro
-              // destaque da aula ativa) e `border-b-{cor}` (só o lado de baixo,
-              // pro separador) como utilitários DIRECIONAIS separados — nunca o
-              // atalho `divide-y`/`divide-{cor}` do Tailwind, que gera uma regra
-              // `border-color` (shorthand, as 4 bordas de uma vez) em cada item;
-              // isso já causou um bug aqui antes, sobrescrevendo a cor da borda
-              // esquerda do destaque ativo. Com as duas bordas endereçadas
-              // separadamente, uma nunca pisa na cor da outra.
-              const naoUltima = idx !== aulasDoModulo.length - 1;
-
-              return (
-                <div
-                  key={a.id}
-                  className={`flex items-start gap-3 border-l-4 px-3 py-3 text-sm transition-colors ${
-                    ativa ? 'border-l-primary bg-surface-high' : 'border-l-transparent hover:bg-surface-container'
-                  } ${naoUltima ? 'border-b border-b-border/40' : ''}`}
-                >
-                  {/* Checkbox sempre clicável, pra qualquer aula da lista (não só a
-                      atual) — é a garantia de que o aluno controla o próprio
-                      progresso manualmente, independente do avanço automático.
-                      É um <button> irmão do <Link> abaixo (não um filho dele) pra
-                      não aninhar elemento interativo dentro de outro. */}
-                  <button
-                    type="button"
-                    onClick={() => alternarConcluida(a, !concluida)}
-                    disabled={!!salvandoIds[a.id]}
-                    aria-pressed={concluida}
-                    aria-label={concluida ? `Desmarcar "${tituloExibido}" como concluída` : `Marcar "${tituloExibido}" como concluída`}
-                    className="group/check relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-container text-xs font-semibold text-on-variant transition-colors hover:bg-surface-high disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {concluida ? (
-                      <CheckCircle2 size={18} className="text-primary" />
-                    ) : (
-                      <>
-                        <span className="group-hover/check:opacity-0">{ativa ? <Play size={14} className="text-primary" /> : idx + 1}</span>
-                        {/* Ícone de check que aparece no hover, convidando a marcar como concluída */}
-                        <Check size={14} className="absolute inset-0 m-auto opacity-0 transition-opacity group-hover/check:opacity-100" />
-                      </>
-                    )}
-                  </button>
-                  <Link href={`/membros/player/${a.id}`} className="min-w-0 flex-1">
-                    <p
-                      className={`break-words font-medium ${concluida ? 'text-on-variant line-through' : ativa ? 'text-primary' : 'text-white'}`}
-                    >
-                      {tituloExibido}
-                    </p>
-                    {ativa ? (
-                      <p className="text-xs text-primary">
-                        Assistindo agora{a.duracao_segundos > 0 ? ` • ${formatDuration(a.duracao_segundos)}` : ''}
-                      </p>
-                    ) : (
-                      a.duracao_segundos > 0 && <p className="text-xs text-on-variant">{formatDuration(a.duracao_segundos)}</p>
-                    )}
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
+        {/* Desktop apenas (hidden lg:flex): no mobile esse mesmo conteúdo
+            (`blocoModulo`) vive dentro da aba "Aulas" logo acima — não faz
+            sentido repetir a lista de aulas duas vezes na mesma tela. */}
+        <aside className="hidden w-full shrink-0 flex-col border-t border-border/60 lg:flex lg:w-80 lg:overflow-hidden lg:border-l lg:border-t-0">
+          {blocoModulo}
         </aside>
       </div>
     </div>

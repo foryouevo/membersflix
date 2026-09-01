@@ -97,26 +97,27 @@ export default function Carousel<T>({
     <div className={outerClassName}>
       <div className={headerClassName}>
         <h2 className={titleClassName}>{title}</h2>
-        {/* Sempre visíveis a partir de 1 item (não só >1) — o estado
-            desativado (disabled/podeNavegar acima) já cobre "não tem pra
-            onde navegar"; esconder a seta de vez só faria sentido com 0
-            itens, mas aí o header nem chega a ser útil (emptyMessage assume
-            o lugar do carrossel logo abaixo). */}
-        {items.length > 0 && (
+        {/* `podeNavegar` (não `items.length > 1`): só aparecem quando o
+            conteúdo de fato ultrapassa a largura visível do carrossel —
+            Embla já calcula isso sozinho via scrollSnapList().length > 1
+            (mais de 1 "página" de scroll = tem overflow de verdade), e
+            reavalia em resize através do evento `reInit` (useEffect acima).
+            Com todos os cards cabendo de uma vez (por mais itens que
+            existam) ou com 0/1 item, as setas somem por completo — não só
+            ficam desativadas. */}
+        {podeNavegar && (
           <div className="flex shrink-0 items-center gap-1.5">
             <button
               onClick={irParaAnterior}
-              disabled={!podeNavegar}
               aria-label={prevLabel}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-high disabled:hover:text-on-variant"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white"
             >
               <ChevronLeft size={20} strokeWidth={1.5} />
             </button>
             <button
               onClick={irParaProxima}
-              disabled={!podeNavegar}
               aria-label={nextLabel}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-surface-high disabled:hover:text-on-variant"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white"
             >
               <ChevronRight size={20} strokeWidth={1.5} />
             </button>

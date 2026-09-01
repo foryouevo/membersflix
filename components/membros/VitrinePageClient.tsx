@@ -9,9 +9,11 @@ import AccessModal from '@/components/membros/AccessModal';
 import Carousel from '@/components/membros/Carousel';
 import HomeSearchFilter from '@/components/membros/HomeSearchFilter';
 import TodosCursosPorCategoria from '@/components/membros/TodosCursosPorCategoria';
+import HomeMobileHeader, { GAP_LOGO_TITULO_PX } from '@/components/membros/HomeMobileHeader';
+import CursoDestaqueMobile from '@/components/membros/CursoDestaqueMobile';
 import { CARD_BASIS_CLASSES, TITULO_SECAO_CLASSNAME } from '@/components/membros/cursoListaEstilos';
 import { useCursoFiltro } from '@/hooks/useCursoFiltro';
-import type { Curso } from '@/types';
+import type { Categoria, Curso } from '@/types';
 
 export default function VitrinePageClient({
   meusCursos,
@@ -24,6 +26,8 @@ export default function VitrinePageClient({
   bannerResumo,
   continuarAssistindoHref,
   temProgresso,
+  todasCategorias,
+  cursoDestaque,
 }: {
   meusCursos: Curso[];
   todosCursos: Curso[];
@@ -35,28 +39,49 @@ export default function VitrinePageClient({
   bannerResumo: string | null;
   continuarAssistindoHref: string;
   temProgresso: boolean;
+  todasCategorias: Categoria[];
+  cursoDestaque: Curso | null;
 }) {
   const [modalCurso, setModalCurso] = useState<Curso | null>(null);
+
+  // Altura real do cabeçalho compacto mobile (HomeMobileHeader — logo+
+  // "Início" + fileira de chips, estado expandido/topo), medida no
+  // navegador — não é dinâmica; remeça se o header mudar de altura. Usada
+  // só pra montar o número do comentário/aviso abaixo — a classe
+  // `pt-[101px]` no JSX continua sendo o valor que de fato vale (Tailwind
+  // não lê essa conta em runtime).
+  const HEADER_HEIGHT_PX = 93;
+  const PT_MOBILE_ESPERADO_PX = HEADER_HEIGHT_PX + GAP_LOGO_TITULO_PX;
+  if (process.env.NODE_ENV !== 'production' && PT_MOBILE_ESPERADO_PX !== 101) {
+    console.warn(
+      `[VitrinePageClient] pt-[101px] (classe do card de destaque mobile) está desatualizado — devia ser pt-[${PT_MOBILE_ESPERADO_PX}px] ` +
+        `(HEADER_HEIGHT_PX=${HEADER_HEIGHT_PX} + GAP_LOGO_TITULO_PX=${GAP_LOGO_TITULO_PX}, de HomeMobileHeader.tsx). Atualize a classe manualmente.`
+    );
+  }
 
   // Busca/filtro (categoria + instrutor, seleção múltipla) + agrupamento de
   // "Todos os Cursos" por categoria — lógica extraída em useCursoFiltro pra
   // ser reaproveitada também na tela de busca dedicada (BuscarPageClient,
   // mobile). Aqui na Home a busca flutuante só aparece em desktop/tablet
-  // (ver `hidden md:block` abaixo) — no mobile o usuário chega no mesmo
-  // resultado pelo ícone de lupa do bottom nav, que leva pra /membros/buscar.
+  // (ver `hidden md:block` abaixo); no mobile ela some, mas a fileira de
+  // chips de categoria (CategoriaChipsMobile, md:hidden também) usa o MESMO
+  // categoriaFiltro/toggleGrupoCategoria — então filtroAtivo também pode
+  // ficar true a partir do mobile agora, não só do desktop.
   const {
     busca,
     setBusca,
     categoriaFiltro,
     toggleCategoriaFiltro,
+    toggleGrupoCategoria,
     instrutorFiltro,
     toggleInstrutorFiltro,
     limparFiltros,
     filtroAtivo,
     categoriasDisponiveis,
+    categoriasAgrupadas,
     instrutoresDisponiveis,
     gruposPorCategoria,
-  } = useCursoFiltro(todosCursos);
+  } = useCursoFiltro(todosCursos, todasCategorias);
 
   return (
     <div className="pb-12">
@@ -67,6 +92,24 @@ export default function VitrinePageClient({
           de ficar sem fundo nenhum. Altura vem do padding do conteúdo (não
           de aspect-ratio fixo), então acomoda o botão novo sem espremer. */}
       <div className="relative w-full overflow-hidden bg-gradient-to-br from-primary/25 via-background to-background">
+        {/* Cabeçalho compacto (logo + "Início" + chips de categoria),
+            estilo app da Netflix — só no mobile (md:hidden, mesmo
+            breakpoint em que a sidebar vira bottom nav — ver
+            MembrosSidebar.tsx). `fixed` (não `absolute`): fica sempre
+            visível no topo mesmo com a página rolando, igual à bottom nav
+            mobile. Substitui o wordmark grande do banner nesse breakpoint
+            (ele ganhou `hidden md:block` logo abaixo). Transparente no
+            topo / sólido + chips colapsados ao rolar — todo esse
+            comportamento (incluindo o listener de scroll com throttle via
+            rAF) mora dentro do componente, ver HomeMobileHeader.tsx. z-30:
+            acima do banner/gradientes; abaixo do bottom nav (z-40) e de
+            modais. */}
+        <HomeMobileHeader
+          categoriasAgrupadas={categoriasAgrupadas}
+          categoriaFiltro={categoriaFiltro}
+          onToggleGrupo={toggleGrupoCategoria}
+        />
+
         {bannerCapaUrl && <Image src={bannerCapaUrl} alt="" fill priority quality={100} className="object-cover" />}
         {/* Overlay: mais escuro embaixo/esquerda (onde o texto fica), mais
             claro pro resto — garante legibilidade sobre qualquer capa,
@@ -100,23 +143,61 @@ export default function VitrinePageClient({
           />
         </div>
 
-        <div className="relative flex flex-col items-start gap-4 px-4 py-14 sm:px-16 sm:py-20">
-          {/* Mesma classe do badge de categoria em CursoDetalheClient.tsx
-              (ex: "FIGMA") — consistência visual entre os dois banners. */}
-          {bannerBadge && (
-            <span className="rounded-full bg-surface-high px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-on-variant">
-              {bannerBadge}
-            </span>
+        {/* pt-[101px] no mobile: espaço pro cabeçalho compacto (fixed,
+            sobreposto) não cobrir o card de destaque abaixo — valor exato,
+            não chutado: HEADER_HEIGHT_PX (header — logo+"Início" + fileira
+            de chips — medido no navegador) + GAP_LOGO_TITULO_PX (o mesmo
+            gap-2 usado entre o logo e "Início", ver HomeMobileHeader.tsx) =
+            93 + 8 = 101px de espaço até o topo do card, igual ao gap do
+            logo. Antes disso o gap real era de 19px (pt-28 = 112px), sem
+            relação nenhuma com o gap do logo.
+            Tailwind não permite montar `pt-[Npx]` a partir de uma variável
+            em runtime (o compilador precisa ver a classe completa como
+            texto no código-fonte) — por isso o valor abaixo continua uma
+            classe estática, mas o cálculo que a origina usa a MESMA
+            constante importada de HomeMobileHeader (GAP_LOGO_TITULO_PX), e
+            o aviso do console abaixo (só em dev) avisa se esse "101"
+            ficar desatualizado depois de uma mudança no gap-2 ou na altura
+            do header.
+            pb-6: o card de destaque já é bem mais compacto que o bloco de
+            texto de antes, não precisa de mais folga embaixo. sm:py-20
+            (sem chips fixos nesse breakpoint, texto original) continua
+            igual. */}
+        <div className="relative px-4 pb-6 pt-[101px] sm:px-16 sm:py-20">
+          {/* Mobile: o bloco de texto (badge/wordmark/resumo/CTA) vira o
+              card de destaque estilo hero — no lugar dele, não junto. Some
+              a partir de md, onde o bloco de texto (abaixo) assume. */}
+          {cursoDestaque && (
+            <div className="md:hidden">
+              <CursoDestaqueMobile
+                curso={cursoDestaque}
+                hasAccess={!!acessos[cursoDestaque.id]}
+                onClickComprar={() => setModalCurso(cursoDestaque)}
+              />
+            </div>
           )}
 
-          <Image src="/logo.png" alt="MembersFlix" width={420} height={84} priority className="h-14 w-auto object-contain sm:h-20" />
+          {/* Desktop/tablet: bloco de texto original (badge + wordmark +
+              resumo + Continuar assistindo) — hidden no mobile, onde o card
+              de destaque acima assume o lugar dele por completo. */}
+          <div className="hidden flex-col items-start gap-4 md:flex">
+            {/* Mesma classe do badge de categoria em CursoDetalheClient.tsx
+                (ex: "FIGMA") — consistência visual entre os dois banners. */}
+            {bannerBadge && (
+              <span className="rounded-full bg-surface-high px-3 py-1 text-[0.65rem] font-bold uppercase tracking-wide text-on-variant">
+                {bannerBadge}
+              </span>
+            )}
 
-          {bannerResumo && <p className="max-w-xl text-sm text-on-variant sm:text-base">{bannerResumo}</p>}
+            <Image src="/logo.png" alt="MembersFlix" width={420} height={84} priority className="h-20 w-auto object-contain" />
 
-          <Link href={continuarAssistindoHref} className="btn-primary mt-2 flex items-center gap-2">
-            <Play size={18} className="fill-white" />
-            {temProgresso ? 'Continuar assistindo' : 'Assistir Agora'}
-          </Link>
+            {bannerResumo && <p className="max-w-xl text-sm text-on-variant sm:text-base">{bannerResumo}</p>}
+
+            <Link href={continuarAssistindoHref} className="btn-primary mt-2 flex items-center gap-2">
+              <Play size={18} className="fill-white" />
+              {temProgresso ? 'Continuar assistindo' : 'Assistir Agora'}
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -130,11 +211,10 @@ export default function VitrinePageClient({
             visíveis, e a página rola normalmente. Os cards em si (CourseCard)
             não mudaram — continuam aspect-video, só a exibição virou
             carrossel em vez de grid fixo. */}
-        {/* Some inteira com busca/filtro ativos (só possível em
-            desktop/tablet, via a busca flutuante acima — no mobile ela nem
-            aparece, então filtroAtivo nunca fica true por aqui) — nesse
+        {/* Some inteira com filtro ativo (busca/instrutor no desktop via a
+            busca flutuante, ou categoria via os chips mobile) — nesse
             estado só "Todos os Cursos" (com os resultados) fica visível;
-            volta a aparecer assim que busca e filtros são limpos. */}
+            volta a aparecer assim que o filtro é limpo. */}
         {!filtroAtivo && (
           <section className="mb-10">
             <Carousel
@@ -163,7 +243,17 @@ export default function VitrinePageClient({
           acessos={acessos}
           progressoPorCurso={progressoPorCurso}
           onClickLocked={setModalCurso}
-          emptyMessage={filtroAtivo ? 'Nenhum curso encontrado com esse filtro.' : 'Nenhum curso disponível no momento.'}
+          emptyMessage={
+            !filtroAtivo
+              ? 'Nenhum curso disponível no momento.'
+              : // Só categoria marcada (sem busca/instrutor) — caso dos chips
+                // mobile — ganha a mensagem específica pedida; combinações
+                // com busca/instrutor (só possíveis no desktop) continuam
+                // com a mensagem genérica.
+                categoriaFiltro.length > 0 && !busca.trim() && instrutorFiltro.length === 0
+                ? 'Nenhum curso nessa categoria ainda.'
+                : 'Nenhum curso encontrado com esse filtro.'
+          }
         />
       </div>
 

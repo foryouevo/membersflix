@@ -73,18 +73,21 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
     }));
   }
 
-  // Módulo "pai" (guarda-chuva, ex: "[02] Filmmaking Avançado") nunca tem
-  // aula própria — as aulas ficam nos filhos — então ele nunca aparece como
-  // card no carrossel: só os módulos-folha (que não são pai de mais
-  // ninguém) aparecem, na mesma sequência de sempre, sem indicação visual
-  // extra de que vieram de dentro de um agrupador.
-  const idsComFilho = new Set(modulos.map((m) => m.modulo_pai_id).filter(Boolean));
-  modulos = modulos.filter((m) => !idsComFilho.has(m.id));
-
+  // Diferente da versão anterior: módulo "pai" (guarda-chuva, ex: "[02]
+  // Filmmaking Avançado") continua na lista passada pro client — é o
+  // CursoDetalheClient quem decide como agrupar visualmente (seção própria
+  // por pai, com os filhos no carrossel dela). Aqui só o cálculo do trial
+  // precisa ignorar os pais: eles nunca têm aula própria, então não fazem
+  // sentido como "o Módulo 1 liberado" (mesma regra de sempre, só isolada
+  // numa lista à parte em vez de filtrar a lista principal).
   if (hasAccess) {
     const { data: profile } = await supabase.from('profiles').select('status_pagamento').eq('id', user!.id).maybeSingle();
-    if (profile?.status_pagamento === 'pendente' && modulos.length > 0) {
-      trialModuloUnicoId = modulos.reduce((min: any, m: any) => (m.ordem < min.ordem ? m : min), modulos[0]).id;
+    if (profile?.status_pagamento === 'pendente') {
+      const idsComFilho = new Set(modulos.map((m) => m.modulo_pai_id).filter(Boolean));
+      const folhas = modulos.filter((m) => !idsComFilho.has(m.id));
+      if (folhas.length > 0) {
+        trialModuloUnicoId = folhas.reduce((min: any, m: any) => (m.ordem < min.ordem ? m : min), folhas[0]).id;
+      }
     }
   }
 

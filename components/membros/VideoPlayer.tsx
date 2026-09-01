@@ -24,6 +24,15 @@ const ReactPlayer = dynamic(() => import('react-player'), { ssr: false });
 
 const VELOCIDADES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
+// Altura (em px) reservada, além dos 16:9 do vídeo em si, pra UI própria do
+// player embutido do Google Drive (.../file/d/FILE_ID/preview) — a barra de
+// título do arquivo no topo + a barra de controles dele embaixo. É medida às
+// cegas (a UI do Drive é cross-origin, não dá pra medir por JS) — 48px não
+// foi suficiente (controles ainda cortavam), 88px é a tentativa atual. Se
+// ainda cortar, sobe esse número (ex.: 104px) — ver DriveIframePlayer,
+// abaixo, onde é o único lugar que usa essa constante.
+const DRIVE_UI_OFFSET_PX = 88;
+
 interface VideoPlayerProps {
   aulaId: string;
   cursoId: string;
@@ -109,37 +118,66 @@ function DriveIframePlayer({ videoUrl }: VideoPlayerProps) {
   useDificultarInspecao();
 
   return (
-    <div
-      ref={containerRef}
-      onContextMenu={(e) => e.preventDefault()}
-      className="relative aspect-video w-full overflow-hidden rounded-lg bg-black"
-    >
-      <iframe
-        src={embedUrl}
-        allow="autoplay; fullscreen"
-        allowFullScreen
-        className="h-full w-full"
-        style={{ border: 0 }}
-      />
-
-      {/* O player embutido do Drive é cross-origin: não dá pra remover do DOM
-          o ícone de "abrir em nova aba"/cast que ele desenha no canto superior
-          direito, só mascará-lo. Este é o ÚNICO elemento de overlay do
-          componente — cobre a área do ícone por completo e intercepta o
-          clique (tanto por estar visualmente por cima quanto pelo
-          preventDefault) para que o aluno não saia da plataforma. Não
-          depende de play/pause: é um bloco estático, sempre presente, sem
-          interferir nos controles do próprio player do Drive (que ficam
-          embaixo, fora dessa área). Mesma posição/tamanho/z-index de antes —
-          só o preenchimento mudou de preto sólido pra essa marca d'água
-          (faviconmenor.png é quadrado, então cover e contain dão o mesmo
-          resultado aqui: preenche o quadrado de ponta a ponta sem sobra). */}
+    // O iframe /preview do Drive não é um player "cru": ele desenha a
+    // própria UI (barra de título do arquivo em cima, barra de controles
+    // embaixo) DENTRO do espaço que a gente dá pra ele. Com aspect-video
+    // puro (16/9 exato), essa UI comia altura do vídeo — o vídeo em si
+    // encolhia pra caber, e a barra de baixo ainda ficava cortada. Por
+    // isso a caixa deixou de ser aspect-ratio puro: é 16/9 (56.25%) +
+    // DRIVE_UI_OFFSET_PX fixos extra (ver constante no topo do arquivo),
+    // espaço reservado só pra UI do Drive, sem comprimir o vídeo. Técnica
+    // do "padding-bottom vira altura" (funciona em qualquer navegador, sem
+    // depender de aspect-ratio nem de JS/ResizeObserver): um spacer com
+    // width:100% e padding-bottom:calc(56.25% + Npx) — como padding
+    // percentual é sempre relativo à LARGURA do próprio elemento, isso dá a
+    // altura final direto em função da largura, sem CSS var. A caixa visual
+    // de verdade (fundo preto, cantos arredondados, overflow-hidden, o
+    // iframe) fica ABSOLUTAMENTE posicionada preenchendo esse spacer
+    // (inset-0) — senão o padding-bottom sobraria como espaço vazio dentro
+    // do próprio fluxo, sem nada desenhado ali.
+    <div className="relative w-full" style={{ paddingBottom: `calc(56.25% + ${DRIVE_UI_OFFSET_PX}px)` }}>
       <div
-        onClick={(e) => e.preventDefault()}
-        style={{ backgroundImage: "url('/faviconmenor.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}
-        className="absolute right-0 top-0 z-20 h-[60px] w-[60px] cursor-default"
-        aria-hidden
-      />
+        ref={containerRef}
+        onContextMenu={(e) => e.preventDefault()}
+        className="absolute inset-0 overflow-hidden rounded-lg bg-black"
+      >
+        {/* h-full w-full: preenche a caixa (16/9 + DRIVE_UI_OFFSET_PX)
+            inteira — o offset extra é exatamente o "respiro" que sobra pra
+            UI do Drive não precisar espremer o vídeo nem cortar a barra
+            debaixo. Sem transform/scale nem overlay tentando "esconder" a
+            UI do Drive — isso quebraria os controles dela; a única correção
+            aqui é dar altura de sobra o suficiente. overflow-hidden só
+            arredonda os cantos do iframe (que é retangular reto) — não
+            corta mais nada, já que a caixa agora é alta o bastante pro
+            conteúdo do Drive inteiro (vídeo 16/9 + a UI dele) caber sem
+            sobrar. */}
+        <iframe
+          src={embedUrl}
+          allow="autoplay; fullscreen"
+          allowFullScreen
+          className="h-full w-full"
+          style={{ border: 0 }}
+        />
+
+        {/* O player embutido do Drive é cross-origin: não dá pra remover do DOM
+            o ícone de "abrir em nova aba"/cast que ele desenha no canto superior
+            direito, só mascará-lo. Este é o ÚNICO elemento de overlay do
+            componente — cobre a área do ícone por completo e intercepta o
+            clique (tanto por estar visualmente por cima quanto pelo
+            preventDefault) para que o aluno não saia da plataforma. Não
+            depende de play/pause: é um bloco estático, sempre presente, sem
+            interferir nos controles do próprio player do Drive (que ficam
+            embaixo, fora dessa área). Mesma posição/tamanho/z-index de antes —
+            só o preenchimento mudou de preto sólido pra essa marca d'água
+            (faviconmenor.png é quadrado, então cover e contain dão o mesmo
+            resultado aqui: preenche o quadrado de ponta a ponta sem sobra). */}
+        <div
+          onClick={(e) => e.preventDefault()}
+          style={{ backgroundImage: "url('/faviconmenor.png')", backgroundSize: 'cover', backgroundPosition: 'center' }}
+          className="absolute right-0 top-0 z-20 h-[60px] w-[60px] cursor-default"
+          aria-hidden
+        />
+      </div>
     </div>
   );
 }
@@ -228,6 +266,14 @@ function CustomVideoPlayer({ aulaId, cursoId, videoUrl, posicaoInicial, aulaAnte
   }
 
   return (
+    // aspect-video + w-full, sem h-*/min-h-*: mesma garantia do
+    // DriveIframePlayer (ver comentário lá) de que a caixa é sempre
+    // exatamente 16:9, nunca mais alta que o vídeo. overflow-hidden só
+    // arredonda os cantos do <video> (que ocupa a caixa inteira via o style
+    // position:absolute+inset:0 do ReactPlayer, abaixo) — a barra de
+    // controles logo mais abaixo é `absolute bottom-0` DENTRO desta mesma
+    // caixa (nunca ultrapassa a altura dela), então overflow-hidden nunca
+    // corta o rodapé dela.
     <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
@@ -255,7 +301,13 @@ function CustomVideoPlayer({ aulaId, cursoId, videoUrl, posicaoInicial, aulaAnte
         }}
         onClickPreview={() => setPlaying(true)}
         config={{ file: { attributes: { controlsList: 'nodownload', disablePictureInPicture: false } } }}
-        style={{ pointerEvents: 'none' }}
+        // position:absolute + inset:0 (em vez de só width/height:"100%") gruda
+        // o wrapper do react-player diretamente na caixa do container (que já
+        // é aspect-video, sem altura fixa) — evita qualquer sobra/tarja preta
+        // que viria de o wrapper calcular seu próprio tamanho em % a partir
+        // de um instante em que o container ainda não tinha a altura final
+        // (ex.: hidratação/primeira medição antes do aspect-ratio "assentar").
+        style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
       />
 
       {/* overlay clicável para play/pause */}

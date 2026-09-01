@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 
-export default function LogoutButton({ className }: { className?: string }) {
+export default function LogoutButton({ className, children }: { className?: string; children?: React.ReactNode }) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -16,7 +16,7 @@ export default function LogoutButton({ className }: { className?: string }) {
 
   return (
     <button onClick={handleLogout} className={cn(className)}>
-      Sair
+      {children ?? 'Sair'}
     </button>
   );
 }

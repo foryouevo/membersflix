@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -9,13 +9,12 @@ import {
   PlaySquare,
   Search,
   MessageCircle,
-  ChevronUp,
   ChevronLeft,
   ChevronRight,
   User as UserIcon,
   LogOut,
 } from 'lucide-react';
-import { cn, initials, buildSupportWhatsappLink } from '@/lib/utils';
+import { cn, buildSupportWhatsappLink } from '@/lib/utils';
 import type { Profile } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 
@@ -31,8 +30,6 @@ export default function MembrosSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   // Começa expandida no server (evita mismatch de hidratação); lê a preferência
   // salva assim que monta no client.
@@ -56,16 +53,6 @@ export default function MembrosSidebar({
       return next;
     });
   }
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -280,34 +267,16 @@ export default function MembrosSidebar({
           )}
         </nav>
 
-        <div ref={menuRef} className="relative border-t border-border/60 p-3">
-          {menuOpen && (
-            <div className="absolute inset-x-3 bottom-full z-10 mb-2 overflow-hidden rounded-lg bg-surface-high shadow-overlay">
-              <Link
-                href="/membros/perfil"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 text-sm text-on-surface hover:bg-surface-container"
-              >
-                <UserIcon size={16} /> Meu perfil
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-error hover:bg-surface-container"
-              >
-                <LogOut size={16} /> Sair
-              </button>
-            </div>
-          )}
-
+        {/* Só "Sair", fixo — sem dropdown, sem avatar/nome do usuário aqui.
+            "Meu Perfil" já existe como item próprio na navegação principal
+            (acima); duplicar identidade do usuário aqui embaixo também era
+            redundante. */}
+        <div className="border-t border-border/60 p-3">
           <button
-            onClick={() => setMenuOpen((o) => !o)}
-            className="flex w-full items-center gap-3 rounded px-2 py-2 text-left hover:bg-surface-container"
+            onClick={handleLogout}
+            className="flex w-full items-center gap-3 rounded px-2 py-2 text-left text-sm font-medium text-error hover:bg-surface-container"
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">
-              {initials(profile.nome || 'Aluno')}
-            </div>
-            <span className="flex-1 truncate text-sm font-medium text-white">{profile.nome}</span>
-            <ChevronUp size={16} className={cn('shrink-0 text-on-variant transition-transform', menuOpen && 'rotate-180')} />
+            <LogOut size={18} /> Sair
           </button>
         </div>
       </aside>
