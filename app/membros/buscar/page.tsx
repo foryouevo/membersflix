@@ -1,12 +1,19 @@
 import { createClient } from '@/lib/supabase/server';
 import BuscarPageClient from '@/components/membros/BuscarPageClient';
 
-// Tela de busca dedicada (mobile — ver MembrosSidebar/mobileNav). Busca os
-// mesmos dados que a Home (app/membros/vitrine/page.tsx) precisa pra render
-// "Todos os Cursos" — cursos com categoria (join), acessos e progresso —
-// mas sem o que só a Home usa (banner, meusCursos, continuarAssistindo):
-// aqui não tem hero nem "Meus Cursos", só a lista completa pra filtrar.
-export default async function BuscarPage() {
+// Tela de busca dedicada — acessada pelo ícone de lupa do bottom nav mobile
+// e pela busca do DesktopHeader (que manda o aluno pra cá com
+// ?q=/categoria=/instrutor= já preenchidos, se ele digitou/marcou algo
+// antes de "entrar" na busca). Busca os mesmos dados que a Home
+// (app/membros/vitrine/page.tsx) precisa pra render "Todos os Cursos" —
+// cursos com categoria (join), acessos e progresso — mas sem o que só a
+// Home usa (banner, meusCursos, continuarAssistindo): aqui não tem hero nem
+// "Meus Cursos", só a lista completa pra filtrar.
+export default async function BuscarPage({
+  searchParams,
+}: {
+  searchParams: { q?: string; categoria?: string; instrutor?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -46,6 +53,11 @@ export default async function BuscarPage() {
       acessos={Object.fromEntries(acessos)}
       progressoPorCurso={Object.fromEntries(progressoPorCurso)}
       numeroWhatsapp={config?.numero_whatsapp ?? null}
+      // Semente do filtro vinda da URL (DesktopHeader) — categoria/instrutor
+      // chegam como lista separada por vírgula de ids/nomes.
+      buscaInicial={searchParams.q ?? ''}
+      categoriaIdsInicial={searchParams.categoria ? searchParams.categoria.split(',') : []}
+      instrutorNomesInicial={searchParams.instrutor ? searchParams.instrutor.split(',') : []}
     />
   );
 }

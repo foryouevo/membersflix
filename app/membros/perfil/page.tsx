@@ -195,12 +195,11 @@ export default async function PerfilPage() {
           </div>
         </div>
 
-        {/* Sair — só no mobile (md:hidden, mesmo breakpoint em que a
-            sidebar com o "Sair" original vira a bottom nav — ver
-            MembrosSidebar.tsx). No mobile a sidebar fica escondida/
-            colapsada, então esse é o único jeito de fazer logout por lá sem
-            precisar caçar a barra inferior por ícone. Mesmo estilo visual
-            do botão da sidebar (ícone + texto em vermelho, mesmo hover). */}
+        {/* Sair — só no mobile (md:hidden). No desktop/tablet o "Sair" já
+            está sempre acessível no dropdown do avatar (DesktopHeader >
+            UserAvatarMenu); no mobile esse mesmo dropdown existe no
+            MobileHeader, mas esse botão aqui na tela de perfil continua
+            como atalho extra, sem precisar abrir o menu do avatar. */}
         <LogoutButton className="flex w-full items-center justify-center gap-2 rounded-lg bg-card px-4 py-3 text-sm font-medium text-error hover:bg-surface-container md:hidden">
           <LogOut size={18} /> Sair da conta
         </LogoutButton>

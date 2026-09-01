@@ -5,14 +5,14 @@ import { Filter, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Busca (por título) + filtro (categoria/instrutor, seleção múltipla) —
-// reaproveitada na Home (flutuando sobre o banner, desktop/tablet) e na
-// tela de busca dedicada (BuscarPageClient, mobile — `fullWidth`). Estado
-// controlado pelo pai, que é quem de fato filtra os cursos; este componente
-// só é a UI. Mesmo padrão de dropdown com click-outside já usado no menu de
-// conta do MembrosSidebar (menuRef + listener de mousedown), reaproveitado
+// reaproveitada no DesktopHeader (barra fixa no topo, desktop/tablet — só
+// navega pra tela de busca, não filtra nada por conta própria) e na tela de
+// busca dedicada (BuscarPageClient — `fullWidth`, filtra de verdade). Estado
+// controlado pelo pai, que decide o que fazer com ele; este componente só é
+// a UI. Mesmo padrão de dropdown com click-outside já usado no menu do
+// avatar (UserAvatarMenu — menuRef + listener de mousedown), reaproveitado
 // aqui pro painel de filtro. Sem padding/posicionamento de página aqui —
-// quem posiciona (flutuante sobre o banner, ou estático em fullWidth) é o
-// componente pai.
+// quem posiciona é o componente pai.
 export default function HomeSearchFilter({
   query,
   onQueryChange,
@@ -24,6 +24,7 @@ export default function HomeSearchFilter({
   onToggleInstrutor,
   onLimparFiltros,
   fullWidth = false,
+  onSubmit,
 }: {
   query: string;
   onQueryChange: (value: string) => void;
@@ -39,6 +40,11 @@ export default function HomeSearchFilter({
   // disponível, lado a lado com o botão de filtro — pedido explícito da
   // tarefa ("ocupando 100% da largura disponível").
   fullWidth?: boolean;
+  // Opcional: Enter no input dispara isso. Home/tela de busca filtram em
+  // tempo real (useMemo a cada tecla) e não precisam disso; o DesktopHeader
+  // usa pra navegar pra /membros/buscar só quando o aluno confirma a busca
+  // (não a cada tecla — aqui não tem lista local pra filtrar de verdade).
+  onSubmit?: () => void;
 }) {
   const [filtroAberto, setFiltroAberto] = useState(false);
   const filtroRef = useRef<HTMLDivElement>(null);
@@ -75,6 +81,9 @@ export default function HomeSearchFilter({
           autoComplete="off"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onSubmit?.();
+          }}
           placeholder="Buscar cursos..."
           aria-label="Buscar curso"
           // bg-surface-high = mesmo #2a2a2a pedido (token já existente no

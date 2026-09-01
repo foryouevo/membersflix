@@ -19,10 +19,21 @@ type GrupoCategoria = { id: string; nome: string; ordem: number; cursos: Curso[]
 // Home). Default `[]`: quem não passar (BuscarPageClient, por ex.) simplesmente
 // não ganha `categoriasAgrupadas`/`toggleGrupoCategoria` populados — o resto
 // do hook funciona igual.
-export function useCursoFiltro(todosCursos: Curso[], todasCategorias: Categoria[] = []) {
-  const [busca, setBusca] = useState('');
-  const [categoriaFiltro, setCategoriaFiltro] = useState<string[]>([]);
-  const [instrutorFiltro, setInstrutorFiltro] = useState<string[]>([]);
+//
+// `initial` (opcional): semente do estado — usada por BuscarPageClient pra
+// já chegar filtrada quando o DesktopHeader manda o aluno pra lá com
+// `?q=`/`categoria=`/`instrutor=` na URL (busca/filtro do header global —
+// ver DesktopHeader.tsx). Só lida na primeira renderização (useState só usa
+// o argumento inicial uma vez); mudanças posteriores na URL não voltam a
+// resetar o filtro sozinhas.
+export function useCursoFiltro(
+  todosCursos: Curso[],
+  todasCategorias: Categoria[] = [],
+  initial?: { busca?: string; categoriaIds?: string[]; instrutorNomes?: string[] }
+) {
+  const [busca, setBusca] = useState(initial?.busca ?? '');
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string[]>(initial?.categoriaIds ?? []);
+  const [instrutorFiltro, setInstrutorFiltro] = useState<string[]>(initial?.instrutorNomes ?? []);
   const filtroAtivo = busca.trim() !== '' || categoriaFiltro.length > 0 || instrutorFiltro.length > 0;
 
   function toggleCategoriaFiltro(id: string) {

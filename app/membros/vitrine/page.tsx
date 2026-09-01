@@ -5,32 +5,26 @@ import { calcularContinuarAssistindo } from '@/lib/membros/continuar-assistindo'
 type BannerConfig = {
   numero_whatsapp: string | null;
   banner_capa_url: string | null;
-  banner_badge: string | null;
-  banner_resumo: string | null;
 };
 
 // Isolada (com try/catch + checagem de `error` explícita) igual ao mesmo
 // padrão já usado em app/login/page.tsx: se a migration das colunas do
-// banner (banner_capa_url/banner_badge/banner_resumo) ainda não rodou no
-// banco, ou a query falhar por qualquer outro motivo, a Home não pode
-// quebrar por causa de um banner — cai num fallback vazio e loga o erro no
-// servidor (visível no terminal do `npm run dev`), em vez de silenciosamente
-// virar `null` sem explicação, que é o que fazia o badge/resumo sumirem sem
-// deixar rastro nenhum.
+// banner (banner_capa_url) ainda não rodou no banco, ou a query falhar por
+// qualquer outro motivo, a Home não pode quebrar por causa de um banner —
+// cai num fallback vazio e loga o erro no servidor (visível no terminal do
+// `npm run dev`), em vez de silenciosamente virar `null` sem explicação.
+// banner_badge/banner_resumo saíram da query: eram só do banner antigo
+// ("MEMBERSFLIX" + descrição), substituído pelo card de destaque
+// (CursoDestaque) em qualquer largura de tela — ninguém mais lê essas duas
+// colunas.
 async function buscarBannerConfig(supabase: ReturnType<typeof createClient>): Promise<BannerConfig> {
   const vazio: BannerConfig = {
     numero_whatsapp: null,
     banner_capa_url: null,
-    banner_badge: null,
-    banner_resumo: null,
   };
 
   try {
-    const { data, error } = await supabase
-      .from('configuracoes')
-      .select('numero_whatsapp, banner_capa_url, banner_badge, banner_resumo')
-      .eq('id', 1)
-      .maybeSingle();
+    const { data, error } = await supabase.from('configuracoes').select('numero_whatsapp, banner_capa_url').eq('id', 1).maybeSingle();
 
     if (error) {
       console.error('[vitrine] Falha ao buscar banner de configuracoes (seguindo com fallback vazio):', error.message);
@@ -40,8 +34,6 @@ async function buscarBannerConfig(supabase: ReturnType<typeof createClient>): Pr
     return {
       numero_whatsapp: data?.numero_whatsapp ?? null,
       banner_capa_url: data?.banner_capa_url ?? null,
-      banner_badge: data?.banner_badge ?? null,
-      banner_resumo: data?.banner_resumo ?? null,
     };
   } catch (err) {
     console.error('[vitrine] Erro inesperado ao buscar banner de configuracoes (seguindo com fallback vazio):', err);
@@ -99,22 +91,17 @@ export default async function VitrinePage() {
   const todosCursos = cursos ?? [];
   const meusCursos = todosCursos.filter((c) => acessos.get(c.id));
 
-  // Botão "Continuar assistindo" do banner — lógica extraída pra
-  // lib/membros/continuar-assistindo.ts (mesma função usada na tela de
-  // perfil, pra não duplicar isso nos dois lugares).
-  const {
-    href: continuarAssistindoHref,
-    temProgresso,
-    cursoId: cursoContinuarId,
-  } = await calcularContinuarAssistindo(supabase, user!.id, meusCursos.map((c) => c.id));
-
-  // Curso em destaque do card hero mobile (logo abaixo dos chips de
-  // categoria): reaproveita o MESMO critério de "o que importa agora pra
-  // esse aluno" que o botão do banner já usa — o curso com atividade mais
-  // recente, ou o primeiro de "Meus Cursos" sem nenhum progresso ainda.
-  // Sem curso nenhum vinculado (aluno novo, ainda não comprou nada), cai no
-  // primeiro curso da vitrine (mesma ordem de "Todos os Cursos") — sempre
-  // mostra algo pra promover, nunca fica sem card.
+  // Curso em destaque do card hero (CursoDestaque, agora igual em qualquer
+  // largura de tela): reaproveita a mesma lógica de "o que importa agora
+  // pra esse aluno" já usada na tela de perfil — cursoId de
+  // calcularContinuarAssistindo é o curso com atividade mais recente, ou o
+  // primeiro de "Meus Cursos" sem nenhum progresso ainda (href/temProgresso,
+  // que essa função também retorna, não são mais usados aqui — eram só do
+  // botão "Continuar assistindo" do banner antigo). Sem curso nenhum
+  // vinculado (aluno novo, ainda não comprou nada), cai no primeiro curso da
+  // vitrine (mesma ordem de "Todos os Cursos") — sempre mostra algo pra
+  // promover, nunca fica sem card.
+  const { cursoId: cursoContinuarId } = await calcularContinuarAssistindo(supabase, user!.id, meusCursos.map((c) => c.id));
   const cursoDestaque = todosCursos.find((c) => c.id === cursoContinuarId) ?? todosCursos[0] ?? null;
 
   return (
@@ -125,10 +112,6 @@ export default async function VitrinePage() {
       progressoPorCurso={Object.fromEntries(progressoPorCurso)}
       numeroWhatsapp={config?.numero_whatsapp ?? null}
       bannerCapaUrl={config?.banner_capa_url ?? null}
-      bannerBadge={config?.banner_badge ?? null}
-      bannerResumo={config?.banner_resumo ?? null}
-      continuarAssistindoHref={continuarAssistindoHref}
-      temProgresso={temProgresso}
       todasCategorias={categorias ?? []}
       cursoDestaque={cursoDestaque}
     />

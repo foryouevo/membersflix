@@ -226,7 +226,16 @@ export default function PlayerPageClient({
   );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    // -mt-14 md:-mt-20: cancela o pt-14 (mobile)/pt-16 (desktop) padrão de
+    // <main> (app/membros/layout.tsx), reservado pro MobileHeader/
+    // DesktopHeader fixos — essa página não usa nenhum dos dois (os dois se
+    // auto-excluem em /membros/player, pra não brigar com o botão de voltar
+    // próprio que já flutua sobre o vídeo, poucas linhas abaixo) nem
+    // depende do <main> pra scroll (gerencia a própria altura via
+    // h-screen), então a folga ficaria sobrando — espaço vazio cortando o
+    // vídeo por baixo, já que h-screen não encolhe pra compensar um
+    // padding-top no pai.
+    <div className="-mt-14 flex h-screen flex-col overflow-hidden bg-background md:-mt-20">
       {/* Mobile: a fileira inteira rola como uma página só (empilhado).
           Desktop (lg+): a fileira trava a altura e cada coluna rola por conta própria. */}
       <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">

@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ChevronLeft, Lock, Play, PlayCircle } from 'lucide-react';
+import { Lock, Play, PlayCircle } from 'lucide-react';
 import AccessModal from '@/components/membros/AccessModal';
 import Carousel from '@/components/membros/Carousel';
 import { useDificultarInspecao } from '@/hooks/useDificultarInspecao';
@@ -31,7 +30,6 @@ export default function CursoDetalheClient({
   proximaAulaId: string | null;
   jaComecou: boolean;
 }) {
-  const router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   useDificultarInspecao();
 
@@ -43,12 +41,12 @@ export default function CursoDetalheClient({
     // tela só, como quando era sempre exatamente 1 carrossel. O scroll em si
     // já vem de graça do <main overflow-y-auto> do layout (app/membros/layout.tsx)
     // que envolve esta página — só precisava parar de brigar com ele.
-    <div className="flex min-h-full flex-col bg-background">
-      {/* Hero: capa do curso, conteúdo (voltar/badge/título/descrição/botão)
-          ancorado embaixo e à esquerda, sobre um gradiente — mesmo padrão
-          reutilizado pra qualquer curso, tudo vindo de `curso` (nada fixo
-          tipo "UI UX DESIGN PRO" hardcoded). Altura no mobile: intrínseca ao
-          conteúdo (sem h-[Xvh] forçado) — o hero só ocupa o que precisa, sem
+    <div className="-mt-14 flex min-h-full flex-col bg-background md:-mt-20">
+      {/* Hero: capa do curso, conteúdo (badge/título/descrição/botão) ancorado
+          embaixo e à esquerda, sobre um gradiente — mesmo padrão reutilizado
+          pra qualquer curso, tudo vindo de `curso` (nada fixo tipo "UI UX
+          DESIGN PRO" hardcoded). Altura no mobile: intrínseca ao conteúdo
+          (sem h-[Xvh] forçado) — o hero só ocupa o que precisa, sem
           "adivinhar" uma porcentagem da tela, sobrando o máximo possível pra
           seção de módulos (que é onde o card de 24.5rem precisa caber). Em
           sm: volta a ser h-[44vh] fixo, como sempre foi. */}
@@ -68,26 +66,14 @@ export default function CursoDetalheClient({
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-black/30" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-black/10" />
 
-        <div className="relative px-6 py-12 sm:px-16">
-          {/* Voltar: router.back() em vez de link fixo pra Home, porque a
-              página de curso é acessada de mais de um lugar (Home, "Meus
-              Cursos", categorias) — back() sempre volta pra de onde o aluno
-              realmente veio, não força ele pra Home se veio de outro lugar.
-              Mesmo padrão visual dos botões de seta do carrossel (Carousel.tsx
-              — bg-surface-high, hover vermelho) pra ficar consistente com o
-              resto da UI. Só aparece no mobile (md:hidden — mesmo breakpoint
-              que MembrosSidebar usa pra trocar bottom nav por sidebar fixa):
-              em telas md+ o aluno já tem a sidebar lateral pra navegar, essa
-              seta ali ficaria redundante. */}
-          <button
-            type="button"
-            onClick={() => router.back()}
-            aria-label="Voltar"
-            className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white sm:mb-4 md:hidden"
-          >
-            <ChevronLeft size={20} strokeWidth={1.5} />
-          </button>
-
+        {/* pt-14/md:pt-20: espaço pro MobileHeader/DesktopHeader fixos não
+            cobrirem a badge/título — os dois são transparentes e flutuam
+            por cima do hero, então só o conteúdo de texto aqui dentro
+            precisa dessa folga, não a imagem/gradiente (que começam no
+            topo de verdade nas duas larguras — ver o -mt-14/md:-mt-20 no
+            container da página acima). pb-12 continua fixo em qualquer
+            tela (pedido à parte, nada a ver com o header). */}
+        <div className="relative px-6 pb-12 pt-14 sm:px-16 md:pt-20">
           {/* Badge de categoria: 100% dinâmico, vem de curso.categoria (join
               feito na página) — some se o curso não tiver categoria
               cadastrada, em vez de mostrar um badge vazio. */}

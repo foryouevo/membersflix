@@ -40,7 +40,7 @@ export default function CategoriaChipsMobile({
   const criacaoDeSites = categoriasAgrupadas.find((g) => g.nome.toLowerCase() === 'criação de sites');
   const edicaoDeVideos = categoriasAgrupadas.find((g) => g.nome.toLowerCase() === 'edição de vídeos');
 
-  const chipBase = 'shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors';
+  const chipBase = 'shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[0.8rem] font-medium transition-colors';
   const chipInativo = 'bg-white/10 text-white/90 hover:bg-white/15';
   const chipAtivo = 'bg-primary text-white';
 
