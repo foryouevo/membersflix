@@ -41,7 +41,11 @@ export default function CursoDetalheClient({
     // tela só, como quando era sempre exatamente 1 carrossel. O scroll em si
     // já vem de graça do <main overflow-y-auto> do layout (app/membros/layout.tsx)
     // que envolve esta página — só precisava parar de brigar com ele.
-    <div className="-mt-14 flex min-h-full flex-col bg-background md:-mt-20">
+    // Sem bg-background: o fundo (gradiente vermelho/preto) agora é só do
+    // <body> (app/globals.css) — um bg-background aqui em cima cobriria ele
+    // por completo com uma cor plana, recriando a emenda visível entre essa
+    // página e as outras.
+    <div className="-mt-14 flex min-h-full flex-col md:-mt-20">
       {/* Hero: capa do curso, conteúdo (badge/título/descrição/botão) ancorado
           embaixo e à esquerda, sobre um gradiente — mesmo padrão reutilizado
           pra qualquer curso, tudo vindo de `curso` (nada fixo tipo "UI UX
@@ -118,10 +122,11 @@ export default function CursoDetalheClient({
           travando num "resto de tela") — cresce com o conteúdo, e quem rola
           é a página (via o <main> do layout). shrink-0 pra não ser
           espremida pelo flex-col do container quando o conteúdo é curto. */}
-      <div
-        className="shrink-0 space-y-8 px-4 py-8 sm:space-y-10 sm:px-12"
-        style={{ background: 'linear-gradient(0deg,rgba(15, 15, 15, 1) 0%, rgba(1, 1, 1, 1) 100%)' }}
-      >
+      {/* Sem background próprio (era um linear-gradient escuro só desta
+          seção — mesma emenda que existia na Home entre o hero e "Meus
+          Cursos"/"Todos os Cursos", resolvida do mesmo jeito: deixando o
+          <body> ser o único fundo do app). */}
+      <div className="shrink-0 space-y-8 px-4 py-8 sm:space-y-10 sm:px-12">
         {/* "Módulos do curso" não é mais renderizado como <h2> solto aqui em
             cima — isso deixava uma caixa vazia entre o título e a linha de
             setas logo abaixo (duas linhas por causa do space-y do

@@ -28,7 +28,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" className={poppins.variable}>
-      <body className="min-h-screen bg-background text-on-surface antialiased">
+      {/* Sem bg-background aqui de propósito: essa classe Tailwind (seletor
+          de classe) venceria o `background-color`/`background-image` do
+          `body {}` de app/globals.css (seletor de elemento, menos
+          específico) na cascata, mesmo essa regra vindo depois no CSS —
+          especificidade de classe sempre bate especificidade de elemento,
+          independente de ordem. O fundo (gradiente + cor) fica só no CSS
+          global agora, então esse conflito não existe mais. */}
+      <body className="min-h-screen text-on-surface antialiased">
         {children}
         {/* Fica fora da árvore de /login de propósito — precisa sobreviver
             à troca de rota /login -> /membros pra não "flashar" a tela de

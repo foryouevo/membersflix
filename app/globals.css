@@ -10,13 +10,46 @@
   border-color: #333333;
 }
 
-html,
-body {
-  background-color: #0f0f0f;
+html {
+  /* Mesma cor do último stop do gradiente do body — evita um "flash"
+     sólido diferente (o #0f0f0f antigo) aparecendo por uma fração de
+     segundo antes do CSS do body carregar, ou no overscroll/bounce do
+     iOS Safari (que expõe o fundo do <html>, não do <body>, além dos
+     limites da página). */
+  background-color: #141414;
   color: #e5e2e1;
 }
 
 body {
+  color: #e5e2e1;
+
+  /* Fundo único do app inteiro (antes era um bg-background/bg-[#141414]
+     plano em cada página + um gradiente reimplementado separadamente só
+     no hero da Home) — cada seção tinha sua própria cor/gradiente que
+     terminava num tom ligeiramente diferente da seguinte, criando uma
+     emenda visível onde uma "entregava" pra outra. Definindo aqui uma
+     única vez, todas as páginas herdam o mesmo fundo por trás (elas
+     precisam ficar com background transparente, sem o bg-background/
+     bg-[#141414]/gradiente próprio que tinham antes — ver
+     VitrinePageClient.tsx, CursoDetalheClient.tsx, PlayerPageClient.tsx,
+     app/membros/layout.tsx, app/layout.tsx). Vermelho nasce no
+     topo-centro (50% 0%) e clareia/puxa pra um acinzentado-avermelhado
+     até fechar em #141414 sólido — mesma cor final do <html> acima, sem
+     costura entre os dois.
+     background-attachment: fixed é o que faz esse gradiente ficar "preso"
+     à janela (não ao conteúdo) — sem isso, cada página com altura
+     diferente re-renderizaria o degradê do zero a partir do seu próprio
+     topo, e rolar a página faria o gradiente rolar/repetir junto (voltando
+     a criar costuras conforme cada seção passa pela mesma faixa de cor em
+     alturas diferentes da tela). Fixed garante uma única "pintura",
+     sempre alinhada ao viewport, atrás de tudo, independente de quanto a
+     página rola ou quão alta ela é. */
+  background-color: #141414;
+  background-image: radial-gradient(100% 60% at 50% 0%, #5c2020 0%, #3a1a1a 30%, #241717 55%, #141414 100%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  min-height: 100vh;
+
   /* var(--font-poppins): fonte carregada via next/font em app/layout.tsx
      (auto-hospedada, sem @import externo pro Google Fonts) — não dá pra
      usar 'Poppins' como string literal aqui, porque o next/font gera um

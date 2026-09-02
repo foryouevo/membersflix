@@ -31,7 +31,13 @@ export default async function MembrosLayout({ children }: { children: React.Reac
   ).sort((a, b) => a.localeCompare(b));
 
   return (
-    <div className="h-screen overflow-hidden bg-background">
+    // Sem bg-background: fundo (gradiente vermelho/preto) é só do <body>
+    // agora (app/globals.css) — esse wrapper h-screen fica transparente, o
+    // gradiente aparece atrás de <main> normalmente (que já não tem
+    // background próprio) e continua "preso" à viewport mesmo com o scroll
+    // interno do <main> (o body em si nunca rola, então
+    // background-attachment: fixed não tem nem por que entrar em jogo aqui).
+    <div className="h-screen overflow-hidden">
       {/* Header mobile global (logo/"Início" ou seta de voltar + avatar do
           usuário) — fixed, md:hidden. Decide sozinho por rota (usePathname)
           se mostra "Início" ou a seta, e se sequer aparece (self-exclui na

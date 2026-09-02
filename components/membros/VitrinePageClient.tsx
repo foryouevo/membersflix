@@ -50,10 +50,14 @@ export default function VitrinePageClient({
       {/* Banner da Home: capa (Configurações > Banner da Página Inicial) sem
           texto embutido — badge, logo e resumo são renderizados aqui, por
           cima da imagem, não fazem mais parte do arquivo enviado pelo admin.
-          Sem capa configurada ainda, cai num gradiente vermelho/preto em vez
-          de ficar sem fundo nenhum. Altura vem do padding do conteúdo (não
-          de aspect-ratio fixo), então acomoda o botão novo sem espremer. */}
-      <div className="relative -mt-14 w-full overflow-hidden bg-gradient-to-br from-primary/25 via-background to-background md:-mt-20">
+          Sem capa configurada ainda, cai no gradiente vermelho/preto do
+          <body> (app/globals.css), que agora é o único fundo do app inteiro
+          — essa div não tem mais cor/gradiente próprios (nem bg-[#141414],
+          nem o radial-gradient que só existia aqui), pra não voltar a criar
+          a emenda visível entre o fim de um e o começo do outro. Altura vem
+          do padding do conteúdo (não de aspect-ratio fixo), então acomoda o
+          botão novo sem espremer. */}
+      <div className="relative -mt-14 w-full overflow-hidden md:-mt-20">
         {/* -mt-14/md:-mt-20: cancela o pt-14 (mobile)/pt-16 (desktop) que
             <main> reserva por padrão (app/membros/layout.tsx) pro
             MobileHeader/DesktopHeader fixos — a imagem/gradiente do banner
@@ -64,11 +68,6 @@ export default function VitrinePageClient({
             destaque, abaixo) repõe essa folga com pt-14/md:pt-20 próprio,
             pra não ficar embaixo do header. */}
         {bannerCapaUrl && <Image src={bannerCapaUrl} alt="" fill priority quality={100} className="object-cover" />}
-        {/* Overlay: mais escuro embaixo/esquerda (onde o texto fica), mais
-            claro pro resto — garante legibilidade sobre qualquer capa,
-            mesmo variante clara. */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/50 to-black/10" />
-
         {/* pt-14/md:pt-20: mesma folga que <main> reserva por padrão pro
             MobileHeader/DesktopHeader — repõe aqui porque o wrapper do
             banner acima cancelou aquela folga (-mt-14/md:-mt-20) pra imagem
@@ -106,7 +105,7 @@ export default function VitrinePageClient({
               pouca largura útil pro card. pb-6/sm:pb-14 continuam pro
               espaço embaixo do card antes de "Meus Cursos"/"Todos os
               Cursos". */}
-          <div className="px-4 pb-6 pt-0 sm:px-14 sm:pb-14">
+          <div className="px-4 pb-6 pt-4 sm:px-14 sm:pb-14">
             {cursoDestaque && (
               <CursoDestaque
                 curso={cursoDestaque}
@@ -118,7 +117,14 @@ export default function VitrinePageClient({
         </div>
       </div>
 
-      <div className="px-4 sm:px-16" style={{ background: 'linear-gradient(0deg,rgba(15, 15, 15, 1) 0%, rgba(1, 1, 1, 1) 100%)' }}>
+      {/* Sem background próprio (era um linear-gradient escuro só desta
+          seção, terminando num tom ligeiramente diferente do #141414 do
+          <body> — exatamente o tipo de emenda que devia deixar de existir).
+          A esta altura da página o gradiente do body já convergiu pro
+          #141414 sólido (o radial só cobre 60% da altura da viewport a
+          partir do topo), então essa seção fica consistente com ele sem
+          precisar reafirmar nada. */}
+      <div className="px-4 sm:px-16">
         {/* Mesmo carrossel da seção "Módulos do curso" (components/membros/
             Carousel.tsx — Embla: drag/swipe, setas prev/next ao lado do
             título, wrap manual nas pontas). Aqui os *ClassName são
@@ -154,19 +160,26 @@ export default function VitrinePageClient({
           </section>
         )}
 
-        <TodosCursosPorCategoria
-          titulo="Todos os Cursos"
-          grupos={gruposPorCategoria}
-          acessos={acessos}
-          progressoPorCurso={progressoPorCurso}
-          onClickLocked={setModalCurso}
-          // O único filtro que ainda existe na própria Home é a categoria
-          // (fileira de chips mobile) — busca por texto/instrutor virou
-          // exclusiva da tela de busca dedicada (DesktopHeader navega pra
-          // lá em vez de filtrar aqui), então filtroAtivo aqui só liga por
-          // causa de categoriaFiltro mesmo.
-          emptyMessage={!filtroAtivo ? 'Nenhum curso disponível no momento.' : 'Nenhum curso nessa categoria ainda.'}
-        />
+        {/* id="todos-os-cursos": alvo do botão "Explorar cursos" do hero
+            institucional (CursoDestaque) — scroll-mt-14/md:scroll-mt-20
+            (mesma folga de pt-14/md:pt-20 usada pelo restante da página)
+            compensa o header fixo, senão ele cobriria o topo da seção ao
+            rolar até aqui. */}
+        <div id="todos-os-cursos" className="scroll-mt-14 md:scroll-mt-20">
+          <TodosCursosPorCategoria
+            titulo="Todos os Cursos"
+            grupos={gruposPorCategoria}
+            acessos={acessos}
+            progressoPorCurso={progressoPorCurso}
+            onClickLocked={setModalCurso}
+            // O único filtro que ainda existe na própria Home é a categoria
+            // (fileira de chips mobile) — busca por texto/instrutor virou
+            // exclusiva da tela de busca dedicada (DesktopHeader navega pra
+            // lá em vez de filtrar aqui), então filtroAtivo aqui só liga por
+            // causa de categoriaFiltro mesmo.
+            emptyMessage={!filtroAtivo ? 'Nenhum curso disponível no momento.' : 'Nenhum curso nessa categoria ainda.'}
+          />
+        </div>
       </div>
 
       <AccessModal open={!!modalCurso} onClose={() => setModalCurso(null)} curso={modalCurso} numeroWhatsapp={numeroWhatsapp} />

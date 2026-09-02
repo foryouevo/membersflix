@@ -20,7 +20,7 @@ export default async function BloqueadoPage() {
   const pendente = profile?.status_pagamento === 'pendente';
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
       <Image src="/logo.png" alt="MembersFlix" width={180} height={36} priority className="mb-8 h-8 w-auto object-contain" />
 
       <div className="w-full max-w-md rounded-lg border-t-2 border-t-primary bg-card p-8 shadow-overlay">

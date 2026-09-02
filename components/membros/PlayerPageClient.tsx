@@ -235,7 +235,13 @@ export default function PlayerPageClient({
     // h-screen), então a folga ficaria sobrando — espaço vazio cortando o
     // vídeo por baixo, já que h-screen não encolhe pra compensar um
     // padding-top no pai.
-    <div className="-mt-14 flex h-screen flex-col overflow-hidden bg-background md:-mt-20">
+    // Sem bg-background: fundo (gradiente vermelho/preto) é só do <body>
+    // agora (app/globals.css) — ver mesmo ajuste em VitrinePageClient.tsx/
+    // CursoDetalheClient.tsx. O player em si continua com fundo preto sólido
+    // (bg-black, no VideoPlayer) por trás do vídeo — isso não muda; só a
+    // folga ao redor dele (padding desta página) deixa de ser plana e passa
+    // a mostrar o mesmo fundo do resto do app.
+    <div className="-mt-14 flex h-screen flex-col overflow-hidden md:-mt-20">
       {/* Mobile: a fileira inteira rola como uma página só (empilhado).
           Desktop (lg+): a fileira trava a altura e cada coluna rola por conta própria. */}
       <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
