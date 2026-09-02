@@ -6,7 +6,6 @@ import CourseCard from '@/components/membros/CourseCard';
 import AccessModal from '@/components/membros/AccessModal';
 import Carousel from '@/components/membros/Carousel';
 import TodosCursosPorCategoria from '@/components/membros/TodosCursosPorCategoria';
-import CategoriaChipsMobile from '@/components/membros/CategoriaChipsMobile';
 import CursoDestaque from '@/components/membros/CursoDestaque';
 import { CARD_BASIS_CLASSES, TITULO_SECAO_CLASSNAME } from '@/components/membros/cursoListaEstilos';
 import { useCursoFiltro } from '@/hooks/useCursoFiltro';
@@ -19,6 +18,7 @@ export default function VitrinePageClient({
   progressoPorCurso,
   numeroWhatsapp,
   bannerCapaUrl,
+  heroDestaqueUrl,
   todasCategorias,
   cursoDestaque,
 }: {
@@ -28,22 +28,27 @@ export default function VitrinePageClient({
   progressoPorCurso: Record<string, number>;
   numeroWhatsapp: string | null;
   bannerCapaUrl: string | null;
+  // Fundo do hero em destaque (CursoDestaque) — campo próprio, isolado de
+  // bannerCapaUrl (o banner logo acima, camada visual separada) e da capa de
+  // qualquer curso. Sem valor: CursoDestaque cai num fundo escuro sólido.
+  heroDestaqueUrl: string | null;
   todasCategorias: Categoria[];
   cursoDestaque: Curso | null;
 }) {
   const [modalCurso, setModalCurso] = useState<Curso | null>(null);
 
-  // Filtro por categoria (seleção única, via a fileira de chips mobile) +
-  // agrupamento de "Todos os Cursos" por categoria — lógica extraída em
+  // Agrupamento de "Todos os Cursos" por categoria — lógica extraída em
   // useCursoFiltro pra ser reaproveitada também na tela de busca dedicada
-  // (BuscarPageClient) e no atalho de busca do DesktopHeader (que navega
-  // pra lá em vez de filtrar a Home em tempo real — busca por texto/
-  // instrutor não existe mais aqui na Home, virou exclusiva da tela de
-  // busca, ver DesktopHeader.tsx).
-  const { categoriaFiltro, toggleGrupoCategoria, filtroAtivo, categoriasAgrupadas, gruposPorCategoria } = useCursoFiltro(
-    todosCursos,
-    todasCategorias
-  );
+  // (BuscarPageClient). A Home não filtra mais nada em si mesma: a fileira
+  // de chips de categoria que existia aqui (CategoriaChipsMobile,
+  // md:hidden) foi removida — o único jeito de filtrar por categoria/
+  // instrutor agora é o menu de filtros do Header (ícone de funil, comum às
+  // duas larguras), que navega pra /membros/buscar, igual ao desktop já
+  // fazia antes desta unificação. `filtroAtivo` fica sempre `false` aqui
+  // por causa disso (não há mais UI nesta página que o ligue) — mantido
+  // porque a lógica de exibição abaixo (esconder "Meus Cursos", mensagem de
+  // vazio) continua correta, só que sempre no caminho "sem filtro".
+  const { filtroAtivo, gruposPorCategoria } = useCursoFiltro(todosCursos, todasCategorias);
 
   return (
     <div className="pb-12">
@@ -59,41 +64,24 @@ export default function VitrinePageClient({
           botão novo sem espremer. */}
       <div className="relative -mt-14 w-full overflow-hidden md:-mt-20">
         {/* -mt-14/md:-mt-20: cancela o pt-14 (mobile)/pt-16 (desktop) que
-            <main> reserva por padrão (app/membros/layout.tsx) pro
-            MobileHeader/DesktopHeader fixos — a imagem/gradiente do banner
-            precisa começar no topo de verdade (y=0) nas duas larguras,
-            porque os dois headers são transparentes e flutuam por cima dela
-            (logo "M"/"Início" no mobile; logo+menu+busca+avatar no
-            desktop). Só o conteúdo de texto lá dentro (chips + card de
-            destaque, abaixo) repõe essa folga com pt-14/md:pt-20 próprio,
-            pra não ficar embaixo do header. */}
+            <main> reserva por padrão (app/membros/layout.tsx) pro Header
+            fixo — a imagem/gradiente do banner precisa começar no topo de
+            verdade (y=0) nas duas larguras, porque o header é transparente
+            e flutua por cima dela em qualquer largura. Só o conteúdo de
+            texto lá dentro (card de destaque, abaixo) repõe essa folga com
+            pt-14/md:pt-20 próprio, pra não ficar embaixo do header. */}
         {bannerCapaUrl && <Image src={bannerCapaUrl} alt="" fill priority quality={100} className="object-cover" />}
         {/* pt-14/md:pt-20: mesma folga que <main> reserva por padrão pro
-            MobileHeader/DesktopHeader — repõe aqui porque o wrapper do
-            banner acima cancelou aquela folga (-mt-14/md:-mt-20) pra imagem
-            começar no topo de verdade nas duas larguras. A fileira de chips
-            (só mobile) ou o card de destaque (as duas) é o primeiro
-            conteúdo depois dela — sem essa folga ficariam cobertos pelo
-            header, mesmo ele sendo transparente (a barra ainda intercepta
-            clique/toque, só não pinta nada por cima). */}
+            Header fixo — repõe aqui porque o wrapper do banner acima
+            cancelou aquela folga (-mt-14/md:-mt-20) pra imagem começar no
+            topo de verdade nas duas larguras. O card de destaque é o
+            primeiro conteúdo depois dela — sem essa folga ficaria coberto
+            pelo header, mesmo ele sendo transparente (a barra ainda
+            intercepta clique/toque, só não pinta nada por cima). Não tem
+            mais fileira de chips de categoria aqui (CategoriaChipsMobile,
+            removida) — o filtro por categoria agora é só o menu de filtros
+            do Header, comum às duas larguras. */}
         <div className="relative pt-14 md:pt-20">
-          {/* Fileira de chips de categoria — só mobile (md:hidden interno,
-              mesmo breakpoint do resto). Antes vivia dentro do header fixo
-              (HomeMobileHeader, hoje extinto — virou o MobileHeader global,
-              que não sabe nada de categorias); agora é conteúdo normal da
-              página, rola junto com o resto ao invés de colapsar sozinha ao
-              rolar. Sem px aqui em cima: o componente já traz seu próprio
-              px-4 (precisa, pro overflow-x-auto ainda mostrar uma margem
-              inicial antes do primeiro chip) — colocar outro px-4 no
-              wrapper dobraria o respiro lateral só dessa fileira. */}
-          <div className="md:hidden">
-            <CategoriaChipsMobile
-              categoriasAgrupadas={categoriasAgrupadas}
-              categoriaFiltro={categoriaFiltro}
-              onToggleGrupo={toggleGrupoCategoria}
-            />
-          </div>
-
           {/* Card de curso em destaque — mesmo componente em qualquer
               largura de tela (CursoDestaque, ver comentário dele pros
               detalhes de responsividade). Substituiu o banner antigo
@@ -111,6 +99,7 @@ export default function VitrinePageClient({
                 curso={cursoDestaque}
                 hasAccess={!!acessos[cursoDestaque.id]}
                 onClickComprar={() => setModalCurso(cursoDestaque)}
+                heroDestaqueUrl={heroDestaqueUrl}
               />
             )}
           </div>
@@ -134,10 +123,12 @@ export default function VitrinePageClient({
             visíveis, e a página rola normalmente. Os cards em si (CourseCard)
             não mudaram — continuam aspect-video, só a exibição virou
             carrossel em vez de grid fixo. */}
-        {/* Some inteira com filtro de categoria ativo (via a fileira de
-            chips mobile — é o único filtro que ainda existe na própria
-            Home) — nesse estado só "Todos os Cursos" (com os resultados)
-            fica visível; volta a aparecer assim que o filtro é limpo. */}
+        {/* Some inteira com filtro de categoria ativo — na prática nunca
+            mais acontece nesta página (filtroAtivo é sempre false aqui, ver
+            comentário acima de useCursoFiltro: o único filtro por
+            categoria/instrutor agora é o menu do Header, que navega pra
+            /membros/buscar em vez de filtrar a Home). Mantido por
+            segurança/consistência com TodosCursosPorCategoria abaixo. */}
         {!filtroAtivo && (
           <section className="mb-10">
             <Carousel
@@ -172,11 +163,10 @@ export default function VitrinePageClient({
             acessos={acessos}
             progressoPorCurso={progressoPorCurso}
             onClickLocked={setModalCurso}
-            // O único filtro que ainda existe na própria Home é a categoria
-            // (fileira de chips mobile) — busca por texto/instrutor virou
-            // exclusiva da tela de busca dedicada (DesktopHeader navega pra
-            // lá em vez de filtrar aqui), então filtroAtivo aqui só liga por
-            // causa de categoriaFiltro mesmo.
+            // filtroAtivo é sempre false nesta página (ver comentário acima
+            // de useCursoFiltro) — a Home não filtra mais nada em si mesma,
+            // busca/categoria/instrutor viraram exclusivos da tela de busca
+            // dedicada (Header navega pra lá em vez de filtrar aqui).
             emptyMessage={!filtroAtivo ? 'Nenhum curso disponível no momento.' : 'Nenhum curso nessa categoria ainda.'}
           />
         </div>

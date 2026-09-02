@@ -195,11 +195,11 @@ export default async function PerfilPage() {
           </div>
         </div>
 
-        {/* Sair — só no mobile (md:hidden). No desktop/tablet o "Sair" já
-            está sempre acessível no dropdown do avatar (DesktopHeader >
-            UserAvatarMenu); no mobile esse mesmo dropdown existe no
-            MobileHeader, mas esse botão aqui na tela de perfil continua
-            como atalho extra, sem precisar abrir o menu do avatar. */}
+        {/* Sair — só no mobile (md:hidden). Em qualquer largura o "Sair" já
+            está sempre acessível no dropdown do ícone de perfil do Header
+            (mesmo componente/menu nas duas larguras agora), mas esse botão
+            aqui na tela de perfil continua como atalho extra, sem precisar
+            abrir esse menu. */}
         <LogoutButton className="flex w-full items-center justify-center gap-2 rounded-lg bg-card px-4 py-3 text-sm font-medium text-error hover:bg-surface-container md:hidden">
           <LogOut size={18} /> Sair da conta
         </LogoutButton>

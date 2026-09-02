@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import type { Curso } from '@/types';
 
 /**
@@ -14,19 +15,30 @@ import type { Curso } from '@/types';
  *
  * Virou um hero institucional da plataforma (título/tags/texto fixos,
  * botão "Explorar cursos" rolando até a seção "Todos os Cursos" da própria
- * Home) — não destaca mais um curso específico. `hasAccess`/`onClickComprar`
- * continuam recebidos (por decisão explícita, ver conversa) mas não são mais
- * usados aqui dentro; `curso` ainda é — a capa (capa_url) continua podendo
- * aparecer como camada acima do banner estático, se cadastrada.
+ * Home) — não destaca mais um curso específico, nem visualmente: a imagem
+ * de fundo é configurável pelo admin (Admin > Configurações > Destaque da
+ * Home, campo `configuracoes.hero_destaque_url`), não a capa de curso
+ * nenhum (curso.capa_url chegou a aparecer como camada por cima dela, mas
+ * foi removido — misturava a capa do curso com progresso mais recente do
+ * aluno nesse hero institucional, bug relatado). Sem imagem cadastrada, cai
+ * num fundo escuro sólido (bg-surface-lowest) em vez de quebrar o layout.
+ * `curso`/`hasAccess`/`onClickComprar` continuam recebidos (por decisão
+ * explícita, ver conversa) mas não são mais usados aqui dentro nenhum dos
+ * três.
  */
 export default function CursoDestaque({
   curso,
   hasAccess,
   onClickComprar,
+  heroDestaqueUrl,
 }: {
   curso: Curso;
   hasAccess: boolean;
   onClickComprar: () => void;
+  // Fundo do hero — campo próprio (configuracoes.hero_destaque_url),
+  // isolado da capa de qualquer curso. null: fundo sólido escuro (ver
+  // bloco logo abaixo).
+  heroDestaqueUrl: string | null;
 }) {
   return (
     // h-[60vh] no mobile (abaixo de 640px) / sm:h-[85vh] no desktop/tablet
@@ -40,35 +52,37 @@ export default function CursoDestaque({
     // não é edge-to-edge em nenhuma tela. object-cover cobre essa caixa do
     // jeito que for, sem depender de proporção nenhuma.
     <div className="relative h-[60vh] w-full overflow-hidden rounded-xl sm:h-[85vh]">
-      {/* Fundo estático (bannerNetflix.jpg) + overlay — sem z-index (fica na
-          "camada 0" da pilha). Como tudo que já existia no card (capa
-          dinâmica/placeholder, logo, gradiente, bloco de texto) não tinha
-          z-index nenhum antes, e agora precisa continuar acima dessas duas
-          camadas novas, dei z-10 pra todos eles — não só pro bloco de
-          conteúdo e pro placeholder pedidos explicitamente, mas por
-          igual/consistência: misturar só ALGUNS com z-10 e deixar outros
-          (ex: a logo, o gradiente escuro da capa) sem nenhum teria
-          escondido eles atrás da imagem/overlay novos (z-index compara
-          TODOS os elementos da mesma pilha entre si, não só cada um contra
-          o banner nesse caso) — na prática isso quebraria a logo/o
-          contraste do texto, não só deixaria o banner invisível de novo. */}
-      <Image src="/bannerNetflix.jpg" alt="" fill priority className="object-cover object-center" />
+      {/* Fundo configurável (Admin > Configurações > Destaque da Home,
+          heroDestaqueUrl) + overlay — sem z-index (fica na "camada 0" da
+          pilha). Sem imagem cadastrada: bg-surface-lowest (fundo escuro
+          sólido do tema) no lugar do <Image>, pra nunca quebrar o layout —
+          o overlay/gradiente/logo/texto continuam exatamente iguais por
+          cima. Como tudo que já existia no card (logo, gradiente, bloco de
+          texto) não tinha z-index nenhum antes, e agora precisa continuar
+          acima dessas duas camadas, dei z-10 pra todos eles — não só pro
+          bloco de conteúdo pedido explicitamente, mas por igual/
+          consistência: misturar só ALGUNS com z-10 e deixar outros (ex: a
+          logo, o gradiente escuro) sem nenhum teria escondido eles atrás da
+          imagem/overlay novos (z-index compara TODOS os elementos da mesma
+          pilha entre si, não só cada um contra o fundo nesse caso) — na
+          prática isso quebraria a logo/o contraste do texto, não só
+          deixaria o fundo invisível de novo. */}
+      {heroDestaqueUrl ? (
+        <Image src={heroDestaqueUrl} alt="" fill priority className="object-cover object-center" />
+      ) : (
+        <div className="absolute inset-0 bg-surface-lowest" />
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/20" />
 
-      {/* Capa (16:9) — o mesmo campo já configurado no admin (Cursos >
-          editar curso > Capa), não a thumbnail (essa é pro card pequeno de
-          CourseCard). object-cover + object-center: preenche o card sem
-          distorcer, recortando as sobras nas laterais e mantendo o centro
-          da imagem — onde normalmente está o elemento mais importante
-          (rosto, texto principal) — sempre visível. z-10: precisa ficar
-          acima do banner/overlay novos acima. */}
-      {/* Sem capa cadastrada (admin > curso > Capa): não renderiza nada aqui
-          — a bannerNetflix.jpg de fundo já preenche a área, então o
-          placeholder do ícone de Play (fundo bg-surface-high + ícone) não
-          faz mais falta e foi removido. */}
-      {curso.capa_url && (
-        <Image src={curso.capa_url} alt={curso.titulo} fill priority className="z-10 object-cover object-center" sizes="100vw" />
-      )}
+      {/* Sem camada de capa de curso aqui de propósito (curso.capa_url) —
+          já existiu, e causava o bug de a imagem do hero "virar" a capa do
+          curso que o aluno tivesse aberto por último (cursoDestaque, em
+          app/membros/vitrine/page.tsx, segue a lógica de "continuar
+          assistindo": o curso com progresso mais recente). Esse hero é
+          institucional (ver comentário do topo do arquivo — título/tags/
+          texto fixos, não destaca mais um curso específico), então a
+          imagem de fundo também precisa ser isolada da capa de qualquer
+          curso — só heroDestaqueUrl (ou o fundo sólido, sem ela) acima. */}
 
       {/* Logo pequena, canto superior esquerdo — mesma imagem do cabeçalho
           compacto "Início"/MobileHeader. md:left-6 md:top-6: mais afastada
@@ -105,51 +119,109 @@ export default function CursoDestaque({
           `relative` venceria) e quebraria esse ancoramento embaixo,
           bagunçando o layout inteiro. Como já não é `static`, já participa
           do empilhamento normalmente — só faltava mesmo o z-10. */}
-      <div className="absolute inset-x-0 bottom-0 z-10 p-4 text-left md:max-w-lg md:p-8">
-        <p className="text-xl font-bold leading-tight text-white drop-shadow md:text-3xl">Todos os cursos. Um só lugar.</p>
+      {/* md:max-w-[45rem]/xl:max-w-[50rem]: notebook (768-1279px) e tela
+          grande (1280px+) recebem valores diferentes agora — antes só
+          existia md: (>=768px), que fazia notebook herdar o valor de tela
+          grande. md:p-12 (3rem, sem variante xl: própria — não fazia parte
+          deste pedido) continua igual em notebook e tela grande. */}
+      <div className="absolute inset-x-0 bottom-0 z-10 p-4 text-left md:max-w-[45rem] md:p-12 xl:max-w-[50rem]">
+        {/* Mobile: text-[2.25rem] leading-[1.1] (era text-xl/leading-tight)
+            — trocado por pedido explícito. md:text-[4rem] md:leading-[4rem]
+            (notebook) / xl:text-[5rem] xl:leading-[5rem] (tela grande)
+            continuam sem mudança. */}
+        <p className="text-[2.25rem] font-bold leading-[1.1] text-white drop-shadow md:text-[4rem] md:leading-[4rem] xl:text-[5rem] xl:leading-[5rem]">
+          Todos os cursos. Um só lugar.
+        </p>
 
         {/* 3 tags lado a lado (mesmo estilo de pílula que a tag única de
-            categoria tinha antes) — gap-2 (0.5rem) entre elas, flex-wrap
-            pra quebrar em mais de uma linha no mobile caso não caibam. */}
-        <div className="mt-2 flex flex-wrap gap-2 md:mt-3">
-          <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-white/90 md:px-3 md:py-1 md:text-xs">
+            categoria tinha antes) — gap-2 (0.5rem, igual em notebook/tela
+            grande, sem variante própria) entre elas, flex-wrap pra quebrar
+            em mais de uma linha no mobile caso não caibam. Mobile: mt-4
+            (1rem, era mt-2) — trocado por pedido explícito. md:mt-6
+            (1.5rem, notebook) / xl:mt-7 (1.75rem, tela grande) sem mudança. */}
+        <div className="mt-4 flex flex-wrap gap-2 md:mt-6 xl:mt-7">
+          {/* Mobile: text-[0.7rem] (era text-[0.65rem]) + py-1 px-[0.7rem]
+              (era py-0.5 px-2.5, 0.125rem/0.625rem) — trocados por pedido
+              explícito (0.25rem em cima/embaixo, 0.7rem nas laterais). md:*
+              sem mudança. */}
+          <span className="rounded-full bg-white/15 px-[0.7rem] py-1 text-[0.7rem] font-semibold uppercase tracking-wide text-white/90 md:px-4 md:py-2 md:text-[0.8rem] md:leading-4">
             +99 cursos
           </span>
-          <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-white/90 md:px-3 md:py-1 md:text-xs">
+          <span className="rounded-full bg-white/15 px-[0.7rem] py-1 text-[0.7rem] font-semibold uppercase tracking-wide text-white/90 md:px-4 md:py-2 md:text-[0.8rem] md:leading-4">
             +1000 aulas
           </span>
-          <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-white/90 md:px-3 md:py-1 md:text-xs">
+          <span className="rounded-full bg-white/15 px-[0.7rem] py-1 text-[0.7rem] font-semibold uppercase tracking-wide text-white/90 md:px-4 md:py-2 md:text-[0.8rem] md:leading-4">
             Acesso Vitalício
           </span>
         </div>
 
-        {/* max-w-[34rem]: trava a largura do texto antes mesmo do md:max-w-lg
-            (32rem) do wrapper entrar em ação — no mobile o wrapper não tem
-            max-width nenhum, então sem isso o texto esticaria até a borda
-            do card numa tela larga. mb-4/md:mb-5: é essa margem (não mais
-            um mt- no botão abaixo) que garante o respiro antes dele. */}
-        <p className="mb-4 mt-3 max-w-[34rem] text-base text-white/80 md:mb-5 md:mt-4">
+        {/* Sem max-w próprio (era max-w-[34rem], removido por pedido
+            explícito) — o parágrafo ocupa toda a largura disponível do
+            container pai, que trava em md:max-w-[45rem]/xl:max-w-[50rem]
+            (mobile não tem max-width nenhum no pai, então o texto já ia até
+            a borda do card mesmo antes). md:mb-5/md:mt-4 (1.25rem/1rem,
+            iguais em notebook/tela grande, sem variante própria).
+            Mobile: text-[0.9rem] leading-[1.3rem] (era text-base, que
+            equivale a 1rem/1.5rem) — trocado por pedido explícito.
+            md:text-[1.3rem] md:leading-[1.8rem] (notebook) / xl:text-[1.5rem]
+            xl:leading-8 (tela grande) sem mudança. */}
+        <p className="mb-4 mt-3 text-[0.9rem] leading-[1.3rem] text-white/80 md:mb-5 md:mt-4 md:text-[1.3rem] md:leading-[1.8rem] xl:text-[1.5rem] xl:leading-8">
           Aulas organizadas por módulo, do básico ao avançado. Assista no seu ritmo, de onde estiver, sem prazo para
           terminar.
         </p>
 
-        {/* rounded-full sobrescreve o `rounded` (4px) do .btn-primary/do
-            utilitário base — não mexemos na classe compartilhada (usada em
-            botões primários em toda a plataforma), só adicionamos um
-            arredondamento maior aqui, específico deste card. md:w-auto:
-            no mobile o botão ocupa a largura toda (w-full herdado do
-            .btn-primary); num card largo de desktop isso ficaria enorme e
-            fora do padrão de botões da plataforma — md:px-8 dá uma largura
-            proporcional ao conteúdo em vez de esticar. href em âncora
-            (#todos-os-cursos, id novo em VitrinePageClient.tsx): rola até a
-            seção "Todos os Cursos" da própria Home, não navega pra outra
-            rota. */}
-        <a
-          href="#todos-os-cursos"
-          className="btn-primary flex w-full items-center justify-center gap-2 rounded-full py-2.5 md:w-auto md:px-8 md:py-3 md:text-base"
-        >
-          Explorar cursos
-        </a>
+        {/* Wrapper dos dois botões — mobile: flex-col (empilhados, cada um
+            w-full via classe própria do botão) + gap-3 (0.75rem) entre
+            eles; md: flex-row + items-center (lado a lado, "Explorar
+            cursos" à esquerda por ordem no DOM), mesmo gap-3 servindo de
+            espaçamento horizontal. Tudo isso pedido explicitamente — antes
+            só existia o botão vermelho sozinho aqui. */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          {/* rounded-full sobrescreve o `rounded` (4px) do .btn-primary/do
+              utilitário base — não mexemos na classe compartilhada (usada em
+              botões primários em toda a plataforma), só adicionamos um
+              arredondamento maior aqui, específico deste card. md:w-fit
+              (width: fit-content, era md:w-auto — trocado por pedido
+              explícito: `w-auto` num elemento `flex` ainda ocupava 100% da
+              largura disponível, já que é uma caixa block-level em fluxo
+              normal; `w-fit` de fato encolhe pro conteúdo, sem precisar virar
+              inline-flex): no mobile o botão continua ocupando a largura toda
+              (w-full herdado do .btn-primary). md:px-8/md:py-3 continuam
+              (padding interno mantido); md:text-[1.1rem] md:leading-6
+              (tamanho/altura de linha) são novos, pedidos explicitamente.
+              href em âncora (#todos-os-cursos, id novo em
+              VitrinePageClient.tsx): rola até a seção "Todos os Cursos" da
+              própria Home, não navega pra outra rota. */}
+          <a
+            href="#todos-os-cursos"
+            className="btn-primary flex w-full items-center justify-center gap-2 rounded-full py-2.5 md:w-fit md:px-8 md:py-3 md:text-[1.1rem] md:leading-6"
+          >
+            Explorar cursos
+          </a>
+
+          {/* Segundo botão, "Meus cursos" — pedido explícito, em todas as
+              telas. Mesmas classes de tamanho/padding/altura/border-radius
+              do botão acima (flex w-full items-center justify-center gap-2
+              rounded-full px-4 py-2.5 md:w-fit md:px-8 md:py-3
+              md:text-[1.1rem] md:leading-6 + text-sm font-semibold, que no
+              botão de cima vêm do .btn-primary) — só a cor muda: fundo
+              branco/texto #141414
+              (bg-white text-[#141414], não dá pra usar .btn-primary/
+              .btn-secondary aqui, nenhum dos dois tem essa combinação) +
+              hover branco levemente acinzentado (hover:bg-white/90),
+              coerente com o hover do vermelho (.btn-primary usa
+              hover:bg-primary-hover, um vermelho um pouco mais escuro — aqui
+              é a mesma ideia de "escurecer um pouco no hover", só que a
+              partir do branco). Link (não <a>): rota de verdade
+              (/membros/meus-cursos), diferente do âncora de rolagem ao
+              lado. */}
+          <Link
+            href="/membros/meus-cursos"
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-[#141414] transition-colors hover:bg-white/90 md:w-fit md:px-8 md:py-3 md:text-[1.1rem] md:leading-6"
+          >
+            Meus cursos
+          </Link>
+        </div>
       </div>
     </div>
   );

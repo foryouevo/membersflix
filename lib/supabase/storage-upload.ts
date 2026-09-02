@@ -14,13 +14,25 @@ export async function uploadImagemPublica(
   admin: SupabaseClient,
   arquivo: File,
   caminhoBase: string,
-  { bucket = PLATFORM_ASSETS_BUCKET, tamanhoMaximo = TAMANHO_MAXIMO_IMAGEM_BYTES } = {}
+  {
+    bucket = PLATFORM_ASSETS_BUCKET,
+    tamanhoMaximo = TAMANHO_MAXIMO_IMAGEM_BYTES,
+    // Opcional: whitelist de MIME types (ex: ['image/jpeg', 'image/png',
+    // 'image/webp']). Sem isso (undefined, default), só valida que É uma
+    // imagem (image/*) — comportamento de sempre, pros chamadores que não
+    // precisam restringir formato. Passar a lista é o jeito de restringir
+    // sem mudar esse default pros outros usos já existentes deste helper.
+    tiposPermitidos,
+  }: { bucket?: string; tamanhoMaximo?: number; tiposPermitidos?: string[] } = {}
 ) {
   if (!arquivo || arquivo.size === 0) {
     throw new Error('Selecione uma imagem.');
   }
   if (!arquivo.type.startsWith('image/')) {
     throw new Error('O arquivo precisa ser uma imagem.');
+  }
+  if (tiposPermitidos && !tiposPermitidos.includes(arquivo.type)) {
+    throw new Error('Formato inválido. Envie um arquivo JPG, PNG ou WEBP.');
   }
   if (arquivo.size > tamanhoMaximo) {
     throw new Error(`A imagem deve ter no máximo ${Math.round(tamanhoMaximo / (1024 * 1024))}MB.`);

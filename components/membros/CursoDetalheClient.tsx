@@ -70,13 +70,13 @@ export default function CursoDetalheClient({
         <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-black/30" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-black/10" />
 
-        {/* pt-14/md:pt-20: espaço pro MobileHeader/DesktopHeader fixos não
-            cobrirem a badge/título — os dois são transparentes e flutuam
-            por cima do hero, então só o conteúdo de texto aqui dentro
-            precisa dessa folga, não a imagem/gradiente (que começam no
-            topo de verdade nas duas larguras — ver o -mt-14/md:-mt-20 no
-            container da página acima). pb-12 continua fixo em qualquer
-            tela (pedido à parte, nada a ver com o header). */}
+        {/* pt-14/md:pt-20: espaço pro Header fixo não cobrir a
+            badge/título — é transparente e flutua por cima do hero, então
+            só o conteúdo de texto aqui dentro precisa dessa folga, não a
+            imagem/gradiente (que começam no topo de verdade nas duas
+            larguras — ver o -mt-14/md:-mt-20 no container da página
+            acima). pb-12 continua fixo em qualquer tela (pedido à parte,
+            nada a ver com o header). */}
         <div className="relative px-6 pb-12 pt-14 sm:px-16 md:pt-20">
           {/* Badge de categoria: 100% dinâmico, vem de curso.categoria (join
               feito na página) — some se o curso não tiver categoria

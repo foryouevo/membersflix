@@ -7,6 +7,10 @@ import { uploadImagemPublica } from '@/lib/supabase/storage-upload';
 
 const BANNER_PATH_PREFIX = 'configuracoes/banner-plataforma';
 const BANNER_HOME_PATH_PREFIX = 'configuracoes/banner-home';
+const HERO_DESTAQUE_PATH_PREFIX = 'configuracoes/hero-destaque';
+// Whitelist do upload do hero em destaque (item explícito do pedido — os
+// outros uploads desta tela aceitam qualquer image/*, esse não).
+const HERO_DESTAQUE_TIPOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp'];
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -106,4 +110,42 @@ export async function uploadBannerHomeCapa(formData: FormData) {
   revalidatePath('/admin/configuracoes');
   revalidatePath('/membros/vitrine');
   return url;
+}
+
+// Imagem de fundo do hero em destaque da Home (CursoDestaque) — campo
+// próprio (hero_destaque_url), isolado de cursos.capa_url e de
+// banner_capa_url (ver migração 008_hero_destaque_home.sql). Só aceita
+// jpg/png/webp (tiposPermitidos), diferente dos outros uploads desta tela.
+export async function uploadHeroDestaque(formData: FormData) {
+  await assertAdmin();
+
+  const arquivo = formData.get('arquivo');
+  if (!(arquivo instanceof File)) throw new Error('Selecione uma imagem.');
+
+  const admin = createAdminClient();
+  const url = await uploadImagemPublica(admin, arquivo, HERO_DESTAQUE_PATH_PREFIX, {
+    tiposPermitidos: HERO_DESTAQUE_TIPOS_PERMITIDOS,
+  });
+
+  const { error: erroSalvar } = await admin.from('configuracoes').update({ hero_destaque_url: url }).eq('id', 1);
+  if (erroSalvar) throw new Error(erroSalvar.message);
+
+  revalidatePath('/admin/configuracoes');
+  revalidatePath('/membros/vitrine');
+  return url;
+}
+
+// "Remover": limpa o campo no banco (fundo sólido escuro assume no hero, ver
+// CursoDestaque.tsx) — não apaga o arquivo do Storage (o path é fixo/upsert,
+// então um novo upload já sobrescreve o antigo; manter o arquivo órfão não
+// atrapalha nada e evita a complexidade de rastrear a extensão exata pra
+// deletar certo).
+export async function removerHeroDestaque() {
+  await assertAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin.from('configuracoes').update({ hero_destaque_url: null }).eq('id', 1);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/admin/configuracoes');
+  revalidatePath('/membros/vitrine');
 }

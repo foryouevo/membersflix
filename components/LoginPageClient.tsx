@@ -115,16 +115,21 @@ export default function LoginPageClient({
 
   return (
     <div className="relative flex min-h-screen flex-col bg-background">
-      {/* TESTE VISUAL: fundo em degradê (mesmo padrão do banner da Home —
-          VitrinePageClient — bg-gradient-to-br from-primary/25 via-background
-          to-background, + glow radial vermelho no canto superior) no lugar da
-          imagem estática, usando a paleta do tema (background #0f0f0f /
-          primary #e50914). Pra reverter, é só trocar USE_GRADIENT_BACKGROUND
-          pra false abaixo — o bloco da imagem original foi mantido intacto,
-          só fica oculto enquanto a flag estiver true. */}
+      {/* TESTE VISUAL: fundo em degradê (glow radial vermelho no canto
+          superior, mesma paleta do tema — background #0f0f0f / primary
+          #e50914) no lugar da imagem estática. Pra reverter, é só trocar
+          USE_GRADIENT_BACKGROUND pra false abaixo — o bloco da imagem
+          original foi mantido intacto, só fica oculto enquanto a flag
+          estiver true.
+          Só o radial fica: existia também um linear diagonal por baixo dele
+          (bg-gradient-to-br from-primary/25 via-background to-background)
+          que criava uma segunda mancha avermelhada, no canto superior
+          ESQUERDO — não confundir com o radial abaixo, que nasce no
+          topo-CENTRO (at 50% -10%) e é o único gradiente que deve
+          permanecer aqui; removido por pedido explícito, sem alterar
+          posição/cores/opacidade/tamanho do radial. */}
       {USE_GRADIENT_BACKGROUND ? (
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-background">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/25 via-background to-background" />
           <div
             className="absolute inset-0"
             style={{ background: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(229,9,20,0.35), transparent 70%)' }}

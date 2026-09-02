@@ -1,13 +1,15 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { MessageCircle, Save, Image as ImageIcon, Upload, LayoutTemplate } from 'lucide-react';
+import { MessageCircle, Save, Image as ImageIcon, Upload, LayoutTemplate, Sparkles, Trash2 } from 'lucide-react';
 import {
   salvarNumeroWhatsapp,
   salvarRodapeLogin,
   salvarBannerHomeTexto,
   uploadBannerPlataforma,
   uploadBannerHomeCapa,
+  uploadHeroDestaque,
+  removerHeroDestaque,
 } from '@/app/admin/configuracoes/actions';
 
 export default function ConfiguracoesForm({
@@ -15,6 +17,7 @@ export default function ConfiguracoesForm({
   bannerAtual,
   rodapeLoginAtual,
   bannerHomeAtual,
+  heroDestaqueAtual,
 }: {
   numeroAtual: string;
   bannerAtual: string | null;
@@ -29,6 +32,7 @@ export default function ConfiguracoesForm({
     banner_badge: string;
     banner_resumo: string;
   };
+  heroDestaqueAtual: string | null;
 }) {
   const [numero, setNumero] = useState(numeroAtual);
   const [salvando, setSalvando] = useState(false);
@@ -73,6 +77,7 @@ export default function ConfiguracoesForm({
         </form>
       </div>
 
+      <HeroDestaqueCard heroDestaqueAtual={heroDestaqueAtual} />
       <BannerHomeCard bannerHomeAtual={bannerHomeAtual} />
       <BannerPlataformaCard bannerAtual={bannerAtual} />
       <RodapeLoginCard rodapeAtual={rodapeLoginAtual} />
@@ -373,6 +378,133 @@ function BannerHomeCard({
           {textoSalvo && <span className="text-sm text-primary">Textos salvos.</span>}
         </div>
       </form>
+    </div>
+  );
+}
+
+// Fundo do card em destaque (hero) do topo da Home (CursoDestaque) — campo
+// próprio (hero_destaque_url), isolado tanto de cursos.capa_url (capa de
+// cada curso) quanto de banner_capa_url (o "Banner da Página Inicial" logo
+// acima, uma camada visual separada). Único upload desta tela que restringe
+// o formato do arquivo (jpg/png/webp) e tem botão de remover — os outros
+// (Banner Institucional/Banner da Página Inicial) aceitam qualquer imagem e
+// só substituem, nunca limpam.
+function HeroDestaqueCard({ heroDestaqueAtual }: { heroDestaqueAtual: string | null }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(heroDestaqueAtual);
+  const [arquivoSelecionado, setArquivoSelecionado] = useState<File | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [removendo, setRemovendo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  function handleSelecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0] ?? null;
+    setArquivoSelecionado(arquivo);
+    setErro(null);
+    setEnviado(false);
+    if (arquivo) setPreview(URL.createObjectURL(arquivo));
+  }
+
+  async function handleUpload() {
+    if (!arquivoSelecionado) return;
+    setEnviando(true);
+    setErro(null);
+    try {
+      const formData = new FormData();
+      formData.set('arquivo', arquivoSelecionado);
+      const url = await uploadHeroDestaque(formData);
+      setPreview(url);
+      setArquivoSelecionado(null);
+      if (inputRef.current) inputRef.current.value = '';
+      setEnviado(true);
+      setTimeout(() => setEnviado(false), 2500);
+    } catch (err: any) {
+      setErro(err.message ?? 'Erro ao enviar a imagem.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function handleRemover() {
+    setRemovendo(true);
+    setErro(null);
+    setEnviado(false);
+    try {
+      await removerHeroDestaque();
+      setPreview(null);
+      setArquivoSelecionado(null);
+      if (inputRef.current) inputRef.current.value = '';
+    } catch (err: any) {
+      setErro(err.message ?? 'Erro ao remover a imagem.');
+    } finally {
+      setRemovendo(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg bg-card p-6">
+      <div className="mb-4 flex items-center gap-2 text-primary">
+        <Sparkles size={18} />
+        <h2 className="font-semibold text-white">Destaque da Home</h2>
+      </div>
+
+      <p className="mb-1 text-xs text-on-variant">
+        Imagem de fundo do card em destaque (hero) da Home, dentro do feed — independente da capa de qualquer curso.
+        Sem imagem cadastrada, o hero usa um fundo escuro sólido em vez de ficar quebrado.
+      </p>
+      <p className="mb-3 text-xs text-on-variant">
+        Proporção recomendada: <strong className="text-on-surface">16:9</strong> (ex: 1920×1080px), sem texto
+        embutido — a imagem é cortada (recorte central) pra preencher o card em qualquer largura de tela.
+      </p>
+
+      {preview ? (
+        <div className="mb-3 aspect-video w-full overflow-hidden rounded bg-surface-lowest">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt="Prévia do destaque da Home" className="h-full w-full object-cover" />
+        </div>
+      ) : (
+        <div className="mb-3 flex aspect-video w-full items-center justify-center rounded border border-dashed border-border/60 bg-surface-lowest text-xs text-on-variant">
+          Nenhuma imagem cadastrada — fundo escuro sólido em uso
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleSelecionarArquivo}
+          className="hidden"
+          id="hero-destaque-input"
+        />
+        <label htmlFor="hero-destaque-input" className="btn-secondary cursor-pointer">
+          {preview ? 'Trocar imagem' : 'Escolher imagem'}
+        </label>
+        <button
+          type="button"
+          onClick={handleUpload}
+          disabled={!arquivoSelecionado || enviando}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Upload size={16} /> {enviando ? 'Enviando...' : 'Enviar Imagem'}
+        </button>
+        {preview && (
+          <button
+            type="button"
+            onClick={handleRemover}
+            disabled={removendo || enviando}
+            className="flex items-center gap-1.5 text-sm text-error hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-60"
+          >
+            <Trash2 size={14} /> {removendo ? 'Removendo...' : 'Remover'}
+          </button>
+        )}
+        {enviado && <span className="text-sm text-primary">Imagem atualizada.</span>}
+      </div>
+
+      <p className="mt-2 text-[0.7rem] text-on-variant">Formatos aceitos: JPG, PNG ou WEBP — até 5MB.</p>
+
+      {erro && <p className="mt-2 text-sm text-error">{erro}</p>}
     </div>
   );
 }

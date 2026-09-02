@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import BottomNav from '@/components/membros/BottomNav';
-import MobileHeader from '@/components/membros/MobileHeader';
-import DesktopHeader from '@/components/membros/DesktopHeader';
+import MembrosChrome from '@/components/membros/MembrosChrome';
 
 export default async function MembrosLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -14,17 +12,34 @@ export default async function MembrosLayout({ children }: { children: React.Reac
   const [{ data: profile }, { data: config }, { data: categorias }, { data: cursosAtivos }] = await Promise.all([
     supabase.from('profiles').select('nome, email, avatar_url, tipo').eq('id', user.id).maybeSingle(),
     supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle(),
-    // Categoria/instrutor pro painel de filtro do DesktopHeader (busca
-    // global, presente em toda página) — mesmas listas que useCursoFiltro
-    // deriva a partir de `todosCursos` em cada página que já carrega isso
-    // (Home, tela de busca), mas o header não tem um `todosCursos` próprio
-    // (não é dono de nenhuma lista de cursos, só é um atalho pra tela de
-    // busca — ver DesktopHeader.tsx), então busca direto aqui.
-    supabase.from('categorias').select('id, nome').order('ordem'),
+    // Categoria/instrutor pro painel de filtro do Header (busca global,
+    // presente em toda página) — mesmas listas que useCursoFiltro deriva a
+    // partir de `todosCursos` em cada página que já carrega isso (Home,
+    // tela de busca), mas o header não tem um `todosCursos` próprio (não é
+    // dono de nenhuma lista de cursos, só é um atalho pra tela de busca —
+    // ver Header.tsx), então busca direto aqui.
+    supabase.from('categorias').select('id, nome').order('nome'),
     supabase.from('cursos').select('instrutor_nome').eq('status', 'active'),
   ]);
 
   if (!profile || profile.tipo !== 'aluno') redirect('/admin/dashboard');
+
+  // Agrupada por nome (case/espaço-insensível), igual a `categoriasAgrupadas`
+  // em hooks/useCursoFiltro.ts — a tabela `categorias` tem linhas duplicadas
+  // (dado legado, ex: "Figma" cadastrado 3x com ids diferentes); sem esse
+  // agrupamento, o painel de filtro do header listava a mesma categoria
+  // repetida. `ids` guarda todas as linhas daquele nome, então selecionar o
+  // grupo bate com curso vinculado a QUALQUER uma delas (ver FiltroModal).
+  const categoriasAgrupadas = (() => {
+    const porNome = new Map<string, { id: string; nome: string; ids: string[] }>();
+    for (const cat of categorias ?? []) {
+      const chave = cat.nome.trim().toLowerCase();
+      const grupo = porNome.get(chave);
+      if (grupo) grupo.ids.push(cat.id);
+      else porNome.set(chave, { id: cat.id, nome: cat.nome.trim(), ids: [cat.id] });
+    }
+    return Array.from(porNome.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+  })();
 
   const instrutores = Array.from(
     new Set((cursosAtivos ?? []).map((c) => c.instrutor_nome).filter((nome): nome is string => !!nome))
@@ -38,37 +53,29 @@ export default async function MembrosLayout({ children }: { children: React.Reac
     // interno do <main> (o body em si nunca rola, então
     // background-attachment: fixed não tem nem por que entrar em jogo aqui).
     <div className="h-screen overflow-hidden">
-      {/* Header mobile global (logo/"Início" ou seta de voltar + avatar do
-          usuário) — fixed, md:hidden. Decide sozinho por rota (usePathname)
-          se mostra "Início" ou a seta, e se sequer aparece (self-exclui na
-          página do player). */}
-      <MobileHeader profile={profile} />
-      {/* Header desktop/tablet — substitui a sidebar lateral que existia
-          antes (removida de vez, MembrosSidebar.tsx). Barra horizontal
-          fixa, estilo Netflix: logo + nav (Início/Meus Cursos/Meu
-          Perfil/Suporte) + busca/filtro + avatar, hidden md:flex. Sem
-          background (transparente), igual em espírito ao MobileHeader. */}
-      <DesktopHeader
+      {/* Header único, global, presente em toda página (fixed) + <main> +
+          BottomNav — agrupados em MembrosChrome.tsx (Client Component)
+          porque precisam compartilhar estado entre si (busca mobile
+          empurrando o padding-top do <main>; bottom sheet de filtro mobile
+          escondendo o BottomNav enquanto aberto — ver comentário completo
+          em MembrosChrome.tsx) e são todos irmãos entre si aqui, sem
+          ancestralidade que permitisse se comunicar sozinhos. layout.tsx é
+          Server Component (não pode ter o useState que faz essa ponte),
+          daí o wrapper. Home e detalhes do curso (hero de tela cheia)
+          cancelam a folga padrão de <main> com -mt-14/md:-mt-20 no próprio
+          wrapper do hero, pra imagem/gradiente "sangrarem" por trás do
+          header (transparente no topo) e repõem a folga só no conteúdo de
+          texto/card lá dentro (pt-14/md:pt-20), pra não ficar coberto.
+          Páginas sem hero (busca, perfil, meus-cursos, categorias) não
+          cancelam nada. */}
+      <MembrosChrome
         profile={profile}
         numeroWhatsapp={config?.numero_whatsapp ?? null}
-        categorias={categorias ?? []}
+        categorias={categoriasAgrupadas}
         instrutores={instrutores}
-      />
-      {/* pt-14/pb-24 no mobile: espaço pro header (56px) e pra bottom nav
-          flutuante (fixed) não cobrirem o conteúdo. md:pt-20/md:pb-0: em
-          telas md+ o bottom nav some (md:hidden nele) e quem ocupa o topo é
-          o DesktopHeader — 64px de altura (h-16), daí o md:pt-20. Home e
-          detalhes do curso (hero de tela cheia) cancelam essa folga com
-          -mt-14/md:-mt-20 no próprio wrapper do hero, pra imagem/gradiente
-          "sangrarem" por trás dos dois headers (os dois são transparentes
-          — o desktop não fica mais sólido como antes) e repõem a folga só
-          no conteúdo de texto/card lá dentro (pt-14/md:pt-20), pra não
-          ficar coberto. Páginas sem hero (busca, perfil, meus-cursos,
-          categorias) não cancelam nada — não têm imagem nenhuma pra
-          sangrar atrás do header, então a folga padrão daqui já basta. */}
-      <main className="h-full overflow-y-auto pb-24 pt-14 md:pb-0 md:pt-20">{children}</main>
-      {/* Bottom nav flutuante — só mobile (md:hidden nela mesma). */}
-      <BottomNav numeroWhatsapp={config?.numero_whatsapp ?? null} />
+      >
+        {children}
+      </MembrosChrome>
     </div>
   );
 }

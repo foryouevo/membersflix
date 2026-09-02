@@ -227,11 +227,11 @@ export default function PlayerPageClient({
 
   return (
     // -mt-14 md:-mt-20: cancela o pt-14 (mobile)/pt-16 (desktop) padrão de
-    // <main> (app/membros/layout.tsx), reservado pro MobileHeader/
-    // DesktopHeader fixos — essa página não usa nenhum dos dois (os dois se
-    // auto-excluem em /membros/player, pra não brigar com o botão de voltar
-    // próprio que já flutua sobre o vídeo, poucas linhas abaixo) nem
-    // depende do <main> pra scroll (gerencia a própria altura via
+    // <main> (app/membros/layout.tsx), reservado pro Header fixo — essa
+    // página não usa ele (se auto-exclui em /membros/player, pra não
+    // brigar com o botão de voltar próprio que já flutua sobre o vídeo,
+    // poucas linhas abaixo) nem depende do <main> pra scroll (gerencia a
+    // própria altura via
     // h-screen), então a folga ficaria sobrando — espaço vazio cortando o
     // vídeo por baixo, já que h-screen não encolhe pra compensar um
     // padding-top no pai.

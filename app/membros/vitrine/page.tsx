@@ -5,6 +5,11 @@ import { calcularContinuarAssistindo } from '@/lib/membros/continuar-assistindo'
 type BannerConfig = {
   numero_whatsapp: string | null;
   banner_capa_url: string | null;
+  // Fundo do hero em destaque (CursoDestaque) — campo próprio, isolado de
+  // banner_capa_url (o banner acima, camada visual separada) e de
+  // cursos.capa_url (capa de cada curso). Ver migração
+  // 008_hero_destaque_home.sql.
+  hero_destaque_url: string | null;
 };
 
 // Isolada (com try/catch + checagem de `error` explícita) igual ao mesmo
@@ -21,10 +26,15 @@ async function buscarBannerConfig(supabase: ReturnType<typeof createClient>): Pr
   const vazio: BannerConfig = {
     numero_whatsapp: null,
     banner_capa_url: null,
+    hero_destaque_url: null,
   };
 
   try {
-    const { data, error } = await supabase.from('configuracoes').select('numero_whatsapp, banner_capa_url').eq('id', 1).maybeSingle();
+    const { data, error } = await supabase
+      .from('configuracoes')
+      .select('numero_whatsapp, banner_capa_url, hero_destaque_url')
+      .eq('id', 1)
+      .maybeSingle();
 
     if (error) {
       console.error('[vitrine] Falha ao buscar banner de configuracoes (seguindo com fallback vazio):', error.message);
@@ -34,6 +44,7 @@ async function buscarBannerConfig(supabase: ReturnType<typeof createClient>): Pr
     return {
       numero_whatsapp: data?.numero_whatsapp ?? null,
       banner_capa_url: data?.banner_capa_url ?? null,
+      hero_destaque_url: data?.hero_destaque_url ?? null,
     };
   } catch (err) {
     console.error('[vitrine] Erro inesperado ao buscar banner de configuracoes (seguindo com fallback vazio):', err);
@@ -112,6 +123,7 @@ export default async function VitrinePage() {
       progressoPorCurso={Object.fromEntries(progressoPorCurso)}
       numeroWhatsapp={config?.numero_whatsapp ?? null}
       bannerCapaUrl={config?.banner_capa_url ?? null}
+      heroDestaqueUrl={config?.hero_destaque_url ?? null}
       todasCategorias={categorias ?? []}
       cursoDestaque={cursoDestaque}
     />

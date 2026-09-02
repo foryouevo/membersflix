@@ -6,7 +6,7 @@ export default async function ConfiguracoesPage() {
   const { data: config } = await supabase
     .from('configuracoes')
     .select(
-      'numero_whatsapp, banner_plataforma_url, desenvolvido_por, email_contato, telefone_contato, termos_uso_url, banner_capa_url, banner_badge, banner_resumo'
+      'numero_whatsapp, banner_plataforma_url, desenvolvido_por, email_contato, telefone_contato, termos_uso_url, banner_capa_url, banner_badge, banner_resumo, hero_destaque_url'
     )
     .eq('id', 1)
     .maybeSingle();
@@ -31,6 +31,7 @@ export default async function ConfiguracoesPage() {
             banner_badge: config?.banner_badge ?? '',
             banner_resumo: config?.banner_resumo ?? '',
           }}
+          heroDestaqueAtual={config?.hero_destaque_url ?? null}
         />
       </div>
     </div>

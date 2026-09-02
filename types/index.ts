@@ -112,6 +112,10 @@ export interface Configuracoes {
   banner_capa_url: string | null;
   banner_badge: string | null;
   banner_resumo: string | null;
+  // Fundo do hero em destaque da Home (CursoDestaque) — campo próprio,
+  // isolado de cursos.capa_url e de banner_capa_url (ver migração
+  // 008_hero_destaque_home.sql).
+  hero_destaque_url: string | null;
 }
 
 export interface VitrineSecao {
