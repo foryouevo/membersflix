@@ -141,8 +141,8 @@ export default function PlayerPageClient({
   // vive numa variável só, montada nos dois lugares, em vez de duplicado.
   const blocoModulo = (
     <>
-      <div className="shrink-0 border-b border-border/40 p-6">
-        <p className="truncate text-2xl font-bold text-white">{formatTitulo(modulo.titulo)}</p>
+      <div className="shrink-0 border-b border-border/40 py-6 px-0 lg:p-6">
+        <p className="truncate text-[1.3rem] font-bold text-white lg:text-2xl">{formatTitulo(modulo.titulo)}</p>
         <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-high">
           <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progressoModulo}%` }} />
         </div>
@@ -271,7 +271,13 @@ export default function PlayerPageClient({
             voltarLabel={`Voltar para ${curso.titulo}`}
           />
 
-          <div className="mt-6 flex items-start justify-between gap-4">
+          {/* flex-col no mobile (empilhado) / lg:flex-row lg:items-start
+              lg:justify-between (desktop, lado a lado — como sempre foi):
+              a ordem visual no mobile (botões primeiro) vem do order-first
+              na div dos botões abaixo, não da ordem no JSX/DOM (que
+              continua tag+título primeiro, botões depois, igual ao
+              desktop) — troca só de apresentação, sem duplicar estrutura. */}
+          <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-surface-high px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-on-variant">
@@ -294,22 +300,32 @@ export default function PlayerPageClient({
                   nessa área. */}
               {aula.descricao && <p className="mt-1 hidden max-w-2xl text-sm text-on-variant lg:block">{aula.descricao}</p>}
             </div>
-            {/* Aula Anterior / Próxima Aula: só no desktop — no mobile essa
-                fileira cortava na borda direita da tela junto com o título.
-                Navegar entre aulas no mobile continua possível pela lista de
-                aulas do módulo, na aside abaixo. */}
-            <div className="hidden shrink-0 gap-2 lg:flex">
+            {/* Aula Anterior / Próxima Aula — visível em qualquer largura.
+                Mobile: order-first (aparece ANTES da tag+título do bloco
+                acima, apesar de vir depois no JSX/DOM — pedido explícito,
+                reordenar só via CSS, sem mudar a estrutura), w-full (some
+                com "largura automática" e vira uma fileira de ponta a
+                ponta) + gap-3 entre os dois botões + mb-4 (separa da
+                tag do módulo que vem logo abaixo, já que a ordem visual
+                inverteu). Desktop (lg:): volta exatamente ao que já era —
+                order-none (ordem normal do DOM, à direita da tag/título),
+                w-auto (largura de conteúdo, não mais 100%), gap-2 (valor
+                original, menor que o do mobile) e mb-0 (sem margem, já que
+                aqui os botões ficam ao LADO do bloco de texto, não acima
+                dele). shrink-0 continua pros dois, evitando que a fileira
+                encolha dentro do flex-row do desktop. */}
+            <div className="order-first mb-2 flex w-full shrink-0 gap-3 lg:order-none lg:mb-0 lg:w-auto lg:gap-2">
               <Link
                 href={aulaAnteriorId ? `/membros/player/${aulaAnteriorId}` : '#'}
                 aria-disabled={!aulaAnteriorId}
-                className={`btn-secondary flex items-center gap-1 ${!aulaAnteriorId ? 'pointer-events-none opacity-40' : ''}`}
+                className={`btn-secondary flex flex-1 items-center justify-center gap-1 lg:flex-none ${!aulaAnteriorId ? 'pointer-events-none opacity-40' : ''}`}
               >
                 <ChevronLeft size={16} /> Aula Anterior
               </Link>
               <Link
                 href={proximaAulaId ? `/membros/player/${proximaAulaId}` : '#'}
                 aria-disabled={!proximaAulaId}
-                className={`btn-primary flex items-center gap-1 ${!proximaAulaId ? 'pointer-events-none opacity-40' : ''}`}
+                className={`btn-primary flex flex-1 items-center justify-center gap-1 lg:flex-none ${!proximaAulaId ? 'pointer-events-none opacity-40' : ''}`}
               >
                 Próxima Aula <ChevronRight size={16} />
               </Link>
@@ -439,10 +455,11 @@ export default function PlayerPageClient({
             lg:pr-6: margem direita da página (simétrica ao lg:pl-14 da
             coluna de conteúdo) — o gap-6 da fileira acima já é o respiro
             ATÉ aqui, isso aqui é só o respiro depois daqui até a borda da
-            tela. lg:w-[28rem] (era lg:w-80/20rem): largura fixa da
-            sidebar em desktop — só entra em jogo a partir de lg (a
-            <aside> é `hidden` abaixo disso), então não afeta o mobile. */}
-        <aside className="hidden w-full shrink-0 flex-col border-t border-border/60 lg:flex lg:w-[28rem] lg:overflow-hidden lg:border-l lg:border-t-0 lg:pr-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh_-_6rem)]">
+            tela. lg:w-[32rem] (era lg:w-[28rem], antes disso lg:w-80/20rem):
+            largura fixa da sidebar em desktop, trocada por pedido explícito
+            — só entra em jogo a partir de lg (a <aside> é `hidden` abaixo
+            disso), então não afeta o mobile. */}
+        <aside className="hidden w-full shrink-0 flex-col border-t border-border/60 lg:flex lg:w-[32rem] lg:overflow-hidden lg:border-l lg:border-t-0 lg:pr-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh_-_6rem)]">
           {blocoModulo}
         </aside>
       </div>

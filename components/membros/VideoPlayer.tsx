@@ -25,14 +25,15 @@ const ReactPlayer = dynamic(() => import('react-player'), { ssr: false });
 
 const VELOCIDADES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-// Altura (em px) reservada, além dos 16:9 do vídeo em si, pra UI própria do
-// player embutido do Google Drive (.../file/d/FILE_ID/preview) — a barra de
-// título do arquivo no topo + a barra de controles dele embaixo. É medida às
-// cegas (a UI do Drive é cross-origin, não dá pra medir por JS) — 48px não
-// foi suficiente (controles ainda cortavam), 88px é a tentativa atual. Se
-// ainda cortar, sobe esse número (ex.: 104px) — ver DriveIframePlayer,
-// abaixo, onde é o único lugar que usa essa constante.
-const DRIVE_UI_OFFSET_PX = 88;
+// Altura (em px) reservada, além do vídeo em si, pra UI própria do player
+// embutido do Google Drive (.../file/d/FILE_ID/preview) — a barra de título
+// do arquivo no topo + a barra de controles dele embaixo. É medida às cegas
+// (a UI do Drive é cross-origin, não dá pra medir por JS) — 88px é o valor
+// atual, embutido direto na classe `pb-[calc(49.6%_+_88px)]` de
+// DriveIframePlayer, abaixo (antes vinha desta constante, via `style`
+// inline — trocado por pedido explícito pra virar uma classe Tailwind, o
+// que exige um valor literal, sem variável). Se algum dia cortar de novo,
+// é lá que se ajusta o "+88px".
 
 interface VideoPlayerProps {
   aulaId: string;
@@ -166,31 +167,48 @@ function DriveIframePlayer({ videoUrl, voltarHref, voltarLabel }: VideoPlayerPro
     // isso a caixa deixou de ser aspect-ratio puro (não dá pra trocar por
     // `aspect-video` puro aqui, mesmo tendo sido pedido de forma geral pro
     // "wrapper do player" — reintroduziria exatamente esse corte já
-    // corrigido): é 16/9 (56.25%) + DRIVE_UI_OFFSET_PX fixos extra (ver
-    // constante no topo do arquivo), espaço reservado só pra UI do Drive,
-    // sem comprimir o vídeo. Técnica do "padding-bottom vira altura"
+    // corrigido): é 16/9 + 88px fixos extra, espaço reservado só pra UI do
+    // Drive, sem comprimir o vídeo. Técnica do "padding-bottom vira altura"
     // (funciona em qualquer navegador, sem depender de aspect-ratio nem de
-    // JS/ResizeObserver): um spacer com width:100% e
-    // padding-bottom:calc(56.25% + Npx) — como padding percentual é sempre
+    // JS/ResizeObserver): um spacer com width:100% e uma classe
+    // `pb-[calc(56.25%_+_88px)]` — como padding percentual é sempre
     // relativo à LARGURA do próprio elemento, isso dá a altura final direto
-    // em função da largura, sem CSS var. A caixa visual de verdade (fundo
-    // preto, cantos arredondados, overflow-hidden, o iframe) fica
-    // ABSOLUTAMENTE posicionada preenchendo esse spacer (inset-0) — senão o
-    // padding-bottom sobraria como espaço vazio dentro do próprio fluxo,
-    // sem nada desenhado ali.
+    // em função da largura. A caixa visual de verdade (fundo preto, cantos
+    // arredondados, overflow-hidden, o iframe) fica ABSOLUTAMENTE
+    // posicionada preenchendo esse spacer (inset-0) — senão o padding-bottom
+    // sobraria como espaço vazio dentro do próprio fluxo, sem nada desenhado
+    // ali.
     //
-    // mx-auto + lg:max-h-[calc(100vh-10rem)]/lg:max-w-[...]: mesmo limite de
-    // altura em telas largas do CustomVideoPlayer (ver lá), calculado pra
-    // um 16:9 puro — como este spacer é 16:9 + 88px extra, no pior caso
-    // (largura no limite) a caixa final fica até ~88px mais baixa que o
-    // teto, nunca mais alta — não estoura a viewport, só não usa o teto
-    // inteiro à risca; mantém as duas caixas (Drive/upload) com o mesmo
-    // tamanho aproximado numa mesma tela, em vez de duas fórmulas
-    // divergentes.
-    <div
-      className="relative mx-auto w-full lg:max-h-[calc(100vh_-_10rem)] lg:max-w-[calc((100vh_-_10rem)*16/9)]"
-      style={{ paddingBottom: `calc(56.25% + ${DRIVE_UI_OFFSET_PX}px)` }}
-    >
+    // pb-[calc(56.25%_+_88px)] (mobile, sem prefixo — 56.25% = 9/16, a
+    // proporção matematicamente correta de 16:9) / lg:pb-[calc(49.6%_+_88px)]
+    // (desktop, valor pedido explicitamente numa tarefa anterior — na hora,
+    // apliquei ele SEM o prefixo lg:, então também passou a valer no
+    // mobile por engano). Bug relatado: no mobile, esse 49.6% (menor que os
+    // 56.25% corretos) produzia uma caixa mais BAIXA do que o vídeo+UI do
+    // Drive realmente precisam numa tela estreita — o conteúdo do iframe
+    // (cross-origin, renderizado pelo próprio Google) ficava cortado por
+    // este container ter overflow-hidden, e o botão de play do Drive podia
+    // acabar fora da área realmente clicável/visível. Com o valor correto
+    // de volta no mobile (e o 49.6% preservado só a partir de lg:, onde já
+    // estava calibrado e funcionando), os dois sintomas relatados — corte/
+    // barra preta E o play não clicável — têm a mesma causa raiz e devem
+    // resolver juntos; não há nenhum overlay/z-index/pointer-events
+    // concorrente neste componente (só BotaoVoltar, canto sup. esquerdo, e
+    // a marca d'água, canto sup. direito — nenhum dos dois cobre o centro
+    // do vídeo, onde fica o play).
+    //
+    // mx-auto + lg:max-h-[calc(100vh-10rem)]/lg:max-w-[...] (já eram lg:,
+    // sem mudança agora): mesmo limite de altura em telas largas do
+    // CustomVideoPlayer (ver lá), calculado pra um 16:9 puro — como este
+    // spacer é 16:9 + 88px extra, no pior caso (largura no limite) a caixa
+    // final fica até ~88px mais baixa que o teto, nunca mais alta — não
+    // estoura a viewport, só não usa o teto inteiro à risca; mantém as duas
+    // caixas (Drive/upload) com o mesmo tamanho aproximado numa mesma tela,
+    // em vez de duas fórmulas divergentes. Só valem a partir de lg mesmo —
+    // abaixo disso o spacer já usa 100% da largura da tela (mx-auto sem
+    // max-w correspondente), então esse teto de altura não faria sentido
+    // aplicado sozinho no mobile.
+    <div className="relative mx-auto w-full pb-[calc(56.25%_+_88px)] lg:pb-[calc(49.6%_+_88px)] lg:max-h-[calc(100vh_-_10rem)] lg:max-w-[calc((100vh_-_10rem)*16/9)]">
       {/* Botão de voltar por cima de tudo (z-20) — mesmo elemento
           `position:relative` que já reserva a altura do spacer é a
           referência de posicionamento aqui (inset-0 do preenchimento
@@ -202,8 +220,9 @@ function DriveIframePlayer({ videoUrl, voltarHref, voltarLabel }: VideoPlayerPro
         onContextMenu={(e) => e.preventDefault()}
         className="absolute inset-0 overflow-hidden rounded-lg bg-black"
       >
-        {/* h-full w-full: preenche a caixa (16/9 + DRIVE_UI_OFFSET_PX)
-            inteira — o offset extra é exatamente o "respiro" que sobra pra
+        {/* h-full w-full: preenche a caixa (16/9 + 88px, ver
+            pb-[calc(49.6%_+_88px)] no spacer acima) inteira — o offset
+            extra é exatamente o "respiro" que sobra pra
             UI do Drive não precisar espremer o vídeo nem cortar a barra
             debaixo. Sem transform/scale nem overlay tentando "esconder" a
             UI do Drive — isso quebraria os controles dela; a única correção
