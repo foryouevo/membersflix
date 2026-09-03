@@ -226,48 +226,52 @@ export default function PlayerPageClient({
   );
 
   return (
-    // -mt-14 md:-mt-20: cancela o pt-14 (mobile)/pt-16 (desktop) padrão de
-    // <main> (app/membros/layout.tsx), reservado pro Header fixo — essa
-    // página não usa ele (se auto-exclui em /membros/player, pra não
-    // brigar com o botão de voltar próprio que já flutua sobre o vídeo,
-    // poucas linhas abaixo) nem depende do <main> pra scroll (gerencia a
-    // própria altura via
-    // h-screen), então a folga ficaria sobrando — espaço vazio cortando o
-    // vídeo por baixo, já que h-screen não encolhe pra compensar um
-    // padding-top no pai.
-    // Sem bg-background: fundo (gradiente vermelho/preto) é só do <body>
-    // agora (app/globals.css) — ver mesmo ajuste em VitrinePageClient.tsx/
-    // CursoDetalheClient.tsx. O player em si continua com fundo preto sólido
-    // (bg-black, no VideoPlayer) por trás do vídeo — isso não muda; só a
-    // folga ao redor dele (padding desta página) deixa de ser plana e passa
-    // a mostrar o mesmo fundo do resto do app.
-    <div className="-mt-14 flex h-screen flex-col overflow-hidden md:-mt-20">
-      {/* Mobile: a fileira inteira rola como uma página só (empilhado).
-          Desktop (lg+): a fileira trava a altura e cada coluna rola por conta própria. */}
-      <div className="flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-        <div className="flex-1 p-4 lg:overflow-y-auto lg:p-6">
-          {/* Botão de voltar: círculo flutuante sobre o vídeo (não mais uma
-              barra de texto acima dele) — só o ícone, sem o título do curso
-              ao lado. O wrapper relative existe só pra ancorar esse overlay;
-              o VideoPlayer continua do jeito que é. */}
-          <div className="relative">
-            <Link
-              href={`/membros/curso/${curso.id}`}
-              aria-label={`Voltar para ${curso.titulo}`}
-              className="absolute left-3 top-3 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-            >
-              <ChevronLeft size={22} />
-            </Link>
-            <VideoPlayer
-              aulaId={aula.id}
-              cursoId={curso.id}
-              posicaoInicial={posicaoInicial}
-              aulaAnteriorId={aulaAnteriorId}
-              proximaAulaId={proximaAulaId}
-            />
-          </div>
+    // Nada de -mt-14/md:-mt-20 nem h-screen/overflow-hidden aqui — essa
+    // página deixou de gerenciar a própria altura de viewport (o vídeo
+    // tinha altura herdada do container inteiro, sem teto, e "vazava" da
+    // tela). Agora ela é uma página normal como as outras da área de
+    // membros: usa a folga padrão que <main> já reserva pro Header
+    // (pt-14/md:pt-20, app/membros/layout.tsx) e quem rola é a PÁGINA
+    // (o próprio <main>, overflow-y-auto) — é isso que faz o Header
+    // detectar o scroll de novo e ganhar fundo ao rolar (ele lê o scroll
+    // de window/documento, não o de uma div interna isolada). Sem
+    // bg-background: fundo (gradiente vermelho/preto) é só do <body>
+    // (app/globals.css).
+    <div>
+      {/* flex-col por padrão / lg:flex-row a partir do breakpoint grande:
+          empilhado no mobile (a lista de aulas mora na aba "Aulas" abaixo
+          do vídeo, não ao lado — ver mais abaixo), lado a lado no desktop.
+          items-start (não mais stretch, o default): a coluna de conteúdo e
+          a <aside> não precisam mais ter a MESMA altura uma da outra — a
+          altura de cada uma agora é só o que o próprio conteúdo pede
+          (a página é quem rola). gap-6 entre as colunas no desktop: é o
+          único espaço entre o vídeo e a sidebar agora — ver padding de
+          cada coluna abaixo (reduzido pra não duplicar esse respiro). */}
+      <div className="flex flex-col lg:flex-row lg:items-start lg:gap-6">
+        {/* px-4 pt-4 (mobile, nas duas larguras) + pb-24: respiro
+            confortável dos dois lados (a <aside> nem aparece, então
+            precisa da própria margem direita) + folga pro BottomNav
+            flutuante (fixed, 6rem — precisa ser reposta à mão porque esta
+            coluna, dentro do fluxo normal da página, termina antes do fim
+            do scroll). A partir de lg: pt-4/pr-0/pb-6/pl-14 — só a margem
+            ESQUERDA da página continua tendo padding aqui (pl-14); a
+            direita fica só no gap-6 da fileira acima (antes de mais do
+            que o gap, o próprio padding direito desta coluna E o espaço
+            reservado pela <aside> se somavam, deixando a borda direita do
+            vídeo longe da sidebar) — daí o pr-0. lg:pb-6: sem o extra do
+            BottomNav (md:hidden, não existe mais nessa largura). */}
+        <div className="flex-1 px-4 pb-24 pt-4 lg:pb-6 lg:pl-14 lg:pr-0 lg:pt-4">
+          <VideoPlayer
+            aulaId={aula.id}
+            cursoId={curso.id}
+            posicaoInicial={posicaoInicial}
+            aulaAnteriorId={aulaAnteriorId}
+            proximaAulaId={proximaAulaId}
+            voltarHref={`/membros/curso/${curso.id}`}
+            voltarLabel={`Voltar para ${curso.titulo}`}
+          />
 
-          <div className="mt-4 flex items-start justify-between gap-4">
+          <div className="mt-6 flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
                 <span className="rounded-full bg-surface-high px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-on-variant">
@@ -418,8 +422,27 @@ export default function PlayerPageClient({
 
         {/* Desktop apenas (hidden lg:flex): no mobile esse mesmo conteúdo
             (`blocoModulo`) vive dentro da aba "Aulas" logo acima — não faz
-            sentido repetir a lista de aulas duas vezes na mesma tela. */}
-        <aside className="hidden w-full shrink-0 flex-col border-t border-border/60 lg:flex lg:w-80 lg:overflow-hidden lg:border-l lg:border-t-0">
+            sentido repetir a lista de aulas duas vezes na mesma tela.
+
+            lg:sticky lg:top-4: gruda no topo da PRÓPRIA PÁGINA (não mais
+            de uma div com scroll isolado) assim que ela rola — top-4
+            (1rem) é o afastamento do topo ao fixar (valor pedido
+            explicitamente, substitui o top-24/6rem anterior, que alinhava
+            rente à altura real do Header em desktop). lg:max-h-
+            [calc(100vh-6rem)]: teto de altura a partir desse mesmo ponto —
+            sem isso, uma lista de aulas longa esticaria a <aside> (e o
+            "sticky" junto) além da tela. lg:overflow-hidden aqui fora +
+            lg:overflow-y-auto dentro (blocoModulo, no bloco da lista) é o
+            que faz só a LISTA rolar por conta própria quando ultrapassa
+            esse teto — o cabeçalho (título do módulo + progresso) fica
+            fixo no topo da aside, nunca é empurrado pra fora por ela.
+            lg:pr-6: margem direita da página (simétrica ao lg:pl-14 da
+            coluna de conteúdo) — o gap-6 da fileira acima já é o respiro
+            ATÉ aqui, isso aqui é só o respiro depois daqui até a borda da
+            tela. lg:w-[28rem] (era lg:w-80/20rem): largura fixa da
+            sidebar em desktop — só entra em jogo a partir de lg (a
+            <aside> é `hidden` abaixo disso), então não afeta o mobile. */}
+        <aside className="hidden w-full shrink-0 flex-col border-t border-border/60 lg:flex lg:w-[28rem] lg:overflow-hidden lg:border-l lg:border-t-0 lg:pr-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh_-_6rem)]">
           {blocoModulo}
         </aside>
       </div>

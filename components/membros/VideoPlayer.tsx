@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
+  ChevronLeft,
   Play,
   Pause,
   Volume2,
@@ -40,6 +41,31 @@ interface VideoPlayerProps {
   posicaoInicial: number;
   aulaAnteriorId: string | null;
   proximaAulaId: string | null;
+  voltarHref: string;
+  voltarLabel: string;
+}
+
+// Botão de voltar (seta), sobreposto ao canto superior esquerdo do PRÓPRIO
+// wrapper do player (não mais um elemento irmão fora dele, ancorado num
+// `relative` à parte em PlayerPageClient.tsx) — motivo: o wrapper do player
+// pode ficar mais estreito que a coluna ao redor dele (mx-auto + max-width
+// proporcional, telas largas/baixas — ver os três wrappers abaixo), então um
+// botão ancorado à COLUNA ficava fora do vídeo de verdade, flutuando sobre a
+// margem esquerda vazia. Ancorado aqui dentro (cada wrapper já é
+// `position: relative`), sempre alinha com a borda de verdade do vídeo,
+// não importa a largura que ele acabar tendo. z-20: acima do vídeo/iframe e
+// do overlay de play/pause do CustomVideoPlayer (que cobre a caixa
+// inteira, `absolute inset-0`, sem z-index próprio).
+function BotaoVoltar({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className="absolute left-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+    >
+      <ChevronLeft size={22} />
+    </Link>
+  );
 }
 
 /**
@@ -80,16 +106,30 @@ export default function VideoPlayer(props: Omit<VideoPlayerProps, 'videoUrl'>) {
     };
   }, [props.aulaId]);
 
+  // w-full h-[78vh]: mesmo tamanho fixo do CustomVideoPlayer (ver lá) — só
+  // pra esses estados (erro/carregando) não ocuparem uma altura diferente
+  // e "pularem" de tamanho assim que o player real montar. Vale só
+  // enquanto o player real acaba sendo o CustomVideoPlayer (upload/URL
+  // externa) — se for um vídeo do Drive, o DriveIframePlayer continua com
+  // o tamanho antigo (aspect-ratio + teto proporcional), então nesse caso
+  // ainda existe um pulo residual entre este placeholder e o player real.
+  const TAMANHO_PLAYER = 'w-full h-[78vh]';
+
   if (erro) {
     return (
-      <div className="flex aspect-video w-full items-center justify-center rounded-lg bg-black text-sm text-error">
+      <div className={`relative flex items-center justify-center rounded-lg bg-black text-sm text-error ${TAMANHO_PLAYER}`}>
+        <BotaoVoltar href={props.voltarHref} label={props.voltarLabel} />
         {erro}
       </div>
     );
   }
 
   if (!videoUrl) {
-    return <div className="aspect-video w-full animate-pulse rounded-lg bg-surface-high" />;
+    return (
+      <div className={`relative animate-pulse rounded-lg bg-surface-high ${TAMANHO_PLAYER}`}>
+        <BotaoVoltar href={props.voltarHref} label={props.voltarLabel} />
+      </div>
+    );
   }
 
   if (isGoogleDriveUrl(videoUrl)) {
@@ -111,7 +151,7 @@ export default function VideoPlayer(props: Omit<VideoPlayerProps, 'videoUrl'>) {
 // o vídeo, ou nem chegar a dar play — seria pior que não ter a funcionalidade.
 // Por isso, pra aulas de origem Drive, a conclusão continua manual: o check
 // clicável de cada aula na sidebar (PlayerPageClient.tsx).
-function DriveIframePlayer({ videoUrl }: VideoPlayerProps) {
+function DriveIframePlayer({ videoUrl, voltarHref, voltarLabel }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const embedUrl = toDriveEmbedUrl(videoUrl) ?? videoUrl;
 
@@ -123,19 +163,40 @@ function DriveIframePlayer({ videoUrl }: VideoPlayerProps) {
     // embaixo) DENTRO do espaço que a gente dá pra ele. Com aspect-video
     // puro (16/9 exato), essa UI comia altura do vídeo — o vídeo em si
     // encolhia pra caber, e a barra de baixo ainda ficava cortada. Por
-    // isso a caixa deixou de ser aspect-ratio puro: é 16/9 (56.25%) +
-    // DRIVE_UI_OFFSET_PX fixos extra (ver constante no topo do arquivo),
-    // espaço reservado só pra UI do Drive, sem comprimir o vídeo. Técnica
-    // do "padding-bottom vira altura" (funciona em qualquer navegador, sem
-    // depender de aspect-ratio nem de JS/ResizeObserver): um spacer com
-    // width:100% e padding-bottom:calc(56.25% + Npx) — como padding
-    // percentual é sempre relativo à LARGURA do próprio elemento, isso dá a
-    // altura final direto em função da largura, sem CSS var. A caixa visual
-    // de verdade (fundo preto, cantos arredondados, overflow-hidden, o
-    // iframe) fica ABSOLUTAMENTE posicionada preenchendo esse spacer
-    // (inset-0) — senão o padding-bottom sobraria como espaço vazio dentro
-    // do próprio fluxo, sem nada desenhado ali.
-    <div className="relative w-full" style={{ paddingBottom: `calc(56.25% + ${DRIVE_UI_OFFSET_PX}px)` }}>
+    // isso a caixa deixou de ser aspect-ratio puro (não dá pra trocar por
+    // `aspect-video` puro aqui, mesmo tendo sido pedido de forma geral pro
+    // "wrapper do player" — reintroduziria exatamente esse corte já
+    // corrigido): é 16/9 (56.25%) + DRIVE_UI_OFFSET_PX fixos extra (ver
+    // constante no topo do arquivo), espaço reservado só pra UI do Drive,
+    // sem comprimir o vídeo. Técnica do "padding-bottom vira altura"
+    // (funciona em qualquer navegador, sem depender de aspect-ratio nem de
+    // JS/ResizeObserver): um spacer com width:100% e
+    // padding-bottom:calc(56.25% + Npx) — como padding percentual é sempre
+    // relativo à LARGURA do próprio elemento, isso dá a altura final direto
+    // em função da largura, sem CSS var. A caixa visual de verdade (fundo
+    // preto, cantos arredondados, overflow-hidden, o iframe) fica
+    // ABSOLUTAMENTE posicionada preenchendo esse spacer (inset-0) — senão o
+    // padding-bottom sobraria como espaço vazio dentro do próprio fluxo,
+    // sem nada desenhado ali.
+    //
+    // mx-auto + lg:max-h-[calc(100vh-10rem)]/lg:max-w-[...]: mesmo limite de
+    // altura em telas largas do CustomVideoPlayer (ver lá), calculado pra
+    // um 16:9 puro — como este spacer é 16:9 + 88px extra, no pior caso
+    // (largura no limite) a caixa final fica até ~88px mais baixa que o
+    // teto, nunca mais alta — não estoura a viewport, só não usa o teto
+    // inteiro à risca; mantém as duas caixas (Drive/upload) com o mesmo
+    // tamanho aproximado numa mesma tela, em vez de duas fórmulas
+    // divergentes.
+    <div
+      className="relative mx-auto w-full lg:max-h-[calc(100vh_-_10rem)] lg:max-w-[calc((100vh_-_10rem)*16/9)]"
+      style={{ paddingBottom: `calc(56.25% + ${DRIVE_UI_OFFSET_PX}px)` }}
+    >
+      {/* Botão de voltar por cima de tudo (z-20) — mesmo elemento
+          `position:relative` que já reserva a altura do spacer é a
+          referência de posicionamento aqui (inset-0 do preenchimento
+          visual, abaixo, cobre exatamente essa mesma área). */}
+      <BotaoVoltar href={voltarHref} label={voltarLabel} />
+
       <div
         ref={containerRef}
         onContextMenu={(e) => e.preventDefault()}
@@ -182,7 +243,16 @@ function DriveIframePlayer({ videoUrl }: VideoPlayerProps) {
   );
 }
 
-function CustomVideoPlayer({ aulaId, cursoId, videoUrl, posicaoInicial, aulaAnteriorId, proximaAulaId }: VideoPlayerProps) {
+function CustomVideoPlayer({
+  aulaId,
+  cursoId,
+  videoUrl,
+  posicaoInicial,
+  aulaAnteriorId,
+  proximaAulaId,
+  voltarHref,
+  voltarLabel,
+}: VideoPlayerProps) {
   const supabase = createClient();
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -266,20 +336,31 @@ function CustomVideoPlayer({ aulaId, cursoId, videoUrl, posicaoInicial, aulaAnte
   }
 
   return (
-    // aspect-video + w-full, sem h-*/min-h-*: mesma garantia do
-    // DriveIframePlayer (ver comentário lá) de que a caixa é sempre
-    // exatamente 16:9, nunca mais alta que o vídeo. overflow-hidden só
-    // arredonda os cantos do <video> (que ocupa a caixa inteira via o style
-    // position:absolute+inset:0 do ReactPlayer, abaixo) — a barra de
-    // controles logo mais abaixo é `absolute bottom-0` DENTRO desta mesma
-    // caixa (nunca ultrapassa a altura dela), então overflow-hidden nunca
-    // corta o rodapé dela.
+    // h-0 + pb-[calc(46.9%+88px)] (era h-[78vh]/h-[80vh] fixo antes disso,
+    // e aspect-video antes ainda): volta pra altura derivada da LARGURA do
+    // próprio elemento — mesma técnica de "padding-bottom vira altura" já
+    // usada no DriveIframePlayer (ver comentário lá): como padding
+    // percentual é sempre relativo à largura, h-0 (zera a altura "de
+    // conteúdo") + esse padding-bottom dão a altura final em função da
+    // largura, sem depender de aspect-ratio nem JS/ResizeObserver. Os
+    // "+88px" replicam literalmente o valor pedido — não têm o mesmo
+    // motivo de existir aqui que no Drive (lá reservam espaço pra UI do
+    // player embutido do Google, que não existe neste player customizado);
+    // aplicados do jeito que foram pedidos mesmo assim.
+    // lg:max-h-[calc(100vh-10rem)]: teto de segurança em telas largas/
+    // baixas — sem um lg:max-w correspondente desta vez (não foi pedido),
+    // então quando esse teto entra em ação a caixa fica mais LARGA do que
+    // um 16:9 puro pediria; o <video> por dentro (absolute inset-0 w-full
+    // h-full + object-contain, abaixo) absorve essa diferença como tarja
+    // (bg-black), sem cortar nem esticar.
     <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
       onContextMenu={(e) => e.preventDefault()}
-      className="group relative aspect-video w-full select-none overflow-hidden rounded-lg bg-black"
+      className="group relative mx-auto h-0 w-full select-none overflow-hidden rounded-lg bg-black pb-[calc(46.9%+88px)] lg:max-h-[calc(100vh_-_10rem)]"
     >
+      <BotaoVoltar href={voltarHref} label={voltarLabel} />
+
       <ReactPlayer
         ref={playerRef}
         url={videoUrl}
@@ -300,14 +381,33 @@ function CustomVideoPlayer({ aulaId, cursoId, videoUrl, posicaoInicial, aulaAnte
           if (proximaAulaId) window.location.href = `/membros/player/${proximaAulaId}`;
         }}
         onClickPreview={() => setPlaying(true)}
-        config={{ file: { attributes: { controlsList: 'nodownload', disablePictureInPicture: false } } }}
-        // position:absolute + inset:0 (em vez de só width/height:"100%") gruda
-        // o wrapper do react-player diretamente na caixa do container (que já
-        // é aspect-video, sem altura fixa) — evita qualquer sobra/tarja preta
-        // que viria de o wrapper calcular seu próprio tamanho em % a partir
-        // de um instante em que o container ainda não tinha a altura final
-        // (ex.: hidratação/primeira medição antes do aspect-ratio "assentar").
-        style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+        // objectFit: 'contain' vai direto pro <video> interno (via
+        // config.file.attributes — o `style` no nível de cima do
+        // <ReactPlayer/>, abaixo, estiliza só o WRAPPER dele, não o <video>
+        // em si). Sem isso o <video> usa o default do navegador (object-fit:
+        // fill), que estica/distorce quando a proporção real do arquivo não
+        // bate 16:9 exato — contain garante que ele sempre cabe inteiro,
+        // sem cortar nem esticar, sobrando tarja (preenchida pelo bg-black
+        // do container) em vez de cortar borda.
+        config={{
+          file: {
+            attributes: {
+              controlsList: 'nodownload',
+              disablePictureInPicture: false,
+              style: { width: '100%', height: '100%', objectFit: 'contain' },
+            },
+          },
+        }}
+        // absolute inset-0 w-full h-full (classe, não mais só o `style`
+        // inline de antes) gruda o wrapper do react-player diretamente na
+        // caixa do container (h-0 + padding-bottom, ver comentário acima) —
+        // evita qualquer sobra/tarja preta que viria de o wrapper calcular
+        // seu próprio tamanho em % a partir de um instante em que o
+        // container ainda não tinha a altura final (ex.: hidratação/
+        // primeira medição antes do padding-bottom "assentar"). pointer-
+        // events-none: clique passa direto pro overlay de play/pause logo
+        // abaixo (mesmo motivo de antes, só que via classe agora).
+        className="absolute inset-0 h-full w-full pointer-events-none"
       />
 
       {/* overlay clicável para play/pause */}

@@ -58,17 +58,6 @@ export default function CursoDetalheClient({
         className={`relative flex w-full shrink-0 items-center overflow-hidden sm:h-[44vh] ${!hasAccess ? 'locked-card' : ''}`}
       >
         {curso.capa_url && <Image src={curso.capa_url} alt={curso.titulo} fill priority className="object-cover" />}
-        {/* Mesmo padrão de gradiente do banner da Home (VitrinePageClient):
-            tom vermelho sutil (from-primary/20) se misturando ao preto,
-            diagonal — aqui como overlay de verdade sobre a capa, não só
-            fallback de quando não há imagem. Empilhado com o gradiente
-            vertical já existente (mais escuro embaixo/nas laterais, onde o
-            texto fica; mais claro em cima, pra não esconder a capa toda) —
-            juntos dão a profundidade + o tom vermelho pedidos, só nessa
-            capa, sem mexer em nenhum outro gradiente da página (cards do
-            carrossel, sidebar etc. continuam como estavam). */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-black/30" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-black/10" />
 
         {/* pt-14/md:pt-20: espaço pro Header fixo não cobrir a
             badge/título — é transparente e flutua por cima do hero, então
@@ -211,7 +200,7 @@ function SecoesDeModulos({
         // nenhum campo do banco) entra direto aqui, na mesma linha das
         // setas, em vez de um <h2> solto acima sobrando espaço.
         titulo="Módulos do curso"
-        titleClassName="ml-[10px] text-[1.6rem] font-bold text-white"
+        titleClassName="ml-[10px] font-medium text-2xl text-white"
         hasAccess={hasAccess}
         trialModuloUnicoId={trialModuloUnicoId}
         onClickLocked={onClickLocked}
@@ -230,7 +219,7 @@ function SecoesDeModulos({
             // Carousel trata isso normal, só sem setas (só 1 item).
             modulos={filhos.length > 0 ? filhos : [item]}
             titulo={formatTitulo(item.titulo)}
-            titleClassName="ml-[10px] text-xl font-bold text-white"
+            titleClassName="ml-[10px] font-medium text-2xl text-white"
             hasAccess={hasAccess}
             trialModuloUnicoId={trialModuloUnicoId}
             onClickLocked={onClickLocked}
@@ -274,7 +263,7 @@ function ModuloCarrosselSecao({
       nextLabel={`${titulo}: próximos`}
       emptyMessage="Nenhum módulo publicado ainda."
       outerClassName="flex flex-col"
-      headerClassName="mb-3 flex shrink-0 items-center justify-between gap-4"
+      headerClassName="flex shrink-0 items-center justify-between gap-4"
       // Só o eixo X esconde overflow (a "janela" horizontal do carrossel);
       // sem trava de altura aqui — cada linha ocupa a altura natural do seu
       // conteúdo, e é a página como um todo que rola quando várias seções
@@ -283,11 +272,11 @@ function ModuloCarrosselSecao({
       // py-6 (24px) cobre o scale-[1.04] do hover + a sombra sem cortar em
       // cima/embaixo; px-2 dá margem pros cards das pontas.
       trackClassName="flex gap-4 px-2 py-6"
-      // Largura fixa por breakpoint (w-36/sm:w-44/lg:w-48), com aspect-[3/4]
-      // definindo a altura a partir dela — o padrão de antes de existir
-      // hierarquia de módulos, quando também não havia trava de altura na
-      // página.
-      itemClassName="aspect-[3/4] w-36 shrink-0 sm:w-44 lg:w-48"
+      // Largura fixa (17rem, igual em qualquer breakpoint — sem variação por
+      // sm:/lg: como antes), com aspect-[3/4] continuando a definir a altura
+      // a partir dela. shrink-0 impede o flex do carrossel (trackClassName)
+      // de comprimir o card.
+      itemClassName="aspect-[3/4] w-[17rem] shrink-0"
       renderItem={(modulo) => (
         <ModuloCard
           modulo={modulo}

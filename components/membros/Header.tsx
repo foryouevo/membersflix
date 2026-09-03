@@ -66,12 +66,15 @@ import type { Profile } from '@/types';
  *
  * h-14 (mobile, 56px) / md:h-24 (desktop, 96px): altura FIXA nas duas
  * larguras — é o que garante que a folga reservada nas outras páginas
- * (pt-14/md:pt-20 em <main>, VitrinePageClient, CursoDetalheClient,
- * PlayerPageClient) bate com a altura de verdade do header. h-14 mantém o
- * valor que o MobileHeader antigo já tinha (nada precisou mudar nas folgas
- * mobile existentes); h-24/md:pt-20 já tinham uma folga de 16px sobrando
- * antes desta tarefa (desvio pré-existente, fora do escopo daqui — não
- * mexido).
+ * (pt-14/md:pt-20 em <main>, VitrinePageClient, CursoDetalheClient) bate com
+ * a altura de verdade do header. h-14 mantém o valor que o MobileHeader
+ * antigo já tinha (nada precisou mudar nas folgas mobile existentes);
+ * h-24/md:pt-20 já tinham uma folga de 16px sobrando antes desta tarefa
+ * (desvio pré-existente, fora do escopo daqui — não mexido). PlayerPageClient
+ * não entra nessa lista: em vez de herdar a folga aproximada de <main>, ele
+ * cancela ela e usa a própria (pt-14/md:pt-24 — os valores exatos de h-14/
+ * md:h-24 aqui em cima), porque a altura dele também precisa ser exata
+ * (h-screen fixo, sem depender do scroll de <main>).
  *
  * Busca/filtro aqui não filtram nenhuma lista local (esse header existe em
  * toda página, não só na Home) — eles escrevem direto na URL da tela de
@@ -297,16 +300,15 @@ export default function Header({
     );
   }
 
-  // A página do player já tem seu próprio botão de voltar flutuando sobre o
-  // vídeo e gerencia a própria altura de tela — uma barra de navegação
-  // persistente por cima brigaria com a experiência imersiva do player,
-  // então o header simplesmente não renderiza nessa rota (mobile e desktop
-  // — antes eram dois `if` iguais, um em cada componente; agora é um só).
-  // Depois de todos os hooks (Rules of Hooks: um `return null` condicional
-  // ANTES dos useState quebraria a ordem deles entre renders, já que
-  // `pathname` pode mudar sem desmontar este componente — ele vive no
-  // layout, não na página).
-  if (pathname.startsWith('/membros/player')) return null;
+  // A página do player (mobile e desktop) voltou a usar este mesmo Header —
+  // antes se auto-excluía aqui (comentário removido pedia pra não brigar com
+  // o botão de voltar flutuante do player), mas por pedido explícito passou
+  // a reaproveitar a mesma navegação das demais páginas de membros. O botão
+  // de voltar próprio do player (sobre o vídeo) continua existindo — os dois
+  // não competem, o header fica fixo no topo e o botão de voltar por cima do
+  // vídeo, abaixo dele. A página do player, por sua vez, ajustou a própria
+  // altura/padding-top pra descontar o espaço deste header em vez de ficar
+  // por baixo dele (ver PlayerPageClient.tsx).
 
   return (
     // Fragment: o header fixo em si + a barra de busca mobile (segunda
