@@ -26,7 +26,7 @@ export default function CourseCard({
     <div className="group relative w-full shrink-0 cursor-pointer transition-transform duration-200 hover:z-10 hover:scale-105">
       <div className={`relative aspect-video overflow-hidden rounded bg-surface-high ${!hasAccess ? 'locked-card' : ''}`}>
         {imagemCard ? (
-          <Image src={imagemCard} alt={curso.titulo} fill className="object-cover" sizes="240px" />
+          <Image src={imagemCard} alt={curso.titulo} fill className="object-cover" sizes="400px" />
         ) : (
           <div className="flex h-full items-center justify-center text-on-variant">
             <Play size={28} />

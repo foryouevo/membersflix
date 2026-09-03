@@ -320,7 +320,7 @@ function ModuloCard({
             alt={modulo.titulo}
             fill
             className="object-cover"
-            sizes="200px"
+            sizes="320px"
           />
         )}
 
