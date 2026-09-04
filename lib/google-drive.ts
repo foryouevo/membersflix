@@ -83,3 +83,38 @@ export const driveStreamUrl = drivePreviewUrl;
 export function driveThumbnailUrl(fileId: string) {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w480`;
 }
+
+/**
+ * Busca o CONTEÚDO (bytes) de um arquivo do Drive via Service Account
+ * (files.get?alt=media) — usado só pelo proxy de streaming
+ * (app/api/membros/aulas/[aulaId]/video/stream/route.ts), pra servir o
+ * vídeo pro aluno sem o arquivo precisar estar público no Drive ("qualquer
+ * pessoa com o link"). Sem relação com listFolderContents (import do
+ * admin, acima — esse só lista metadados, nunca baixa conteúdo).
+ *
+ * Repassa o header Range recebido do navegador pro Drive — é isso que
+ * permite avançar/voltar o vídeo sem baixar o arquivo inteiro de novo: o
+ * Drive responde com 206 Partial Content + Content-Range quando honra o
+ * range pedido (arquivos de vídeo normalmente honram). Sem Range nenhum
+ * (primeira carga, dependendo do navegador), devolve o arquivo completo
+ * com 200 — o vídeo ainda toca normalmente nesse caso, só sem o ganho de
+ * já anunciar o tamanho total via Content-Range de cara.
+ *
+ * responseType: 'stream' é o que evita carregar o arquivo inteiro na
+ * memória do servidor antes de repassar pro navegador — os bytes vão
+ * sendo lidos e reenviados conforme chegam do Drive (streaming de
+ * verdade), importante pra não estourar memória/tempo de execução da
+ * function serverless em vídeos grandes.
+ */
+export async function streamDriveFile(fileId: string, range?: string | null) {
+  const drive = getDrive();
+  const res = await drive.files.get(
+    { fileId, alt: 'media', supportsAllDrives: true },
+    { responseType: 'stream', headers: range ? { Range: range } : undefined }
+  );
+  return {
+    stream: res.data as unknown as NodeJS.ReadableStream,
+    status: res.status,
+    headers: res.headers as Record<string, string>,
+  };
+}
