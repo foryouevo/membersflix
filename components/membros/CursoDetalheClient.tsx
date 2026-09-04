@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Lock, Play, PlayCircle } from 'lucide-react';
+import { Lock, Play } from 'lucide-react';
 import AccessModal from '@/components/membros/AccessModal';
 import Carousel from '@/components/membros/Carousel';
 import { useDificultarInspecao } from '@/hooks/useDificultarInspecao';
@@ -325,10 +325,6 @@ function ModuloCard({
 
         {/* Gradiente escuro na base pra legibilidade do nome do módulo por cima da imagem */}
         <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-
-        <div className="absolute inset-0 flex items-center justify-center">
-          <PlayCircle size={30} className="text-white/90 drop-shadow" />
-        </div>
 
         {bloqueado && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
