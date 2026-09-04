@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { createPrivateKey } from 'node:crypto';
 import { driveEmbedUrlFromId } from '@/lib/drive-url';
 
 export { isGoogleDriveUrl, extractDriveFileId, toDriveEmbedUrl } from '@/lib/drive-url';
@@ -13,19 +14,98 @@ export interface DriveFile {
   size?: string | null;
 }
 
-function getAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+/**
+ * Normaliza a chave privada da Service Account antes de usar — cobre as
+ * variações comuns de como esse valor chega quebrado via env var
+ * (principalmente colado à mão no painel do Vercel), que produziriam o
+ * erro genérico e pouco útil do OpenSSL/Node ("error:1E08010C:DECODER
+ * routines::unsupported") sem dizer O QUE está errado:
+ *
+ * 1. .trim() nas pontas — espaço/quebra de linha extra colado sem querer
+ *    antes do "-----BEGIN" ou depois do "-----END...-----" já é
+ *    suficiente pra quebrar o parse do PEM.
+ * 2. Aspas envolvendo o valor inteiro (") — se alguém colou o valor
+ *    JÁ com as aspas do .env.local.example (`"-----BEGIN...\n...-----"`)
+ *    dentro do campo do Vercel, essas aspas viram parte LITERAL da
+ *    string (o painel do Vercel não as trata como delimitador — isso só
+ *    existe num arquivo .env de verdade). Removidas aqui se estiverem
+ *    presentes nas duas pontas.
+ * 3. "\n" literal (dois caracteres, barra invertida + n) → quebra de
+ *    linha real — é assim que a chave normalmente chega colada numa env
+ *    var de uma linha só. Sem essa troca, o PEM vira uma única linha
+ *    gigante, sem as quebras que o parser exige entre cabeçalho, corpo em
+ *    base64 e rodapé.
+ *
+ * Um .trim() final cobre espaço que a troca de \n possa ter deixado
+ * sobrando nas pontas de novo.
+ */
+function normalizarChavePrivada(valor: string): string {
+  let chave = valor.trim();
+  if (chave.length >= 2 && chave.startsWith('"') && chave.endsWith('"')) {
+    chave = chave.slice(1, -1).trim();
+  }
+  return chave.replace(/\\n/g, '\n').trim();
+}
 
-  if (!email || !key) {
+/**
+ * Diagnóstico seguro pra log de erro — nunca inclui a chave em si (nem um
+ * pedaço dela), só metadados que ajudam a identificar qual variação de
+ * formatação causou o problema, sem vazar segredo nenhum em log.
+ */
+function diagnosticoChave(chave: string) {
+  return {
+    tamanho: chave.length,
+    comecaComBegin: chave.startsWith('-----BEGIN PRIVATE KEY-----'),
+    terminaComEnd: chave.endsWith('-----END PRIVATE KEY-----'),
+    numeroDeLinhas: chave.split('\n').length,
+  };
+}
+
+function getAuth() {
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
+  const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+
+  if (!email || !rawKey) {
     throw new Error(
       'Credenciais do Google Drive não configuradas (GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).'
     );
   }
 
+  const key = normalizarChavePrivada(rawKey);
+
+  // Checagem rápida e específica (markers ausentes = quase sempre \n não
+  // virou quebra de linha, ou aspas não removidas) ANTES da checagem
+  // completa abaixo — dá uma mensagem mais direta pro caso mais comum.
+  if (!key.startsWith('-----BEGIN PRIVATE KEY-----') || !key.endsWith('-----END PRIVATE KEY-----')) {
+    console.error(
+      '[google-drive] GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY não tem os marcadores "-----BEGIN/END PRIVATE KEY-----" esperados depois de normalizada (trim + remoção de aspas envolventes + \\n → quebra de linha real). Diagnóstico (sem expor a chave):',
+      diagnosticoChave(key)
+    );
+    throw new Error(
+      'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY malformada (marcadores PEM ausentes) — ver log do servidor pro diagnóstico.'
+    );
+  }
+
+  // Validação de verdade: usa o MESMO parser PEM/DER que o Node/OpenSSL
+  // usaria ao assinar o JWT (é exatamente aí que "error:1E08010C:DECODER
+  // routines::unsupported" acontece hoje, só que sem contexto nenhum, do
+  // lado de dentro da lib googleapis). Fazendo essa checagem aqui, o mesmo
+  // erro (se a chave realmente estiver corrompida — não só sem os
+  // marcadores, mas com o conteúdo base64 do meio truncado/alterado) é
+  // pego imediatamente, num lugar que loga o diagnóstico antes de propagar.
+  try {
+    createPrivateKey({ key, format: 'pem' });
+  } catch (err) {
+    console.error(
+      '[google-drive] GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY tem os marcadores PEM mas não pôde ser decodificada (conteúdo corrompido/truncado no meio). Diagnóstico (sem expor a chave):',
+      diagnosticoChave(key)
+    );
+    throw err;
+  }
+
   return new google.auth.JWT({
     email,
-    key: key.replace(/\\n/g, '\n'),
+    key,
     scopes: ['https://www.googleapis.com/auth/drive.readonly'],
   });
 }
