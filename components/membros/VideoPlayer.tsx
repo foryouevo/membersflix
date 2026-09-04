@@ -265,6 +265,26 @@ function CustomVideoPlayer({
         playbackRate={speed}
         width="100%"
         height="100%"
+        // controls={false} explícito (já era o padrão do react-player sem
+        // esse prop — deixado escrito pra deixar a intenção clara e evitar
+        // que uma mudança futura habilite sem querer os controles nativos
+        // do <video>, que ficariam sobrepostos aos nossos, abaixo).
+        controls={false}
+        // playsinline: ESSENCIAL no mobile, principalmente iOS Safari — sem
+        // isso, o Safari puxa o <video> pro PRÓPRIO player nativo em tela
+        // cheia (webkitEnterFullscreen) automaticamente assim que o vídeo
+        // começa a tocar, mesmo sem o usuário pedir fullscreen nenhum e sem
+        // o atributo `controls` estar presente (é um comportamento à parte,
+        // do sistema operacional, não do HTML/controls). Esse player nativo
+        // do iOS desenha os PRÓPRIOS controles (pular 10s, barra de
+        // progresso) por cima — como nosso overlay de controles customizado
+        // continua montado por baixo (e fica sempre visível quando pausado,
+        // via `controlsVisible || !playing` mais abaixo), o resultado eram
+        // dois conjuntos de controles sobrepostos, mais visível justamente
+        // ao pausar. playsinline mantém o vídeo SEMPRE inline na página —
+        // "tela cheia" nesse player é só o requestFullscreen() do container
+        // (toggleFullscreen, acima), nunca o modo nativo do <video>.
+        playsinline
         onReady={() => {
           setReady(true);
           if (posicaoInicial > 0) playerRef.current?.seekTo(posicaoInicial, 'seconds');
@@ -283,10 +303,16 @@ function CustomVideoPlayer({
         // fill), que estica/distorce quando a proporção real do arquivo não
         // bate 16:9 exato — contain garante que ele sempre cabe inteiro,
         // sem cortar nem esticar, sobrando tarja (preenchida pelo bg-black
-        // do container) em vez de cortar borda.
+        // do container) em vez de cortar borda. controls: false e
+        // playsInline repetidos aqui (redundante com os props de cima, que
+        // já bastam) só como reforço defensivo — não custa nada e garante
+        // que valem mesmo se algum dia o `config` for passado sem os props
+        // de nível superior.
         config={{
           file: {
             attributes: {
+              controls: false,
+              playsInline: true,
               controlsList: 'nodownload',
               disablePictureInPicture: false,
               style: { width: '100%', height: '100%', objectFit: 'contain' },

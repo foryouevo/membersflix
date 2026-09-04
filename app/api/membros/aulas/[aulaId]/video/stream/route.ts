@@ -23,6 +23,74 @@ function getHeader(headers: Record<string, string>, name: string): string | unde
 }
 
 /**
+ * Faz o parse manual de um header Range (formatos que navegadores mandam:
+ * "bytes=START-END", "bytes=START-" e "bytes=-SUFFIXLENGTH") — usado só
+ * quando o Drive NÃO honrou o Range que a gente pediu (ver comentário mais
+ * abaixo, no bloco que decide entre repassar o corte do Drive ou fazer o
+ * nosso próprio). Quando o Drive já responde 206 corretamente, o
+ * Content-Range que ELE calculou é usado direto, sem reinventar essa conta.
+ */
+function parseRangeHeader(range: string, totalSize: number): { start: number; end: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+  if (!match) return null;
+  const [, startStr, endStr] = match;
+  if (startStr === '' && endStr === '') return null;
+
+  let start: number;
+  let end: number;
+
+  if (startStr === '') {
+    // "bytes=-N" = últimos N bytes do arquivo.
+    const suffixLength = Number(endStr);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) return null;
+    start = Math.max(0, totalSize - suffixLength);
+    end = totalSize - 1;
+  } else {
+    start = Number(startStr);
+    end = endStr === '' ? totalSize - 1 : Number(endStr);
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start > end || start >= totalSize) return null;
+  return { start, end: Math.min(end, totalSize - 1) };
+}
+
+/**
+ * Recorta um stream Node pra só emitir os bytes entre `start` e `end`
+ * (índices absolutos no arquivo, inclusive nas duas pontas) — é o que
+ * garante o Range request pro navegador quando o Drive devolveu o arquivo
+ * inteiro (200) em vez do pedaço certo (206) que a gente pediu: em vez de
+ * confiar cegamente que o Drive honra Range (nem sempre honra — foi essa
+ * suposição que quebrava o avanço/pulo do vídeo antes), a gente mesmo
+ * descarta os bytes antes de `start`, repassa só até `end`, e para de ler
+ * (destruindo a conexão com o Drive) assim que os bytes pedidos terminam —
+ * não continua baixando o resto do arquivo à toa quando o navegador só
+ * queria um pedaço do meio.
+ */
+async function* recortarBytes(source: NodeJS.ReadableStream, start: number, end: number) {
+  let lido = 0;
+  for await (const chunkAny of source as AsyncIterable<Buffer | string>) {
+    const chunk = Buffer.isBuffer(chunkAny) ? chunkAny : Buffer.from(chunkAny);
+    const inicioChunk = lido;
+    const fimChunk = lido + chunk.length - 1;
+    lido += chunk.length;
+
+    if (fimChunk < start) continue; // chunk inteiro antes do range pedido — descarta
+    if (inicioChunk > end) break; // já passou do range pedido — para de ler
+
+    const recorteInicio = Math.max(0, start - inicioChunk);
+    const recorteFim = Math.min(chunk.length, end - inicioChunk + 1);
+    yield chunk.subarray(recorteInicio, recorteFim);
+
+    if (fimChunk >= end) break; // terminou de emitir o range pedido
+  }
+  // Sem isso, sair do loop mais cedo (break) deixaria o download do
+  // restante do arquivo continuando em segundo plano até o fim, gastando
+  // tempo/banda à toa com bytes que o navegador nem pediu.
+  const destruivel = source as unknown as { destroy?: () => void };
+  destruivel.destroy?.();
+}
+
+/**
  * Proxy de streaming pro conteúdo REAL do vídeo (bytes, não metadado) —
  * é esta URL que a tag <video> (dentro do CustomVideoPlayer, via
  * react-player) busca diretamente, não um fetch() do componente. Só existe
@@ -76,47 +144,67 @@ export async function GET(request: NextRequest, { params }: { params: { aulaId: 
   }
 
   try {
-    const range = request.headers.get('range');
-    const { stream, status, headers } = await streamDriveFile(fileId, range);
+    const rangeSolicitado = request.headers.get('range');
+    const { stream, status, headers } = await streamDriveFile(fileId, rangeSolicitado);
+
+    const contentType = getHeader(headers, 'content-type') ?? 'video/mp4';
+    const contentEncoding = getHeader(headers, 'content-encoding');
+    const contentLengthDrive = getHeader(headers, 'content-length');
+    const contentRangeDrive = getHeader(headers, 'content-range');
+
+    let bodyStream: NodeJS.ReadableStream = stream;
+    let statusFinal = 200;
+    let contentRangeFinal: string | undefined;
+    let contentLengthFinal = contentLengthDrive;
+
+    if (rangeSolicitado && status === 206 && contentRangeDrive) {
+      // Caminho feliz: o Drive honrou o Range e já devolveu 206 + o pedaço
+      // certo — só repassa o que ele calculou, sem reinventar nada.
+      statusFinal = 206;
+      contentRangeFinal = contentRangeDrive;
+      // contentLengthFinal já é o do Drive, que pra uma 206 já é o tamanho
+      // do pedaço (não do arquivo inteiro).
+    } else if (rangeSolicitado && contentLengthDrive) {
+      // O navegador pediu um Range, mas o Drive NÃO honrou (devolveu o
+      // arquivo inteiro, 200) — em vez de repassar isso como um 200 (o que
+      // diz pro navegador "este servidor não suporta partes", e é
+      // exatamente o que travava o avanço/pulo do vídeo antes), a gente
+      // mesmo corta o stream pro pedaço pedido e monta um 206 de verdade.
+      // contentLengthDrive numa resposta 200 é o TAMANHO TOTAL do arquivo —
+      // é o que `parseRangeHeader` precisa pra resolver ranges abertos
+      // ("bytes=1000-", sem fim explícito) e o formato de sufixo.
+      const total = Number(contentLengthDrive);
+      const parsed = Number.isFinite(total) ? parseRangeHeader(rangeSolicitado, total) : null;
+
+      if (parsed) {
+        const { start, end } = parsed;
+        bodyStream = Readable.from(recortarBytes(stream, start, end));
+        statusFinal = 206;
+        contentRangeFinal = `bytes ${start}-${end}/${total}`;
+        contentLengthFinal = String(end - start + 1);
+      }
+      // Se o Range não deu pra interpretar (formato inesperado), cai no
+      // fallback abaixo: serve o arquivo inteiro como 200 — mesmo
+      // comportamento padrão de HTTP quando um servidor não consegue
+      // honrar um Range específico.
+    }
 
     // Node stream → Web ReadableStream: é o formato que o corpo de uma
     // Response (App Router) espera — sem essa conversão, não dá pra
     // encaminhar os bytes conforme chegam (ia exigir juntar tudo num
     // buffer antes de responder, exatamente o que queremos evitar em
     // vídeos grandes/streaming).
-    const webStream = Readable.toWeb(stream as Readable) as unknown as ReadableStream;
-
-    const contentType = getHeader(headers, 'content-type') ?? 'video/mp4';
-    const contentLength = getHeader(headers, 'content-length');
-    const contentRange = getHeader(headers, 'content-range');
-    // Defensivo: com Accept-Encoding: identity (ver streamDriveFile), o
-    // Drive nunca deveria comprimir a resposta — mas se por algum motivo
-    // esse header ainda vier, repassa pro navegador saber que precisa
-    // descomprimir, em vez de tentar decodificar os bytes crus como vídeo
-    // (era exatamente essa lacuna, sem esse header e sem forçar identity,
-    // que corrompia a imagem).
-    const contentEncoding = getHeader(headers, 'content-encoding');
+    const webStream = Readable.toWeb(bodyStream as Readable) as unknown as ReadableStream;
 
     const respHeaders = new Headers();
     respHeaders.set('Content-Type', contentType);
+    // Sempre presente, com ou sem Range pedido — é isso que avisa o
+    // navegador, já na PRIMEIRA resposta (antes de qualquer seek), que
+    // pode pedir pedaços específicos depois.
     respHeaders.set('Accept-Ranges', 'bytes');
     if (contentEncoding) respHeaders.set('Content-Encoding', contentEncoding);
-    // Content-Length: sempre o valor que o Drive devolveu pra ESSA resposta
-    // específica — pra uma 206, o Drive já calcula isso como o tamanho do
-    // range pedido (não do arquivo inteiro); pra uma 200, é o arquivo
-    // inteiro. Nunca calculado por nós — só repassado, exatamente como o
-    // pedido do usuário exige ("correspondendo exatamente ao tamanho do
-    // range pedido").
-    if (contentLength) respHeaders.set('Content-Length', contentLength);
-    // Status e Content-Range andam juntos: uma resposta 206 sem
-    // Content-Range é inválida (o navegador não sabe qual pedaço do
-    // arquivo está recebendo) — nesse caso (não deveria acontecer com um
-    // Range válido, mas serve de garantia), rebaixa pra 200: o corpo que o
-    // Drive mandou nesse cenário é o arquivo inteiro, então servir como
-    // resposta completa é o comportamento correto, não um bug.
-    const statusFinal = status === 206 && contentRange ? 206 : 200;
-    if (statusFinal === 206 && contentRange) respHeaders.set('Content-Range', contentRange);
-
+    if (contentLengthFinal) respHeaders.set('Content-Length', contentLengthFinal);
+    if (statusFinal === 206 && contentRangeFinal) respHeaders.set('Content-Range', contentRangeFinal);
     // Vídeo de aula: nunca cacheável por proxy/CDN compartilhado — ficaria
     // servindo o mesmo arquivo pra qualquer aluno que batesse nessa URL,
     // sem checar acesso de novo. Cache só no navegador de quem já passou
