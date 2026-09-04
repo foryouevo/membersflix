@@ -9,6 +9,19 @@ import { extractDriveFileId, streamDriveFile } from '@/lib/google-drive';
 // Router, mas deixado explícito porque essa rota depende disso pra existir.
 export const runtime = 'nodejs';
 
+// Busca um header devolvido pelo axios/gaxios (client HTTP usado por
+// `googleapis`) sem depender de qual variação de maiúsculas/minúsculas ele
+// normalizou a chave — na prática vem sempre em minúsculas, mas ler com
+// segurança aqui custa nada e elimina de vez essa dúvida como suspeita de
+// bug (Content-Length/Content-Range "incorretos" por causa da chave errada).
+function getHeader(headers: Record<string, string>, name: string): string | undefined {
+  const chaveAlvo = name.toLowerCase();
+  for (const chave in headers) {
+    if (chave.toLowerCase() === chaveAlvo) return headers[chave];
+  }
+  return undefined;
+}
+
 /**
  * Proxy de streaming pro conteúdo REAL do vídeo (bytes, não metadado) —
  * é esta URL que a tag <video> (dentro do CustomVideoPlayer, via
@@ -73,18 +86,44 @@ export async function GET(request: NextRequest, { params }: { params: { aulaId: 
     // vídeos grandes/streaming).
     const webStream = Readable.toWeb(stream as Readable) as unknown as ReadableStream;
 
+    const contentType = getHeader(headers, 'content-type') ?? 'video/mp4';
+    const contentLength = getHeader(headers, 'content-length');
+    const contentRange = getHeader(headers, 'content-range');
+    // Defensivo: com Accept-Encoding: identity (ver streamDriveFile), o
+    // Drive nunca deveria comprimir a resposta — mas se por algum motivo
+    // esse header ainda vier, repassa pro navegador saber que precisa
+    // descomprimir, em vez de tentar decodificar os bytes crus como vídeo
+    // (era exatamente essa lacuna, sem esse header e sem forçar identity,
+    // que corrompia a imagem).
+    const contentEncoding = getHeader(headers, 'content-encoding');
+
     const respHeaders = new Headers();
-    respHeaders.set('Content-Type', headers['content-type'] ?? 'video/mp4');
+    respHeaders.set('Content-Type', contentType);
     respHeaders.set('Accept-Ranges', 'bytes');
-    if (headers['content-length']) respHeaders.set('Content-Length', headers['content-length']);
-    if (headers['content-range']) respHeaders.set('Content-Range', headers['content-range']);
+    if (contentEncoding) respHeaders.set('Content-Encoding', contentEncoding);
+    // Content-Length: sempre o valor que o Drive devolveu pra ESSA resposta
+    // específica — pra uma 206, o Drive já calcula isso como o tamanho do
+    // range pedido (não do arquivo inteiro); pra uma 200, é o arquivo
+    // inteiro. Nunca calculado por nós — só repassado, exatamente como o
+    // pedido do usuário exige ("correspondendo exatamente ao tamanho do
+    // range pedido").
+    if (contentLength) respHeaders.set('Content-Length', contentLength);
+    // Status e Content-Range andam juntos: uma resposta 206 sem
+    // Content-Range é inválida (o navegador não sabe qual pedaço do
+    // arquivo está recebendo) — nesse caso (não deveria acontecer com um
+    // Range válido, mas serve de garantia), rebaixa pra 200: o corpo que o
+    // Drive mandou nesse cenário é o arquivo inteiro, então servir como
+    // resposta completa é o comportamento correto, não um bug.
+    const statusFinal = status === 206 && contentRange ? 206 : 200;
+    if (statusFinal === 206 && contentRange) respHeaders.set('Content-Range', contentRange);
+
     // Vídeo de aula: nunca cacheável por proxy/CDN compartilhado — ficaria
     // servindo o mesmo arquivo pra qualquer aluno que batesse nessa URL,
     // sem checar acesso de novo. Cache só no navegador de quem já passou
     // pela checagem de acesso acima.
     respHeaders.set('Cache-Control', 'private, no-store');
 
-    return new NextResponse(webStream, { status, headers: respHeaders });
+    return new NextResponse(webStream, { status: statusFinal, headers: respHeaders });
   } catch (err: any) {
     // Erro mais comum aqui: arquivo não compartilhado com o e-mail da
     // Service Account (ver GOOGLE_SERVICE_ACCOUNT_EMAIL) — o Drive responde

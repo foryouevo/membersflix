@@ -105,12 +105,32 @@ export function driveThumbnailUrl(fileId: string) {
  * sendo lidos e reenviados conforme chegam do Drive (streaming de
  * verdade), importante pra não estourar memória/tempo de execução da
  * function serverless em vídeos grandes.
+ *
+ * Accept-Encoding: identity — ESSENCIAL, era a causa do vídeo chegar
+ * corrompido (faixa branca/artefatos): sem isso, se o Drive (ou o CDN dele)
+ * decidisse comprimir a resposta (gzip/br), `responseType: 'stream'` NÃO
+ * descomprime automaticamente — o stream repassado continuaria com os
+ * bytes comprimidos, mas o Content-Type devolvido pro navegador seguiria
+ * "video/mp4". O navegador tentava decodificar bytes gzip como se fossem
+ * H.264 cru, produzindo exatamente esse tipo de corrupção visual — e o
+ * Content-Length que a gente repassava (calculado sobre os bytes
+ * comprimidos) não batia com o tamanho real depois de qualquer
+ * decodificação, então mesmo pedidos sem Range (carga completa, não só
+ * seek) já vinham quebrados. Forçando identity, o Drive nunca comprime a
+ * resposta — os bytes do stream são sempre o vídeo cru, e Content-Length/
+ * Content-Range (abaixo) sempre correspondem exatamente a eles.
  */
 export async function streamDriveFile(fileId: string, range?: string | null) {
   const drive = getDrive();
   const res = await drive.files.get(
     { fileId, alt: 'media', supportsAllDrives: true },
-    { responseType: 'stream', headers: range ? { Range: range } : undefined }
+    {
+      responseType: 'stream',
+      headers: {
+        'Accept-Encoding': 'identity',
+        ...(range ? { Range: range } : {}),
+      },
+    }
   );
   return {
     stream: res.data as unknown as NodeJS.ReadableStream,
