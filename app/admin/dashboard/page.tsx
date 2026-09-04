@@ -31,17 +31,7 @@ export default async function DashboardPage() {
     porCategoria.get(catId)!.add((a as any).aluno_id);
   }
 
-  // "Figma" (3 linhas duplicadas/não usadas — dado legado do import) e
-  // "Design" (renomeada de uma dessas duplicatas, mas o admin não quer ela
-  // nesse gráfico) ficam de fora só da EXIBIÇÃO aqui — as linhas continuam
-  // intactas em `categorias` no banco, isso não é uma limpeza de dados,
-  // só filtra o que alimenta este gráfico específico. Comparação
-  // trim+lowercase (mesmo padrão já usado em categoriasAgrupadas, hooks/
-  // useCursoFiltro.ts) pra não depender de acentuação/caixa exata.
-  const NICHOS_OCULTOS = new Set(['figma', 'design']);
-  const niche = (categorias ?? [])
-    .filter((c: any) => !NICHOS_OCULTOS.has(c.nome.trim().toLowerCase()))
-    .map((c: any) => ({ nome: c.nome, total: porCategoria.get(c.id)?.size ?? 0 }));
+  const niche = (categorias ?? []).map((c: any) => ({ nome: c.nome, total: porCategoria.get(c.id)?.size ?? 0 }));
   const max = Math.max(1, ...niche.map((n) => n.total));
 
   return (

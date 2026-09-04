@@ -3,6 +3,11 @@ import { createClient } from '@/lib/supabase/server';
 import PlayerPageClient from '@/components/membros/PlayerPageClient';
 
 export default async function PlayerPage({ params }: { params: { aulaId: string } }) {
+  // DIAGNÓSTICO TEMPORÁRIO (investigação de travamento na tela da aula,
+  // remover depois de identificar a causa).
+  const inicio = Date.now();
+  console.log(`[PlayerPage] iniciando carregamento da página (aula ${params.aulaId})`);
+
   const supabase = createClient();
   const {
     data: { user },
@@ -14,6 +19,8 @@ export default async function PlayerPage({ params }: { params: { aulaId: string 
     .select('*, documentos(*), modulo:modulos(*, curso:cursos(*))')
     .eq('id', params.aulaId)
     .maybeSingle()) as { data: any };
+
+  console.log(`[PlayerPage] aula resolvida em ${Date.now() - inicio}ms (aula ${params.aulaId}, encontrada=${!!aula})`);
 
   if (!aula) notFound();
 
@@ -56,6 +63,10 @@ export default async function PlayerPage({ params }: { params: { aulaId: string 
   const proximaAulaId = indiceAtual < todasAulasOrdenadas.length - 1 ? todasAulasOrdenadas[indiceAtual + 1].id : null;
   const posicaoInicial = progressoPorAula.get(aula.id)?.segundo_atual ?? 0;
   const { video_url: _videoUrl, ...aulaSemVideoUrl } = aula as any;
+
+  console.log(
+    `[PlayerPage] dados completos em ${Date.now() - inicio}ms (aula ${params.aulaId}, módulos=${modulosComStatus.length}, aulas do curso=${todasAulasOrdenadas.length}) — renderizando PlayerPageClient`
+  );
 
   return (
     <PlayerPageClient

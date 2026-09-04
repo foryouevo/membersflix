@@ -9,6 +9,57 @@ import { extractDriveFileId, streamDriveFile } from '@/lib/google-drive';
 // Router, mas deixado explícito porque essa rota depende disso pra existir.
 export const runtime = 'nodejs';
 
+// 300s = valor atual de default E máximo pro plano Hobby (com Fluid
+// Compute, ativo por padrão em projetos novos) — conferido ao vivo na
+// documentação da Vercel em 2026-09-04 (vercel.com/docs/functions/
+// limitations#max-duration); não é mais os históricos 10s/60s de antes do
+// Fluid Compute. Deixado explícito aqui (mesmo já sendo o default) porque é
+// o teto real disponível neste plano — não dá pra pedir mais que isso sem
+// upgrade pra Pro. Combinado com o corte de chunk logo abaixo (CHUNK_SIZE):
+// a expectativa é que cada requisição individual termine bem antes disso
+// mesmo numa conexão lenta ao Drive; isto aqui é só o teto de segurança pro
+// pior caso (ex.: uma única requisição de 2MB inesperadamente lenta).
+export const maxDuration = 300;
+
+// Tamanho máximo, em bytes, de cada pedaço pedido ao Google Drive por
+// requisição — mesmo que o navegador peça um Range muito maior (ou aberto,
+// tipo "bytes=1000-", que sem isso pediria o arquivo inteiro a partir dali).
+// Isso limita o tempo de CADA execução serverless individual (ver
+// limitarRangeParaDrive abaixo), em vez de depender só do maxDuration como
+// única rede de segurança — mesmo numa conexão bem lenta ao Drive, buscar
+// ~2MB deve terminar em segundos, não minutos. O navegador/react-player não
+// precisa saber de nada disso: ele só vê uma resposta 206 com um
+// Content-Range menor do que pediu (perfeitamente válido por HTTP — RFC
+// 7233 permite o servidor devolver menos do que foi pedido) e naturalmente
+// já pede o próximo pedaço sozinho quando precisar de mais, exatamente como
+// já faz durante um seek normal.
+const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB
+
+/**
+ * Recebe o Range que o NAVEGADOR pediu e devolve o Range que a gente de fato
+ * envia pro Drive, com o fim limitado a `start + CHUNK_SIZE - 1` quando o
+ * pedido original não tinha fim, ou tinha um fim mais distante que isso.
+ * Repassa o valor original sem mexer nos dois casos em que não dá pra
+ * limitar com segurança: formato de sufixo ("bytes=-500", últimos N bytes —
+ * exigiria saber o tamanho total do arquivo, que só temos DEPOIS da
+ * resposta) e formato que não bate com o esperado (deixa o comportamento
+ * de sempre decidir o que fazer).
+ */
+function limitarRangeParaDrive(rangeSolicitado: string, chunkSize: number): string {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeSolicitado.trim());
+  if (!match) return rangeSolicitado;
+
+  const [, startStr, endStr] = match;
+  if (startStr === '') return rangeSolicitado; // "bytes=-N" — sufixo, não dá pra limitar aqui
+
+  const start = Number(startStr);
+  if (!Number.isFinite(start)) return rangeSolicitado;
+
+  const endPedido = endStr === '' ? Infinity : Number(endStr);
+  const endLimitado = Math.min(endPedido, start + chunkSize - 1);
+  return `bytes=${start}-${endLimitado}`;
+}
+
 // Busca um header devolvido pelo axios/gaxios (client HTTP usado por
 // `googleapis`) sem depender de qual variação de maiúsculas/minúsculas ele
 // normalizou a chave — na prática vem sempre em minúsculas, mas ler com
@@ -110,6 +161,13 @@ async function* recortarBytes(source: NodeJS.ReadableStream, start: number, end:
  * nada especial no <video>/react-player.
  */
 export async function GET(request: NextRequest, { params }: { params: { aulaId: string } }) {
+  // DIAGNÓSTICO TEMPORÁRIO (investigação de travamento na tela da aula,
+  // remover depois de identificar a causa) — timestamps em cada etapa pra
+  // comparar com os logs do client (VideoPlayer.tsx) e achar em qual trecho
+  // exato o tempo é gasto quando o travamento acontecer de novo.
+  const inicioRequest = Date.now();
+  console.log(`[video/stream] GET recebido (aula ${params.aulaId}, range=${request.headers.get('range') ?? '(nenhum)'})`);
+
   const supabase = createClient();
   const {
     data: { user },
@@ -126,6 +184,8 @@ export async function GET(request: NextRequest, { params }: { params: { aulaId: 
     .select('video_url, video_origem')
     .eq('id', params.aulaId)
     .maybeSingle()) as { data: { video_url: string | null; video_origem: string } | null; error: any };
+
+  console.log(`[video/stream] checagem de acesso concluída em ${Date.now() - inicioRequest}ms (aula ${params.aulaId})`);
 
   if (error || !aula || !aula.video_url) {
     return NextResponse.json({ error: 'Vídeo não encontrado ou sem acesso.' }, { status: 404 });
@@ -145,7 +205,17 @@ export async function GET(request: NextRequest, { params }: { params: { aulaId: 
 
   try {
     const rangeSolicitado = request.headers.get('range');
-    const { stream, status, headers } = await streamDriveFile(fileId, rangeSolicitado);
+    // Limita o pedido que sai daqui pro Drive a no máximo CHUNK_SIZE bytes —
+    // o navegador continua vendo a resposta como um Range normal (206),
+    // só que menor do que pediu; ver comentário de CHUNK_SIZE/
+    // limitarRangeParaDrive acima.
+    const rangeParaDrive = rangeSolicitado ? limitarRangeParaDrive(rangeSolicitado, CHUNK_SIZE) : null;
+    if (rangeParaDrive !== rangeSolicitado) {
+      console.log(`[video/stream] range pedido pelo navegador (${rangeSolicitado}) limitado pra ${rangeParaDrive} antes de enviar ao Drive`);
+    }
+
+    const { stream, status, headers } = await streamDriveFile(fileId, rangeParaDrive);
+    console.log(`[video/stream] streamDriveFile voltou em ${Date.now() - inicioRequest}ms total (aula ${params.aulaId}, status=${status})`);
 
     const contentType = getHeader(headers, 'content-type') ?? 'video/mp4';
     const contentEncoding = getHeader(headers, 'content-encoding');
@@ -157,24 +227,28 @@ export async function GET(request: NextRequest, { params }: { params: { aulaId: 
     let contentRangeFinal: string | undefined;
     let contentLengthFinal = contentLengthDrive;
 
-    if (rangeSolicitado && status === 206 && contentRangeDrive) {
-      // Caminho feliz: o Drive honrou o Range e já devolveu 206 + o pedaço
-      // certo — só repassa o que ele calculou, sem reinventar nada.
+    if (rangeParaDrive && status === 206 && contentRangeDrive) {
+      // Caminho feliz: o Drive honrou o Range (já limitado a CHUNK_SIZE) e
+      // devolveu 206 + o pedaço certo — só repassa o que ele calculou, sem
+      // reinventar nada.
       statusFinal = 206;
       contentRangeFinal = contentRangeDrive;
       // contentLengthFinal já é o do Drive, que pra uma 206 já é o tamanho
       // do pedaço (não do arquivo inteiro).
-    } else if (rangeSolicitado && contentLengthDrive) {
+    } else if (rangeParaDrive && contentLengthDrive) {
       // O navegador pediu um Range, mas o Drive NÃO honrou (devolveu o
       // arquivo inteiro, 200) — em vez de repassar isso como um 200 (o que
       // diz pro navegador "este servidor não suporta partes", e é
       // exatamente o que travava o avanço/pulo do vídeo antes), a gente
-      // mesmo corta o stream pro pedaço pedido e monta um 206 de verdade.
+      // mesmo corta o stream pro pedaço pedido (rangeParaDrive, já limitado
+      // a CHUNK_SIZE — o `recortarBytes` para de ler e destrói a conexão
+      // assim que esse pedaço termina, então mesmo aqui não ficamos
+      // esperando o arquivo inteiro) e monta um 206 de verdade.
       // contentLengthDrive numa resposta 200 é o TAMANHO TOTAL do arquivo —
       // é o que `parseRangeHeader` precisa pra resolver ranges abertos
       // ("bytes=1000-", sem fim explícito) e o formato de sufixo.
       const total = Number(contentLengthDrive);
-      const parsed = Number.isFinite(total) ? parseRangeHeader(rangeSolicitado, total) : null;
+      const parsed = Number.isFinite(total) ? parseRangeHeader(rangeParaDrive, total) : null;
 
       if (parsed) {
         const { start, end } = parsed;
@@ -216,7 +290,10 @@ export async function GET(request: NextRequest, { params }: { params: { aulaId: 
     // Erro mais comum aqui: arquivo não compartilhado com o e-mail da
     // Service Account (ver GOOGLE_SERVICE_ACCOUNT_EMAIL) — o Drive responde
     // 403/404 nesse caso, não um erro de rede genérico.
-    console.error(`[video/stream] Falha ao buscar arquivo do Drive (aula ${params.aulaId}):`, err?.message ?? err);
+    console.error(
+      `[video/stream] Falha ao buscar arquivo do Drive após ${Date.now() - inicioRequest}ms (aula ${params.aulaId}):`,
+      err?.message ?? err
+    );
     return NextResponse.json({ error: 'Não foi possível carregar o vídeo.' }, { status: 502 });
   }
 }

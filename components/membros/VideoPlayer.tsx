@@ -78,6 +78,16 @@ function BotaoVoltar({ href, label }: { href: string; label: string }) {
  * embutido do Google — DriveIframePlayer, removido; não sobrou motivo pra
  * manter dois players quando os dois consomem URL de mídia direta agora).
  */
+// DIAGNÓSTICO TEMPORÁRIO (investigação de travamento na tela da aula,
+// remover depois de identificar a causa) — 15s: prazo de segurança pro fetch
+// da URL do vídeo. Sem isso, se o endpoint (ou algo atrás dele — checagem de
+// sessão, RLS, proxy do Drive) ficar pendurado sem nunca responder, o
+// `fetch()` também nunca resolve NEM rejeita (fetch do navegador não tem
+// timeout próprio) — a tela fica presa pra sempre no esqueleto de
+// carregamento, sem erro nenhum visível. O AbortController abaixo força uma
+// desistência depois desse prazo, com mensagem amigável em vez de travar.
+const TIMEOUT_FETCH_VIDEO_MS = 15000;
+
 export default function VideoPlayer(props: Omit<VideoPlayerProps, 'videoUrl'>) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -87,20 +97,41 @@ export default function VideoPlayer(props: Omit<VideoPlayerProps, 'videoUrl'>) {
     setVideoUrl(null);
     setErro(null);
 
-    fetch(`/api/membros/aulas/${props.aulaId}/video`)
+    console.log(`[VideoPlayer] iniciando busca da URL do vídeo (aula ${props.aulaId})`);
+    const inicio = Date.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_FETCH_VIDEO_MS);
+
+    fetch(`/api/membros/aulas/${props.aulaId}/video`, { signal: controller.signal })
       .then(async (res) => {
+        console.log(`[VideoPlayer] resposta do endpoint de vídeo em ${Date.now() - inicio}ms (aula ${props.aulaId}, status=${res.status})`);
         if (!res.ok) throw new Error('Não foi possível carregar o vídeo.');
         return res.json();
       })
       .then((data) => {
+        console.log(`[VideoPlayer] URL do vídeo recebida (aula ${props.aulaId}):`, data.url);
         if (!cancelado) setVideoUrl(data.url);
       })
-      .catch(() => {
-        if (!cancelado) setErro('Não foi possível carregar o vídeo. Recarregue a página.');
-      });
+      .catch((err) => {
+        const foiTimeout = err?.name === 'AbortError';
+        console.error(
+          `[VideoPlayer] falha ao buscar URL do vídeo após ${Date.now() - inicio}ms (aula ${props.aulaId}, timeout=${foiTimeout}):`,
+          err
+        );
+        if (!cancelado) {
+          setErro(
+            foiTimeout
+              ? 'Não foi possível carregar o vídeo, tente novamente.'
+              : 'Não foi possível carregar o vídeo. Recarregue a página.'
+          );
+        }
+      })
+      .finally(() => clearTimeout(timeoutId));
 
     return () => {
       cancelado = true;
+      controller.abort();
+      clearTimeout(timeoutId);
     };
   }, [props.aulaId]);
 
@@ -150,6 +181,13 @@ function CustomVideoPlayer({
   voltarHref,
   voltarLabel,
 }: VideoPlayerProps) {
+  // DIAGNÓSTICO TEMPORÁRIO (investigação de travamento na tela da aula,
+  // remover depois de identificar a causa) — marca o instante em que o
+  // player de verdade (não mais o esqueleto de carregamento) começa a
+  // renderizar, pra comparar com os timestamps do fetch acima e dos logs do
+  // servidor (video/route.ts, video/stream/route.ts, google-drive.ts).
+  console.log(`[CustomVideoPlayer] iniciando renderização (aula ${aulaId}, videoUrl=${videoUrl})`);
+
   const supabase = createClient();
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -171,6 +209,65 @@ function CustomVideoPlayer({
   // como o react-player é importado.
   function pegarVideo(): HTMLVideoElement | null {
     return containerRef.current?.querySelector('video') ?? null;
+  }
+
+  // Retry com backoff quando um chunk falha/expira (ex.: instabilidade na
+  // conexão com o proxy/Drive) — em vez de deixar o <video> travado
+  // esperando pra sempre um pedaço que nunca chega, ou já mostrar erro na
+  // primeira falha. tentativasRef (não state): não precisa re-renderizar
+  // nada só por incrementar a contagem, e precisa estar disponível
+  // sincronamente dentro do handler de erro. Reseta sozinho a cada troca de
+  // aula porque CustomVideoPlayer é desmontado/remontado quando videoUrl
+  // muda (ver VideoPlayer acima — só renderiza este componente depois que a
+  // nova URL chegou), não precisa de reset manual aqui.
+  const MAX_TENTATIVAS_RETRY = 3;
+  const tentativasRef = useRef(0);
+  const [erroPlayback, setErroPlayback] = useState(false);
+
+  function tentarNovamenteVideo() {
+    tentativasRef.current = 0;
+    setErroPlayback(false);
+    pegarVideo()?.load();
+  }
+
+  function handleErroVideo(err: unknown) {
+    const video = pegarVideo();
+    const posicaoAtual = video?.currentTime ?? 0;
+    const estavaTocando = playing;
+
+    if (tentativasRef.current >= MAX_TENTATIVAS_RETRY) {
+      console.error(
+        `[CustomVideoPlayer] erro no <video> (aula ${aulaId}) — esgotadas as ${MAX_TENTATIVAS_RETRY} tentativas, exibindo erro:`,
+        err
+      );
+      setPlaying(false);
+      setErroPlayback(true);
+      return;
+    }
+
+    tentativasRef.current += 1;
+    // Backoff exponencial: 1s, 2s, 4s.
+    const atraso = 1000 * 2 ** (tentativasRef.current - 1);
+    console.error(
+      `[CustomVideoPlayer] erro no <video> (aula ${aulaId}) — tentativa ${tentativasRef.current}/${MAX_TENTATIVAS_RETRY}, tentando de novo em ${atraso}ms (posição ${posicaoAtual.toFixed(1)}s):`,
+      err
+    );
+
+    setTimeout(() => {
+      const v = pegarVideo();
+      if (!v) return;
+      // .load() reinicia o <video> do zero (nova requisição HTTP pro proxy,
+      // desde o início do src) — o listener abaixo retoma de onde parou
+      // assim que os metadados da nova tentativa chegarem, em vez de voltar
+      // pro começo do vídeo.
+      v.load();
+      const aoRecarregar = () => {
+        v.currentTime = posicaoAtual;
+        if (estavaTocando) v.play().catch(() => {});
+        v.removeEventListener('loadedmetadata', aoRecarregar);
+      };
+      v.addEventListener('loadedmetadata', aoRecarregar);
+    }, atraso);
   }
 
   const [playing, setPlaying] = useState(false);
@@ -321,6 +418,23 @@ function CustomVideoPlayer({
   );
 
   useEffect(() => {
+    // DIAGNÓSTICO TEMPORÁRIO (investigação de travamento na tela da aula,
+    // remover depois de identificar a causa) — ACHADO do item 1 do pedido:
+    // `salvarProgresso` depende de `supabase` (useCallback acima), e
+    // `supabase` vem de `createClient()` chamado direto no corpo do
+    // componente (linha ~153) — uma instância NOVA a cada render, não
+    // memoizada. Como `onProgress` do player chama `setPlayed` várias vezes
+    // por segundo enquanto toca, isso recria `salvarProgresso` a cada uma
+    // dessas renderizações, o que recria (limpa + religa) este
+    // setInterval MUITO mais vezes do que o necessário (só precisaria mudar
+    // ao trocar de aula/play-pause). Não é, sozinho, um loop infinito de
+    // render (nada aqui chama setState de forma incondicional), mas é
+    // exatamente o padrão de "dependência que muda a cada render" pedido —
+    // o log abaixo quantifica ao vivo essa recriação na próxima reprodução
+    // do problema. Ainda não alterado (nem a dependência, nem o
+    // createClient()) — só instrumentado, por pedido explícito de não
+    // corrigir nesta etapa.
+    console.log(`[CustomVideoPlayer] efeito de auto-save (re)criado (aula ${aulaId}, playing=${playing}, played=${played.toFixed(4)})`);
     const interval = setInterval(() => {
       if (playing && duration > 0) {
         salvarProgresso(played * duration, played > 0.95);
@@ -455,6 +569,20 @@ function CustomVideoPlayer({
     >
       <BotaoVoltar href={voltarHref} label={voltarLabel} />
 
+      {/* Esgotadas as tentativas automáticas de retry (handleErroVideo,
+          acima) — cobre o <video>/overlay de play-pause inteiro, com botão
+          pra tentar de novo manualmente (reseta a contagem de tentativas e
+          chama video.load() de novo). z-30: acima de tudo mais neste
+          player, inclusive o menu de velocidade (que não passa de z-20). */}
+      {erroPlayback && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/90 px-6 text-center">
+          <p className="text-sm text-error">Não foi possível carregar o vídeo, tente novamente.</p>
+          <button type="button" onClick={tentarNovamenteVideo} className="btn-primary">
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
       {/* Picture-in-picture — só mobile (sm:hidden): a barra de controles
           inferior precisa caber numa linha só nessa largura (pedido
           explícito), então esse botão saiu de lá (ver a versão "hidden
@@ -509,6 +637,7 @@ function CustomVideoPlayer({
         // (toggleFullscreen, acima), nunca o modo nativo do <video>.
         playsinline
         onReady={() => {
+          console.log(`[CustomVideoPlayer] onReady disparado (aula ${aulaId}) — <video> real montado no DOM`);
           setReady(true);
           // posicaoInicial já vem em segundos — atribuir direto em
           // currentTime (ver pegarVideo(), acima) em vez do antigo
@@ -525,6 +654,12 @@ function CustomVideoPlayer({
           if (proximaAulaId) window.location.href = `/membros/player/${proximaAulaId}`;
         }}
         onClickPreview={() => setPlaying(true)}
+        // Chunk de um Range falhou/expirou (rede instável até o proxy, ou o
+        // proxy cortou a conexão) — em vez de deixar o <video> parado pra
+        // sempre esperando um pedaço que nunca chega, tenta de novo sozinho
+        // (retry com backoff, até 3 tentativas — ver handleErroVideo acima)
+        // antes de mostrar qualquer erro pro aluno.
+        onError={handleErroVideo}
         // objectFit: 'contain' vai direto pro <video> interno (via
         // config.file.attributes — o `style` no nível de cima do
         // <ReactPlayer/>, abaixo, estiliza só o WRAPPER dele, não o <video>
@@ -544,6 +679,17 @@ function CustomVideoPlayer({
               playsInline: true,
               controlsList: 'nodownload',
               disablePictureInPicture: false,
+              // preload="auto": pede pro navegador buscar mais dados
+              // adiante da posição atual (não só o mínimo de metadados),
+              // dando uma margem de buffer maior pra absorver pequenas
+              // variações de velocidade entre um chunk e outro (ver
+              // CHUNK_SIZE em video/stream/route.ts) sem gerar um "waiting"
+              // perceptível. É só uma sugestão pro navegador (que pode
+              // ignorá-la, ex. em conexão limitada/economia de dados) — não
+              // existe, num <video> nativo sem MSE, um jeito de exigir X
+              // segundos de buffer antes de tocar; isso aqui é o controle
+              // real disponível nesse modelo.
+              preload: 'auto',
               style: { width: '100%', height: '100%', objectFit: 'contain' },
             },
           },

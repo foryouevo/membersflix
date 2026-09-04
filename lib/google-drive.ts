@@ -200,9 +200,25 @@ export function driveThumbnailUrl(fileId: string) {
  * resposta — os bytes do stream são sempre o vídeo cru, e Content-Length/
  * Content-Range (abaixo) sempre correspondem exatamente a eles.
  */
+// DIAGNÓSTICO TEMPORÁRIO (investigação de travamento na tela da aula, remover
+// depois de identificar a causa): `drive.files.get` abaixo nunca tinha um
+// timeout próprio — se a chamada ao Drive (autenticação JWT inclusa, que
+// acontece por baixo dos panos na primeira requisição) ficar pendurada por
+// qualquer motivo de rede, essa Promise nunca resolve NEM rejeita, e a rota
+// que chama isto (stream/route.ts) fica esperando pra sempre, sem responder
+// nada pro navegador — daí a tela travada sem erro nenhum visível. O
+// Promise.race abaixo é só uma rede de segurança: força uma rejeição depois
+// de TIMEOUT_MS, com uma mensagem clara, em vez de ficar pendurado
+// indefinidamente. Ainda não é a correção definitiva (essa depende de
+// confirmar, com os logs abaixo, que é realmente aqui que trava).
+const TIMEOUT_DRIVE_MS = 15000;
+
 export async function streamDriveFile(fileId: string, range?: string | null) {
+  console.log(`[google-drive] streamDriveFile: iniciando busca (fileId=${fileId}, range=${range ?? '(nenhum)'})`);
+  const inicio = Date.now();
+
   const drive = getDrive();
-  const res = await drive.files.get(
+  const chamada = drive.files.get(
     { fileId, alt: 'media', supportsAllDrives: true },
     {
       responseType: 'stream',
@@ -212,9 +228,21 @@ export async function streamDriveFile(fileId: string, range?: string | null) {
       },
     }
   );
-  return {
-    stream: res.data as unknown as NodeJS.ReadableStream,
-    status: res.status,
-    headers: res.headers as Record<string, string>,
-  };
+
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`Timeout: Drive não respondeu em ${TIMEOUT_DRIVE_MS}ms (fileId=${fileId}).`)), TIMEOUT_DRIVE_MS);
+  });
+
+  try {
+    const res = await Promise.race([chamada, timeout]);
+    console.log(`[google-drive] streamDriveFile: respondeu em ${Date.now() - inicio}ms (status=${res.status}, fileId=${fileId})`);
+    return {
+      stream: res.data as unknown as NodeJS.ReadableStream,
+      status: res.status,
+      headers: res.headers as Record<string, string>,
+    };
+  } catch (err) {
+    console.error(`[google-drive] streamDriveFile: falhou após ${Date.now() - inicio}ms (fileId=${fileId}):`, err);
+    throw err;
+  }
 }

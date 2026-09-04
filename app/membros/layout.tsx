@@ -30,10 +30,11 @@ export default async function MembrosLayout({ children }: { children: React.Reac
   if (!profile || profile.tipo !== 'aluno') redirect('/admin/dashboard');
 
   // Agrupada por nome (case/espaço-insensível), igual a `categoriasAgrupadas`
-  // em hooks/useCursoFiltro.ts — a tabela `categorias` tem linhas duplicadas
-  // (dado legado, ex: "Figma" cadastrado 3x com ids diferentes); sem esse
-  // agrupamento, o painel de filtro do header listava a mesma categoria
-  // repetida. `ids` guarda todas as linhas daquele nome, então selecionar o
+  // em hooks/useCursoFiltro.ts — protege contra linhas duplicadas na tabela
+  // `categorias` (já aconteceu de ter o mesmo nome cadastrado mais de uma
+  // vez com ids diferentes; as duplicatas de então foram removidas do
+  // banco, mas o agrupamento continua valendo como salvaguarda caso volte a
+  // acontecer). `ids` guarda todas as linhas daquele nome, então selecionar o
   // grupo bate com curso vinculado a QUALQUER uma delas (ver FiltroModal).
   const categoriasAgrupadas = (() => {
     const porNome = new Map<string, { id: string; nome: string; ids: string[] }>();

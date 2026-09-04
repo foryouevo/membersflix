@@ -35,6 +35,11 @@ import { createClient } from '@/lib/supabase/server';
  * passar de novo por este endpoint.
  */
 export async function GET(request: NextRequest, { params }: { params: { aulaId: string } }) {
+  // DIAGNÓSTICO TEMPORÁRIO (investigação de travamento na tela da aula,
+  // remover depois de identificar a causa).
+  const inicio = Date.now();
+  console.log(`[video/route] GET recebido (aula ${params.aulaId})`);
+
   const supabase = createClient();
   const {
     data: { user },
@@ -49,6 +54,8 @@ export async function GET(request: NextRequest, { params }: { params: { aulaId: 
     .select('video_url, video_origem')
     .eq('id', params.aulaId)
     .maybeSingle()) as { data: { video_url: string | null; video_origem: string } | null; error: any };
+
+  console.log(`[video/route] resolvido em ${Date.now() - inicio}ms (aula ${params.aulaId}, origem=${aula?.video_origem ?? '(sem aula)'})`);
 
   if (error || !aula || !aula.video_url) {
     return NextResponse.json({ error: 'Vídeo não encontrado ou sem acesso.' }, { status: 404 });
