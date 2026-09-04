@@ -105,7 +105,7 @@ export default function PlayerPageClient({
             curso_id: curso.id,
             concluida: novoValor,
             atualizado_em: new Date().toISOString(),
-          },
+          } as any,
           { onConflict: 'aluno_id,aula_id' }
         )
       : { error: new Error('Sessão expirada.') };

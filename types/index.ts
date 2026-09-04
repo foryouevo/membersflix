@@ -134,20 +134,4 @@ export interface VitrineSecaoCurso {
   ordem: number;
 }
 
-export interface Database {
-  public: {
-    Tables: {
-      profiles: { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile> };
-      categorias: { Row: Categoria; Insert: Partial<Categoria>; Update: Partial<Categoria> };
-      cursos: { Row: Curso; Insert: Partial<Curso>; Update: Partial<Curso> };
-      modulos: { Row: Modulo; Insert: Partial<Modulo>; Update: Partial<Modulo> };
-      aulas: { Row: Aula; Insert: Partial<Aula>; Update: Partial<Aula> };
-      documentos: { Row: Documento; Insert: Partial<Documento>; Update: Partial<Documento> };
-      acessos_curso: { Row: AcessoCurso; Insert: Partial<AcessoCurso>; Update: Partial<AcessoCurso> };
-      progresso_aulas: { Row: ProgressoAula; Insert: Partial<ProgressoAula>; Update: Partial<ProgressoAula> };
-      configuracoes: { Row: Configuracoes; Insert: Partial<Configuracoes>; Update: Partial<Configuracoes> };
-      vitrine_secoes: { Row: VitrineSecao; Insert: Partial<VitrineSecao>; Update: Partial<VitrineSecao> };
-      vitrine_secao_cursos: { Row: VitrineSecaoCurso; Insert: Partial<VitrineSecaoCurso>; Update: Partial<VitrineSecaoCurso> };
-    };
-  };
-}
+export type { Database } from './database.types';

@@ -16,7 +16,7 @@ export default async function GerenciarAulasPage({ params }: { params: { id: str
 
   if (!curso) notFound();
 
-  const modulosOrdenados = (modulos ?? []).map((m) => ({
+   const modulosOrdenados = (modulos ?? []).map((m: any) => ({
     ...m,
     aulas: (m.aulas ?? []).sort((a: any, b: any) => a.ordem - b.ordem),
   }));

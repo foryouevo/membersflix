@@ -17,21 +17,21 @@ export default async function ConfiguracoesPage() {
       <p className="mb-6 text-sm text-on-variant">Gerencie integrações, comunicações e preferências do sistema.</p>
 
       <div className="max-w-xl">
-        <ConfiguracoesForm
-          numeroAtual={config?.numero_whatsapp ?? ''}
-          bannerAtual={config?.banner_plataforma_url ?? null}
+<ConfiguracoesForm
+          numeroAtual={(config as any)?.numero_whatsapp ?? ''}
+          bannerAtual={(config as any)?.banner_plataforma_url ?? null}
           rodapeLoginAtual={{
-            desenvolvido_por: config?.desenvolvido_por ?? '',
-            email_contato: config?.email_contato ?? '',
-            telefone_contato: config?.telefone_contato ?? '',
-            termos_uso_url: config?.termos_uso_url ?? '',
+            desenvolvido_por: (config as any)?.desenvolvido_por ?? '',
+            email_contato: (config as any)?.email_contato ?? '',
+            telefone_contato: (config as any)?.telefone_contato ?? '',
+            termos_uso_url: (config as any)?.termos_uso_url ?? '',
           }}
           bannerHomeAtual={{
-            banner_capa_url: config?.banner_capa_url ?? null,
-            banner_badge: config?.banner_badge ?? '',
-            banner_resumo: config?.banner_resumo ?? '',
+            banner_capa_url: (config as any)?.banner_capa_url ?? null,
+            banner_badge: (config as any)?.banner_badge ?? '',
+            banner_resumo: (config as any)?.banner_resumo ?? '',
           }}
-          heroDestaqueAtual={config?.hero_destaque_url ?? null}
+          heroDestaqueAtual={(config as any)?.hero_destaque_url ?? null}
         />
       </div>
     </div>

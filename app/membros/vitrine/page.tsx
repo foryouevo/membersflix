@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import VitrinePageClient from '@/components/membros/VitrinePageClient';
 import { calcularContinuarAssistindo } from '@/lib/membros/continuar-assistindo';
+import type { Curso } from '@/types';
 
 type BannerConfig = {
   numero_whatsapp: string | null;
@@ -30,11 +31,11 @@ async function buscarBannerConfig(supabase: ReturnType<typeof createClient>): Pr
   };
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = (await supabase
       .from('configuracoes')
       .select('numero_whatsapp, banner_capa_url, hero_destaque_url')
       .eq('id', 1)
-      .maybeSingle();
+      .maybeSingle()) as { data: BannerConfig | null; error: any };
 
     if (error) {
       console.error('[vitrine] Falha ao buscar banner de configuracoes (seguindo com fallback vazio):', error.message);
@@ -79,7 +80,7 @@ export default async function VitrinePage() {
       supabase.from('categorias').select('*').order('ordem'),
     ]);
 
-  const acessos = new Map<string, boolean>((acessosRaw ?? []).map((a) => [a.curso_id, !a.bloqueado]));
+  const acessos = new Map<string, boolean>((acessosRaw ?? []).map((a: any) => [a.curso_id, !a.bloqueado]));
 
   const totalAulasPorCurso = new Map<string, number>();
   for (const a of aulas ?? []) {
@@ -89,7 +90,7 @@ export default async function VitrinePage() {
   }
 
   const concluidasPorCurso = new Map<string, number>();
-  for (const p of progresso ?? []) {
+  for (const p of (progresso ?? []) as any[]) {
     if (p.concluida) concluidasPorCurso.set(p.curso_id, (concluidasPorCurso.get(p.curso_id) ?? 0) + 1);
   }
 
@@ -99,7 +100,7 @@ export default async function VitrinePage() {
     progressoPorCurso.set(cursoId, total > 0 ? Math.round((concluidas / total) * 100) : 0);
   }
 
-  const todosCursos = cursos ?? [];
+  const todosCursos = (cursos ?? []) as Curso[];
   const meusCursos = todosCursos.filter((c) => acessos.get(c.id));
 
   // Curso em destaque do card hero (CursoDestaque, agora igual em qualquer

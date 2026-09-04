@@ -29,7 +29,7 @@ export default async function DashboardPage() {
     porCategoria.get(catId)!.add((a as any).aluno_id);
   }
 
-  const niche = (categorias ?? []).map((c) => ({ nome: c.nome, total: porCategoria.get(c.id)?.size ?? 0 }));
+   const niche = (categorias ?? []).map((c: any) => ({ nome: c.nome, total: porCategoria.get(c.id)?.size ?? 0 }));
   const max = Math.max(1, ...niche.map((n) => n.total));
 
   return (

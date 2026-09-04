@@ -9,11 +9,11 @@ export default async function PlayerPage({ params }: { params: { aulaId: string 
   } = await supabase.auth.getUser();
 
   // RLS garante que só retorna a aula se o aluno tiver acesso liberado ao curso.
-  const { data: aula } = await supabase
+  const { data: aula } = (await supabase
     .from('aulas')
     .select('*, documentos(*), modulo:modulos(*, curso:cursos(*))')
     .eq('id', params.aulaId)
-    .maybeSingle();
+    .maybeSingle()) as { data: any };
 
   if (!aula) notFound();
 
@@ -28,7 +28,7 @@ export default async function PlayerPage({ params }: { params: { aulaId: string 
     .order('ordem');
 
   const { data: progresso } = await supabase.from('progresso_aulas').select('aula_id, concluida, segundo_atual').eq('aluno_id', user!.id);
-  const progressoPorAula = new Map((progresso ?? []).map((p) => [p.aula_id, p]));
+  const progressoPorAula = new Map((progresso ?? []).map((p: any) => [p.aula_id, p]));
 
   // video_url nunca sai daqui pro client — nem o da aula atual, nem o das
   // outras aulas do curso (que também apareceriam na lista lateral se não
@@ -41,15 +41,15 @@ export default async function PlayerPage({ params }: { params: { aulaId: string 
   const idsComFilho = new Set((todosModulos ?? []).map((m: any) => m.modulo_pai_id).filter(Boolean));
   const modulosComStatus = (todosModulos ?? [])
     .filter((m: any) => !idsComFilho.has(m.id))
-    .map((m) => ({
+    .map((m: any) => ({
       ...m,
       aulas: (m.aulas ?? [])
         .sort((a: any, b: any) => a.ordem - b.ordem)
         .map(({ video_url, ...a }: any) => ({ ...a, concluida: progressoPorAula.get(a.id)?.concluida ?? false })),
     }));
 
-  const todasAulasOrdenadas = modulosComStatus.flatMap((m) => m.aulas);
-  const indiceAtual = todasAulasOrdenadas.findIndex((a) => a.id === aula.id);
+  const todasAulasOrdenadas = modulosComStatus.flatMap((m: any) => m.aulas);
+  const indiceAtual = todasAulasOrdenadas.findIndex((a: any) => a.id === aula.id);
   if (indiceAtual === -1) redirect(`/membros/curso/${curso.id}`);
 
   const aulaAnteriorId = indiceAtual > 0 ? todasAulasOrdenadas[indiceAtual - 1].id : null;

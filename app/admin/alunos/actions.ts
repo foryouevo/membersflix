@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
+import type { Profile } from '@/types';
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -10,8 +11,8 @@ async function assertAdmin() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Não autenticado.');
-  const { data: profile } = await supabase.from('profiles').select('tipo').eq('id', user.id).maybeSingle();
-  if (profile?.tipo !== 'admin') throw new Error('Acesso negado.');
+   const { data: profile } = await supabase.from('profiles').select('tipo').eq('id', user.id).maybeSingle() as { data: { tipo: string } | null };
+  if ((profile as any)?.tipo !== 'admin') throw new Error('Acesso negado.');
 }
 
 export async function criarAluno(input: {
@@ -59,7 +60,7 @@ export async function atualizarStatusPagamento(alunoId: string, status: 'pendent
   await assertAdmin();
   const admin = createAdminClient();
 
-  const patch: Record<string, unknown> = { status_pagamento: status };
+  const patch: Partial<Profile> = { status_pagamento: status };
   if (status === 'pago') {
     patch.bloqueado = false;
   } else {

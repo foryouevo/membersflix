@@ -10,7 +10,7 @@ export default async function VitrinePage() {
     supabase.from('categorias').select('*').order('ordem'),
   ]);
 
-  const secoesOrdenadas = (secoes ?? []).map((s) => ({
+   const secoesOrdenadas = (secoes ?? []).map((s: any) => ({
     ...s,
     cursos: (s.cursos ?? []).sort((a: any, b: any) => a.ordem - b.ordem),
   }));

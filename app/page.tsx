@@ -9,7 +9,9 @@ export default async function RootPage() {
 
   if (!user) redirect('/login');
 
-  const { data: profile } = await supabase.from('profiles').select('tipo').eq('id', user.id).maybeSingle();
+  const { data: profile } = (await supabase.from('profiles').select('tipo').eq('id', user.id).maybeSingle()) as {
+    data: { tipo: string } | null;
+  };
 
   redirect(profile?.tipo === 'admin' ? '/admin/dashboard' : '/membros/vitrine');
 }

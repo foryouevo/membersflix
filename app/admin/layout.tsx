@@ -13,7 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .from('profiles')
     .select('nome, avatar_url, tipo')
     .eq('id', user.id)
-    .maybeSingle();
+.maybeSingle() as { data: any };
 
   if (!profile || profile.tipo !== 'admin') redirect('/membros/vitrine');
 

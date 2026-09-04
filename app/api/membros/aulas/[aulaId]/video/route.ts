@@ -32,7 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: { aulaId: 
     return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 });
   }
 
-  const { data: aula, error } = await supabase.from('aulas').select('video_url').eq('id', params.aulaId).maybeSingle();
+   const { data: aula, error } = await supabase.from('aulas').select('video_url').eq('id', params.aulaId).maybeSingle() as { data: { video_url: string } | null, error: any };
 
   if (error || !aula || !aula.video_url) {
     return NextResponse.json({ error: 'Vídeo não encontrado ou sem acesso.' }, { status: 404 });

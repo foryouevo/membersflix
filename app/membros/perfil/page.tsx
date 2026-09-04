@@ -14,22 +14,32 @@ export default async function PerfilPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: profile } = await supabase
+  const { data: profile } = (await supabase
     .from('profiles')
     .select('nome, email, telefone, avatar_url, status_pagamento, created_at, liberado_em')
     .eq('id', user.id)
-    .maybeSingle();
+    .maybeSingle()) as {
+    data: {
+      nome: string;
+      email: string;
+      telefone: string | null;
+      avatar_url: string | null;
+      status_pagamento: string;
+      created_at: string;
+      liberado_em: string;
+    } | null;
+  };
 
   if (!profile) redirect('/membros/vitrine');
 
-  const [{ data: acessosRaw }, { data: aulas }, { data: progresso }] = await Promise.all([
+  const [{ data: acessosRaw }, { data: aulas }, { data: progresso }] = (await Promise.all([
     supabase.from('acessos_curso').select('curso_id, bloqueado').eq('aluno_id', user.id),
     supabase.from('aulas').select('id, modulo:modulos(curso_id)'),
     // Só concluida: sem o card "Aulas Concluídas" (removido), atualizado_em
     // não é mais usado em lugar nenhum da tela (era só pro badge "+N este
     // mês" desse card) — não busca à toa.
     supabase.from('progresso_aulas').select('concluida').eq('aluno_id', user.id),
-  ]);
+  ])) as [{ data: any[] | null }, { data: any[] | null }, { data: any[] | null }];
 
   const meusCursoIds = (acessosRaw ?? []).filter((a) => !a.bloqueado).map((a) => a.curso_id);
   const meusCursoIdsSet = new Set(meusCursoIds);
@@ -52,7 +62,10 @@ export default async function PerfilPage() {
   // quebra a página.
   let numeroWhatsapp: string | null = null;
   try {
-    const { data: config, error } = await supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle();
+    const { data: config, error } = (await supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle()) as {
+      data: { numero_whatsapp: string | null } | null;
+      error: any;
+    };
     if (error) console.error('[perfil] Falha ao buscar numero_whatsapp:', error.message);
     else numeroWhatsapp = config?.numero_whatsapp ?? null;
   } catch (err) {

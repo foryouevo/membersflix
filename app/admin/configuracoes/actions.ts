@@ -18,8 +18,8 @@ async function assertAdmin() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('Não autenticado.');
-  const { data: profile } = await supabase.from('profiles').select('tipo').eq('id', user.id).maybeSingle();
-  if (profile?.tipo !== 'admin') throw new Error('Acesso negado.');
+   const { data: profile } = await supabase.from('profiles').select('tipo').eq('id', user.id).maybeSingle() as { data: { tipo: string } | null };
+  if ((profile as any)?.tipo !== 'admin') throw new Error('Acesso negado.');
 }
 
 export async function salvarNumeroWhatsapp(numero: string) {

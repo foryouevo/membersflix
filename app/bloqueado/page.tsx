@@ -15,7 +15,7 @@ export default async function BloqueadoPage() {
     .from('profiles')
     .select('status_pagamento, bloqueado')
     .eq('id', user.id)
-    .maybeSingle();
+   .maybeSingle() as { data: any };
 
   const pendente = profile?.status_pagamento === 'pendente';
 

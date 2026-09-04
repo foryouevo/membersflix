@@ -11,11 +11,11 @@ export default async function CursosPage() {
   ]);
 
   const modulosPorCurso = new Map<string, number>();
-  for (const m of modulos ?? []) {
+   for (const m of (modulos ?? []) as any[]) {
     modulosPorCurso.set(m.curso_id, (modulosPorCurso.get(m.curso_id) ?? 0) + 1);
   }
 
-  const cursosComContagem = (cursos ?? []).map((c) => ({ ...c, modulos_count: modulosPorCurso.get(c.id) ?? 0 }));
+const cursosComContagem = (cursos ?? []).map((c: any) => ({ ...c, modulos_count: modulosPorCurso.get(c.id) ?? 0 }));
 
   return <CursosGrid cursos={cursosComContagem as any} categorias={categorias ?? []} />;
 }

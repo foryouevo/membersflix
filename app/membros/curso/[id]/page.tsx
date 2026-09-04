@@ -20,11 +20,11 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
     .select('bloqueado')
     .eq('aluno_id', user!.id)
     .eq('curso_id', params.id)
-    .maybeSingle();
+   .maybeSingle() as any;
 
   const hasAccess = !!acesso && !acesso.bloqueado;
 
-  const { data: config } = await supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle();
+   const { data: config } = await supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle() as any;
 
   let modulos: any[] = [];
   let jaComecou = false;
@@ -48,7 +48,7 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
       .select('aula_id, concluida')
       .eq('aluno_id', user!.id)
       .eq('curso_id', params.id);
-    const concluidaPorAula = new Map((progresso ?? []).map((p) => [p.aula_id, p.concluida]));
+const concluidaPorAula = new Map((progresso ?? []).map((p: any) => [p.aula_id, p.concluida]));
     jaComecou = (progresso?.length ?? 0) > 0;
 
     modulos = modulos.map((m) => ({
@@ -81,7 +81,9 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
   // sentido como "o Módulo 1 liberado" (mesma regra de sempre, só isolada
   // numa lista à parte em vez de filtrar a lista principal).
   if (hasAccess) {
-    const { data: profile } = await supabase.from('profiles').select('status_pagamento').eq('id', user!.id).maybeSingle();
+    const { data: profile } = (await supabase.from('profiles').select('status_pagamento').eq('id', user!.id).maybeSingle()) as {
+      data: { status_pagamento: string } | null;
+    };
     if (profile?.status_pagamento === 'pendente') {
       const idsComFilho = new Set(modulos.map((m) => m.modulo_pai_id).filter(Boolean));
       const folhas = modulos.filter((m) => !idsComFilho.has(m.id));

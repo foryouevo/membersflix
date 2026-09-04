@@ -33,7 +33,7 @@ async function buscarLoginConfig(): Promise<LoginConfig> {
       .from('configuracoes')
       .select('desenvolvido_por, email_contato, telefone_contato, termos_uso_url, numero_whatsapp')
       .eq('id', 1)
-      .maybeSingle();
+   .maybeSingle() as { data: any, error: any };
 
     if (error) {
       console.error('[login] Falha ao buscar configuracoes (seguindo com fallback vazio):', error.message);

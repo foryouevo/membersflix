@@ -306,7 +306,7 @@ function CustomVideoPlayer({
           segundo_atual: Math.floor(segundoAtual),
           concluida,
           atualizado_em: new Date().toISOString(),
-        },
+        } as any,
         { onConflict: 'aluno_id,aula_id' }
       );
     },

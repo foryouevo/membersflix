@@ -9,7 +9,7 @@ export default async function MembrosLayout({ children }: { children: React.Reac
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const [{ data: profile }, { data: config }, { data: categorias }, { data: cursosAtivos }] = await Promise.all([
+  const [{ data: profile }, { data: config }, { data: categorias }, { data: cursosAtivos }] = (await Promise.all([
     supabase.from('profiles').select('nome, email, avatar_url, tipo').eq('id', user.id).maybeSingle(),
     supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle(),
     // Categoria/instrutor pro painel de filtro do Header (busca global,
@@ -20,7 +20,12 @@ export default async function MembrosLayout({ children }: { children: React.Reac
     // ver Header.tsx), então busca direto aqui.
     supabase.from('categorias').select('id, nome').order('nome'),
     supabase.from('cursos').select('instrutor_nome').eq('status', 'active'),
-  ]);
+  ])) as [
+    { data: { nome: string; email: string; avatar_url: string | null; tipo: string } | null },
+    { data: { numero_whatsapp: string | null } | null },
+    { data: { id: string; nome: string }[] | null },
+    { data: { instrutor_nome: string | null }[] | null },
+  ];
 
   if (!profile || profile.tipo !== 'aluno') redirect('/admin/dashboard');
 

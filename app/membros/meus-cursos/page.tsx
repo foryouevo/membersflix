@@ -8,12 +8,12 @@ export default async function MeusCursosPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: acessos }, { data: aulas }, { data: progresso }, { data: config }] = await Promise.all([
+  const [{ data: acessos }, { data: aulas }, { data: progresso }, { data: config }] = (await Promise.all([
     supabase.from('acessos_curso').select('curso_id, bloqueado, curso:cursos(*)').eq('aluno_id', user!.id),
     supabase.from('aulas').select('id, modulo:modulos(curso_id)'),
     supabase.from('progresso_aulas').select('curso_id, concluida').eq('aluno_id', user!.id),
     supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle(),
-  ]);
+  ])) as [{ data: any[] | null }, { data: any[] | null }, { data: any[] | null }, { data: { numero_whatsapp: string | null } | null }];
 
   const totalPorCurso = new Map<string, number>();
   for (const a of aulas ?? []) {
@@ -22,7 +22,7 @@ export default async function MeusCursosPage() {
     totalPorCurso.set(cursoId, (totalPorCurso.get(cursoId) ?? 0) + 1);
   }
   const concluidasPorCurso = new Map<string, number>();
-  for (const p of progresso ?? []) {
+  for (const p of (progresso ?? []) as any[]) {
     if (p.concluida) concluidasPorCurso.set(p.curso_id, (concluidasPorCurso.get(p.curso_id) ?? 0) + 1);
   }
 
@@ -30,7 +30,7 @@ export default async function MeusCursosPage() {
   const progressoPorCurso: Record<string, number> = {};
   const bloqueados: Record<string, boolean> = {};
 
-  for (const a of acessos ?? []) {
+  for (const a of (acessos ?? []) as any[]) {
     const curso = (a as any).curso as Curso | null;
     if (!curso) continue;
     cursos.push(curso);
