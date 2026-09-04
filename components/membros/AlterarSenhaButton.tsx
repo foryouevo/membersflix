@@ -4,12 +4,13 @@ import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { createClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
 
 // Diferente do fluxo de "Esqueceu a senha?" (login, deslogado — precisa do
 // link por email porque não existe sessão ainda), aqui o aluno já está
 // autenticado, então dá pra trocar a senha direto com updateUser, sem
 // precisar de link nenhum.
-export default function AlterarSenhaButton() {
+export default function AlterarSenhaButton({ className }: { className?: string } = {}) {
   const supabase = createClient();
   const [open, setOpen] = useState(false);
   const [novaSenha, setNovaSenha] = useState('');
@@ -52,7 +53,7 @@ export default function AlterarSenhaButton() {
 
   return (
     <>
-      <button type="button" onClick={handleOpen} className="btn-secondary flex items-center gap-2">
+      <button type="button" onClick={handleOpen} className={cn('btn-secondary flex items-center justify-center gap-2', className)}>
         <KeyRound size={16} />
         Alterar Senha
       </button>

@@ -6,7 +6,7 @@ export default async function ConfiguracoesPage() {
   const { data: config } = await supabase
     .from('configuracoes')
     .select(
-      'numero_whatsapp, banner_plataforma_url, desenvolvido_por, email_contato, telefone_contato, termos_uso_url, banner_capa_url, banner_badge, banner_resumo, hero_destaque_url'
+      'numero_whatsapp, banner_plataforma_url, desenvolvido_por, email_contato, telefone_contato, termos_uso_url, banner_capa_url, banner_badge, banner_resumo, hero_destaque_url, login_background_url'
     )
     .eq('id', 1)
     .maybeSingle();
@@ -32,6 +32,7 @@ export default async function ConfiguracoesPage() {
             banner_resumo: (config as any)?.banner_resumo ?? '',
           }}
           heroDestaqueAtual={(config as any)?.hero_destaque_url ?? null}
+          loginBackgroundAtual={(config as any)?.login_background_url ?? null}
         />
       </div>
     </div>

@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   Play,
   Pause,
+  Volume1,
   Volume2,
   VolumeX,
   Maximize,
@@ -15,6 +16,7 @@ import {
   SkipBack,
   SkipForward,
   Settings,
+  FastForward,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { formatDuration } from '@/lib/utils';
@@ -182,6 +184,70 @@ function CustomVideoPlayer({
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  // Slider de volume expandido — só tem efeito visual no mobile (abaixo de
+  // 640px, o breakpoint `sm`): lá o slider começa recolhido (w-0) ao lado
+  // do ícone e expande inline ao tocar nele, em vez do popover flutuante
+  // que existia antes (trocado por pedido explícito). No desktop o slider
+  // já é sempre w-16 via `sm:w-16` incondicional (ver JSX mais abaixo) —
+  // esse estado nunca chega a ser lido lá, porque o onClick do ícone
+  // decide em tempo de clique (matchMedia) se deve alternar isso ou mutar
+  // direto (setMuted), então no desktop ele nunca é sequer alterado.
+  const [volumeExpandido, setVolumeExpandido] = useState(false);
+  const volumeWrapRef = useRef<HTMLDivElement>(null);
+
+  // "Segurar para acelerar" (press and hold -> 2x, solta -> volta pro
+  // `speed` escolhido no menu) — `acelerando` não MEXE em `speed` (o valor
+  // que o menu de configurações mostra/controla) em nenhum momento: o
+  // playbackRate de verdade, passado pro <ReactPlayer/> mais abaixo, é
+  // sempre `acelerando ? 2 : speed` — um valor DERIVADO, nunca uma escrita
+  // em cima do estado do usuário. Isso já cobre sozinho o item 3 do pedido
+  // ("volta pra velocidade selecionada antes, seja 1x, 1.5x etc") sem
+  // precisar guardar/restaurar nada em ref: soltar só zera `acelerando`, e
+  // o valor efetivo volta a ser `speed` na hora, seja lá o que `speed` for.
+  const [acelerando, setAcelerando] = useState(false);
+  const holdTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  // true só entre o disparo do hold (300ms) e o clique sintético que o
+  // navegador gera ao soltar o mouse/dedo sobre o MESMO botão — usado só
+  // pra esse clique não também alternar play/pause (item 5: soltar depois
+  // de segurar não deve contar como o toque rápido normal).
+  const foiHoldRef = useRef(false);
+
+  function iniciarPossivelHold() {
+    foiHoldRef.current = false;
+    holdTimeoutRef.current = setTimeout(() => {
+      foiHoldRef.current = true;
+      setAcelerando(true);
+    }, 300);
+  }
+
+  // Chamado ao soltar (mouseup/touchend/touchcancel) OU ao o cursor sair da
+  // área do vídeo ainda pressionado (mouseleave — item 6: tratar como
+  // "soltou"). Sempre seguro chamar mesmo fora de um hold em andamento:
+  // clearTimeout de um timer já disparado/inexistente e um setState pro
+  // mesmo valor são no-ops.
+  function pararPossivelHold() {
+    clearTimeout(holdTimeoutRef.current);
+    setAcelerando(false);
+  }
+
+  // onClick do overlay de play/pause (abaixo) — mesmo botão que recebe os
+  // handlers de hold acima. Sem isso, soltar depois de um "segurar" também
+  // dispararia o clique nativo do navegador (mousedown+mouseup no mesmo
+  // elemento = click, não importa o tempo entre os dois) e alternaria
+  // play/pause sem querer, logo depois do 2x temporário.
+  function handleCliquePlayPause() {
+    if (foiHoldRef.current) {
+      foiHoldRef.current = false;
+      return;
+    }
+    setPlaying((p) => !p);
+  }
+
+  // Cancela um hold pendente se o componente desmontar no meio do timer
+  // (ex: aluno navega pra outra aula enquanto ainda está segurando).
+  useEffect(() => {
+    return () => clearTimeout(holdTimeoutRef.current);
+  }, []);
 
   useDificultarInspecao();
 
@@ -189,6 +255,27 @@ function CustomVideoPlayer({
     const onFsChange = () => setFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  // Recolhe o slider de volume expandido (mobile) ao tocar em QUALQUER
+  // outro controle do player, ou fora dele — pedido explícito (item 3): um
+  // toque em play/pause, avançar/voltar aula, velocidade, PiP, tela cheia
+  // ou na própria barra de progresso é sempre "fora" de volumeWrapRef
+  // (cada um é um elemento irmão, fora desse wrapper), então já recolhe
+  // sozinho, sem precisar de um listener por botão. Um segundo toque no
+  // próprio ícone de volume é tratado como toggle no onClick dele (está
+  // DENTRO de volumeWrapRef, não dispara isto). Mesmo padrão de
+  // click-outside já usado no resto da plataforma (mousedown +
+  // ref.contains) — cobre toque em mobile também, os navegadores
+  // sintetizam mousedown a partir de touchstart.
+  useEffect(() => {
+    function handleClickFora(e: MouseEvent) {
+      if (volumeWrapRef.current && !volumeWrapRef.current.contains(e.target as Node)) {
+        setVolumeExpandido(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickFora);
+    return () => document.removeEventListener('mousedown', handleClickFora);
   }, []);
 
   // webkitEnterFullscreen() (fallback do iOS, usado em toggleFullscreen
@@ -288,14 +375,51 @@ function CustomVideoPlayer({
     }
   }
 
+  // requestPictureInPicture() lança InvalidStateError se os metadados do
+  // <video> (duração/dimensões) ainda não carregaram — readyState 0 (o
+  // clique pode acontecer bem cedo, antes do vídeo terminar de carregar).
+  // pipAguardandoRef evita empilhar um listener 'loadedmetadata' por
+  // clique: se o aluno clicar várias vezes antes do vídeo carregar, só o
+  // primeiro clique registra um listener — os próximos são ignorados até
+  // ele disparar (ou o vídeo trocar, ver reset abaixo).
+  const pipAguardandoRef = useRef(false);
+
   function togglePip() {
     const video = pegarVideo();
     if (!video) return;
     if (document.pictureInPictureElement) {
       document.exitPictureInPicture();
-    } else {
-      video.requestPictureInPicture();
+      return;
     }
+
+    // try/catch aqui (não só na leitura de readyState): requestPictureInPicture()
+    // retorna uma Promise que também pode rejeitar por outros motivos (sem
+    // suporte do navegador, documento em fullscreen, etc.) — sem isso, a
+    // rejeição não tratada sobe e derruba a tela com o overlay de erro do
+    // Next. PiP é um extra, não pode quebrar o player por falhar.
+    async function solicitarPip() {
+      try {
+        await video!.requestPictureInPicture();
+      } catch (err) {
+        console.error('Não foi possível abrir o Picture-in-Picture:', err);
+      }
+    }
+
+    if (video.readyState >= 1) {
+      solicitarPip();
+      return;
+    }
+
+    if (pipAguardandoRef.current) return;
+    pipAguardandoRef.current = true;
+    video.addEventListener(
+      'loadedmetadata',
+      () => {
+        pipAguardandoRef.current = false;
+        solicitarPip();
+      },
+      { once: true }
+    );
   }
 
   let hideTimeout: ReturnType<typeof setTimeout>;
@@ -331,12 +455,37 @@ function CustomVideoPlayer({
     >
       <BotaoVoltar href={voltarHref} label={voltarLabel} />
 
+      {/* Picture-in-picture — só mobile (sm:hidden): a barra de controles
+          inferior precisa caber numa linha só nessa largura (pedido
+          explícito), então esse botão saiu de lá (ver a versão "hidden
+          sm:block" dele mais abaixo, dentro da barra) e virou um botão
+          flutuante próprio, mesmo padrão visual do BotaoVoltar (canto
+          oposto — right-4 em vez de left-4 — mesmo h-10/bg-black/60/
+          backdrop-blur/z-20). onClick continua chamando o mesmo
+          togglePip de sempre, sem lógica nova. z-20: acima do vídeo (que
+          não tem z-index próprio), mesmo nível do BotaoVoltar — nenhum
+          popover deste player (o menu de velocidade, mais abaixo) usa um
+          z-index maior que isso, então não há conflito. */}
+      <button
+        onClick={togglePip}
+        title="Janela flutuante"
+        aria-label="Janela flutuante"
+        className="absolute right-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80 sm:hidden"
+      >
+        <PictureInPicture2 size={18} />
+      </button>
+
       <ReactPlayer
         url={videoUrl}
         playing={playing}
         volume={volume}
         muted={muted}
-        playbackRate={speed}
+        // acelerando ? 2 : speed: 2x temporário de "segurar pra acelerar"
+        // (ver comentário de `acelerando`, acima) sobrepõe o `speed`
+        // escolhido no menu sem escrever em cima dele — ReactPlayer já
+        // repassa esse prop pro <video> real (video.playbackRate) sozinho,
+        // reativamente, mesmo mecanismo que o menu de velocidade já usava.
+        playbackRate={acelerando ? 2 : speed}
         width="100%"
         height="100%"
         // controls={false} explícito (já era o padrão do react-player sem
@@ -411,10 +560,25 @@ function CustomVideoPlayer({
         className="absolute inset-0 h-full w-full pointer-events-none"
       />
 
-      {/* overlay clicável para play/pause */}
+      {/* overlay clicável para play/pause — também é a "área do vídeo"
+          onde o gesto de segurar-pra-acelerar (2x) funciona: onMouseDown/
+          onTouchStart começam o temporizador de 300ms (iniciarPossivelHold),
+          onMouseUp/onMouseLeave/onTouchEnd/onTouchCancel encerram
+          (pararPossivelHold — mouseleave cobrindo o item 6: soltar o botão
+          fora da área conta como "soltou"). A barra de controles (mais
+          abaixo) é um elemento IRMÃO, renderizada depois — um toque nela
+          nunca alcança este botão por baixo, então o gesto nunca dispara
+          sem querer em cima de play/volume/configurações etc (item 7),
+          sem precisar de nenhum guard extra aqui. */}
       <button
         aria-label={playing ? 'Pausar' : 'Reproduzir'}
-        onClick={() => setPlaying((p) => !p)}
+        onClick={handleCliquePlayPause}
+        onMouseDown={iniciarPossivelHold}
+        onMouseUp={pararPossivelHold}
+        onMouseLeave={pararPossivelHold}
+        onTouchStart={iniciarPossivelHold}
+        onTouchEnd={pararPossivelHold}
+        onTouchCancel={pararPossivelHold}
         className="absolute inset-0 flex items-center justify-center"
       >
         {!playing && ready && (
@@ -422,11 +586,23 @@ function CustomVideoPlayer({
             <Play size={30} className="ml-1" />
           </span>
         )}
+
+        {/* Indicador "2x" (item 4) — só enquanto `acelerando` (não
+            enquanto o timer de 300ms ainda está pendente, só depois que
+            ele dispara de verdade). pointer-events-none: é só visual, não
+            pode interceptar o mouseup/touchend que precisa continuar
+            chegando neste botão pra encerrar o hold corretamente. */}
+        {acelerando && (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full bg-black/70 px-4 py-2 text-sm font-semibold text-white">
+            <FastForward size={16} className="fill-white" />
+            2x
+          </div>
+        )}
       </button>
 
       {/* controles */}
       <div
-        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-4 pb-3 pt-10 transition-opacity ${
+        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-8 pb-7 pt-10 transition-opacity ${
           controlsVisible || !playing ? 'opacity-100' : 'opacity-0'
         }`}
       >
@@ -450,7 +626,7 @@ function CustomVideoPlayer({
             const video = pegarVideo();
             if (video && duration > 0) video.currentTime = fracao * duration;
           }}
-          className="mb-2 h-1 w-full cursor-pointer appearance-none rounded-full bg-border accent-primary"
+          className="mb-6 h-1 w-full cursor-pointer appearance-none rounded-full bg-border accent-primary"
         />
 
         <div className="flex items-center justify-between text-white">
@@ -472,8 +648,44 @@ function CustomVideoPlayer({
               <SkipForward size={18} className="opacity-30" />
             )}
 
-            <div className="flex items-center gap-1.5">
-              <button onClick={() => setMuted((m) => !m)}>{muted || volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+            {/* Volume — UM bloco só, reaproveitado nas duas larguras (era
+                um popover flutuante separado pro mobile antes disso;
+                trocado por pedido explícito pra ficar inline, igual ao
+                desktop). O onClick do ícone decide em tempo de clique (via
+                matchMedia, não um breakpoint fixo no JS) o que fazer:
+                >=640px (sm) muta direto, igual sempre foi; abaixo disso,
+                alterna volumeExpandido, que é o que anima o slider ao
+                lado dele (w-0 -> w-16, mesma técnica de largura animada do
+                botão de busca do Header.tsx — [transition:width...],
+                w-0/opacity-0 -> w-X/opacity-100). No desktop o slider é
+                sempre w-16 via `sm:w-16` incondicional (a classe `sm:`
+                vence a condicional de largura independente do estado),
+                então volumeExpandido nunca chega a ter efeito visual ali.
+                Ícone de 3 estados (mudo/baixo/alto — VolumeX/Volume1/
+                Volume2) agora vale nas duas larguras — antes só o mobile
+                tinha o terceiro estado; unificar os dois blocos trouxe
+                esse ganho de graça pro desktop também, sem custo. */}
+            <div ref={volumeWrapRef} className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.matchMedia('(min-width: 640px)').matches) {
+                    setMuted((m) => !m);
+                  } else {
+                    setVolumeExpandido((v) => !v);
+                  }
+                }}
+                aria-label="Volume"
+                aria-expanded={volumeExpandido}
+              >
+                {muted || volume === 0 ? (
+                  <VolumeX size={18} />
+                ) : volume < 0.5 ? (
+                  <Volume1 size={18} />
+                ) : (
+                  <Volume2 size={18} />
+                )}
+              </button>
               <input
                 type="range"
                 min={0}
@@ -484,19 +696,39 @@ function CustomVideoPlayer({
                   setVolume(Number(e.target.value));
                   setMuted(false);
                 }}
-                className="h-1 w-16 cursor-pointer appearance-none rounded-full bg-border accent-primary"
+                // volume-slider (app/globals.css): thumb customizado
+                // (bolinha vermelha, ::-webkit-slider-thumb/::-moz-range-thumb)
+                // — accent-primary sozinho não bastava no mobile, ver
+                // comentário da classe. Mesma classe nas duas larguras,
+                // já que é o mesmo <input> compartilhado.
+                className={`volume-slider h-1 shrink-0 cursor-pointer appearance-none overflow-hidden rounded-full bg-border accent-primary [transition:width_0.3s_ease,opacity_0.3s_ease] sm:w-16 sm:opacity-100 ${
+                  volumeExpandido ? 'w-16 opacity-100' : 'w-0 opacity-0'
+                }`}
               />
             </div>
 
-            <span className="text-xs text-on-variant">
-              {formatDuration(played * duration)} / {formatDuration(duration)}
+            {/* Tempo: some inteiro no mobile enquanto o slider de volume
+                está expandido (item 4 do pedido — abre espaço na barra
+                pra caber numa linha só, já que o slider some com o w-0
+                normalmente mas ocupa w-16 quando expandido). Do contrário,
+                comportamento de sempre: só o decorrido no mobile ("/
+                duração" via hidden sm:inline no <span> de dentro), formato
+                completo a partir de sm. volumeExpandido nunca é true no
+                desktop (ver onClick acima), então esse hidden condicional
+                nunca chega a esconder o tempo lá. */}
+            <span className={`text-xs text-on-variant ${volumeExpandido ? 'hidden' : ''}`}>
+              {formatDuration(played * duration)}
+              <span className="hidden sm:inline"> / {formatDuration(duration)}</span>
             </span>
           </div>
 
           <div className="flex items-center gap-4">
             <div className="relative">
+              {/* "{speed}x" some no mobile (hidden sm:inline) — só o ícone
+                  fica; o toque continua abrindo o mesmo menu de sempre
+                  (onClick/showSpeedMenu inalterados). */}
               <button onClick={() => setShowSpeedMenu((s) => !s)} className="flex items-center gap-1 text-xs">
-                <Settings size={16} /> {speed}x
+                <Settings size={16} /> <span className="hidden sm:inline">{speed}x</span>
               </button>
               {showSpeedMenu && (
                 <div className="absolute bottom-8 right-0 rounded bg-surface-high py-1 shadow-overlay">
@@ -517,7 +749,11 @@ function CustomVideoPlayer({
                 </div>
               )}
             </div>
-            <button onClick={togglePip} title="Janela flutuante">
+            {/* hidden sm:block: no mobile esse botão vira o flutuante no
+                canto superior direito do player (logo depois do
+                BotaoVoltar, acima) — aqui na barra some pra abrir espaço
+                e caber tudo numa linha só. */}
+            <button onClick={togglePip} title="Janela flutuante" className="hidden sm:block">
               <PictureInPicture2 size={18} />
             </button>
             <button onClick={toggleFullscreen} title="Tela cheia">

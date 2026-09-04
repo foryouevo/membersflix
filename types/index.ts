@@ -116,6 +116,10 @@ export interface Configuracoes {
   // isolado de cursos.capa_url e de banner_capa_url (ver migração
   // 008_hero_destaque_home.sql).
   hero_destaque_url: string | null;
+  // Fundo da tela de login — sem valor, cai no fallback estático
+  // /hero-destaque.png (ver migração 009_login_background.sql).
+  login_background_url: string | null;
+  updated_at: string;
 }
 
 export interface VitrineSecao {

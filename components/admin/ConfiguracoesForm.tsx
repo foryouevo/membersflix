@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { MessageCircle, Save, Image as ImageIcon, Upload, LayoutTemplate, Sparkles, Trash2 } from 'lucide-react';
+import { MessageCircle, Save, Image as ImageIcon, Upload, LayoutTemplate, Sparkles, Trash2, LogIn } from 'lucide-react';
 import {
   salvarNumeroWhatsapp,
   salvarRodapeLogin,
@@ -10,6 +10,8 @@ import {
   uploadBannerHomeCapa,
   uploadHeroDestaque,
   removerHeroDestaque,
+  uploadLoginBackground,
+  removerLoginBackground,
 } from '@/app/admin/configuracoes/actions';
 
 export default function ConfiguracoesForm({
@@ -18,6 +20,7 @@ export default function ConfiguracoesForm({
   rodapeLoginAtual,
   bannerHomeAtual,
   heroDestaqueAtual,
+  loginBackgroundAtual,
 }: {
   numeroAtual: string;
   bannerAtual: string | null;
@@ -33,6 +36,7 @@ export default function ConfiguracoesForm({
     banner_resumo: string;
   };
   heroDestaqueAtual: string | null;
+  loginBackgroundAtual: string | null;
 }) {
   const [numero, setNumero] = useState(numeroAtual);
   const [salvando, setSalvando] = useState(false);
@@ -80,6 +84,7 @@ export default function ConfiguracoesForm({
       <HeroDestaqueCard heroDestaqueAtual={heroDestaqueAtual} />
       <BannerHomeCard bannerHomeAtual={bannerHomeAtual} />
       <BannerPlataformaCard bannerAtual={bannerAtual} />
+      <LoginBackgroundCard loginBackgroundAtual={loginBackgroundAtual} />
       <RodapeLoginCard rodapeAtual={rodapeLoginAtual} />
     </div>
   );
@@ -479,6 +484,128 @@ function HeroDestaqueCard({ heroDestaqueAtual }: { heroDestaqueAtual: string | n
           id="hero-destaque-input"
         />
         <label htmlFor="hero-destaque-input" className="btn-secondary cursor-pointer">
+          {preview ? 'Trocar imagem' : 'Escolher imagem'}
+        </label>
+        <button
+          type="button"
+          onClick={handleUpload}
+          disabled={!arquivoSelecionado || enviando}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Upload size={16} /> {enviando ? 'Enviando...' : 'Enviar Imagem'}
+        </button>
+        {preview && (
+          <button
+            type="button"
+            onClick={handleRemover}
+            disabled={removendo || enviando}
+            className="flex items-center gap-1.5 text-sm text-error hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-60"
+          >
+            <Trash2 size={14} /> {removendo ? 'Removendo...' : 'Remover'}
+          </button>
+        )}
+        {enviado && <span className="text-sm text-primary">Imagem atualizada.</span>}
+      </div>
+
+      <p className="mt-2 text-[0.7rem] text-on-variant">Formatos aceitos: JPG, PNG ou WEBP — até 5MB.</p>
+
+      {erro && <p className="mt-2 text-sm text-error">{erro}</p>}
+    </div>
+  );
+}
+
+// Fundo da tela de login (login_background_url) — mesmo padrão do
+// HeroDestaqueCard acima (upload restrito a jpg/png/webp + botão de
+// remover), campo próprio, isolado de qualquer outro fundo da plataforma.
+// Sem imagem cadastrada, a tela de login cai no fallback estático
+// /hero-destaque.png (ver app/login/page.tsx e components/LoginPageClient.tsx)
+// — nunca fica sem fundo.
+function LoginBackgroundCard({ loginBackgroundAtual }: { loginBackgroundAtual: string | null }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(loginBackgroundAtual);
+  const [arquivoSelecionado, setArquivoSelecionado] = useState<File | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState(false);
+  const [removendo, setRemovendo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  function handleSelecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const arquivo = e.target.files?.[0] ?? null;
+    setArquivoSelecionado(arquivo);
+    setErro(null);
+    setEnviado(false);
+    if (arquivo) setPreview(URL.createObjectURL(arquivo));
+  }
+
+  async function handleUpload() {
+    if (!arquivoSelecionado) return;
+    setEnviando(true);
+    setErro(null);
+    try {
+      const formData = new FormData();
+      formData.set('arquivo', arquivoSelecionado);
+      const url = await uploadLoginBackground(formData);
+      setPreview(url);
+      setArquivoSelecionado(null);
+      if (inputRef.current) inputRef.current.value = '';
+      setEnviado(true);
+      setTimeout(() => setEnviado(false), 2500);
+    } catch (err: any) {
+      setErro(err.message ?? 'Erro ao enviar a imagem.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function handleRemover() {
+    setRemovendo(true);
+    setErro(null);
+    setEnviado(false);
+    try {
+      await removerLoginBackground();
+      setPreview(null);
+      setArquivoSelecionado(null);
+      if (inputRef.current) inputRef.current.value = '';
+    } catch (err: any) {
+      setErro(err.message ?? 'Erro ao remover a imagem.');
+    } finally {
+      setRemovendo(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg bg-card p-6">
+      <div className="mb-4 flex items-center gap-2 text-primary">
+        <LogIn size={18} />
+        <h2 className="font-semibold text-white">Fundo da Tela de Login</h2>
+      </div>
+
+      <p className="mb-3 text-xs text-on-variant">
+        Imagem de fundo em tela cheia atrás do card de login. Sem imagem cadastrada, a tela usa uma imagem padrão —
+        nunca fica sem fundo.
+      </p>
+
+      {preview ? (
+        <div className="mb-3 aspect-video w-full overflow-hidden rounded bg-surface-lowest">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt="Prévia do fundo da tela de login" className="h-full w-full object-cover" />
+        </div>
+      ) : (
+        <div className="mb-3 flex aspect-video w-full items-center justify-center rounded border border-dashed border-border/60 bg-surface-lowest text-xs text-on-variant">
+          Nenhuma imagem cadastrada — usando a imagem padrão
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleSelecionarArquivo}
+          className="hidden"
+          id="login-background-input"
+        />
+        <label htmlFor="login-background-input" className="btn-secondary cursor-pointer">
           {preview ? 'Trocar imagem' : 'Escolher imagem'}
         </label>
         <button

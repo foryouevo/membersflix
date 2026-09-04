@@ -11,6 +11,9 @@ const HERO_DESTAQUE_PATH_PREFIX = 'configuracoes/hero-destaque';
 // Whitelist do upload do hero em destaque (item explícito do pedido — os
 // outros uploads desta tela aceitam qualquer image/*, esse não).
 const HERO_DESTAQUE_TIPOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp'];
+const LOGIN_BACKGROUND_PATH_PREFIX = 'configuracoes/login-background';
+// Mesma whitelist do hero em destaque — pedido explícito (jpg/png/webp).
+const LOGIN_BACKGROUND_TIPOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp'];
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -148,4 +151,60 @@ export async function removerHeroDestaque() {
 
   revalidatePath('/admin/configuracoes');
   revalidatePath('/membros/vitrine');
+}
+
+// Imagem de fundo da tela de login — campo próprio (login_background_url),
+// ver migração 009_login_background.sql. Sem valor, a tela de login cai no
+// fallback estático /hero-destaque.png (app/login/page.tsx). Só aceita
+// jpg/png/webp (tiposPermitidos), igual ao upload do hero em destaque.
+export async function uploadLoginBackground(formData: FormData) {
+  await assertAdmin();
+
+  const arquivo = formData.get('arquivo');
+  if (!(arquivo instanceof File)) throw new Error('Selecione uma imagem.');
+
+  // TEMPORÁRIO — log de diagnóstico pro erro "Invalid Compact JWS" relatado
+  // (item 3 do pedido: capturar o erro completo antes do catch genérico do
+  // client, que só vê `err.message`). Remover depois de confirmado o que
+  // está causando isso — não é lógica permanente.
+  const admin = createAdminClient();
+  let url: string;
+  try {
+    url = await uploadImagemPublica(admin, arquivo, LOGIN_BACKGROUND_PATH_PREFIX, {
+      tiposPermitidos: LOGIN_BACKGROUND_TIPOS_PERMITIDOS,
+    });
+  } catch (err) {
+    console.error('[uploadLoginBackground] Falha no upload pro Storage — erro completo:', err);
+    throw err;
+  }
+
+  const { error: erroSalvar } = await admin
+    .from('configuracoes')
+    .update({ login_background_url: url, updated_at: new Date().toISOString() })
+    .eq('id', 1);
+  if (erroSalvar) {
+    console.error('[uploadLoginBackground] Falha ao salvar login_background_url — erro completo:', erroSalvar);
+    throw new Error(erroSalvar.message);
+  }
+
+  revalidatePath('/admin/configuracoes');
+  revalidatePath('/login');
+  return url;
+}
+
+// "Remover": limpa o campo no banco — a tela de login volta pro fallback
+// estático /hero-destaque.png na hora (não apaga o arquivo do Storage, mesmo
+// motivo do removerHeroDestaque acima: path fixo/upsert, um novo upload já
+// sobrescreve, manter o órfão não atrapalha).
+export async function removerLoginBackground() {
+  await assertAdmin();
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from('configuracoes')
+    .update({ login_background_url: null, updated_at: new Date().toISOString() })
+    .eq('id', 1);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/admin/configuracoes');
+  revalidatePath('/login');
 }

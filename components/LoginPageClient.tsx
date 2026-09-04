@@ -9,9 +9,14 @@ import { verificarStatusPorEmail } from '@/app/login/actions';
 import TrocarSenhaModal from '@/components/TrocarSenhaModal';
 import { preloadLoginIntro, playLoginIntro } from '@/lib/loginIntro';
 
-// TESTE VISUAL: true = fundo em degradê (padrão da Home); false = volta pra
-// imagem estática original (/imagens/telalogin.png). Ver bloco no JSX abaixo.
-const USE_GRADIENT_BACKGROUND = true;
+// TESTE VISUAL: qual fundo mostrar atrás do card de login — 'gradiente'
+// (glow radial vermelho, padrão da Home), 'imagem-estatica' (a arte
+// original, /imagens/telalogin.png) ou 'banner-netflix' (a mesma imagem do
+// card de destaque da Home, public/bannerNetflix.jpg, cobrindo a tela cheia
+// — pedido explícito, novo teste). Trocar aqui alterna entre os três sem
+// apagar nenhum dos blocos (era um boolean USE_GRADIENT_BACKGROUND antes,
+// virou essa union por causa da terceira opção).
+const FUNDO_LOGIN: 'gradiente' | 'imagem-estatica' | 'banner-netflix' = 'banner-netflix';
 
 export default function LoginPageClient({
   desenvolvidoPor,
@@ -19,12 +24,18 @@ export default function LoginPageClient({
   telefoneContato,
   termosUsoUrl,
   numeroWhatsapp,
+  loginBackgroundUrl,
 }: {
   desenvolvidoPor: string | null;
   emailContato: string | null;
   telefoneContato: string | null;
   termosUsoUrl: string | null;
   numeroWhatsapp: string | null;
+  // Fundo em tela cheia configurável pelo admin (Admin > Configurações >
+  // Fundo da Tela de Login). null: cai no fallback estático
+  // /hero-destaque.png, ver uso mais abaixo (bloco FUNDO_LOGIN ===
+  // 'banner-netflix') — a tela nunca fica sem imagem de fundo.
+  loginBackgroundUrl: string | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -114,28 +125,33 @@ export default function LoginPageClient({
   const temRodape = !!(desenvolvidoPor || emailContato || telefoneContato || termosUsoUrl);
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-background">
+    // overflow-hidden (novo, item 1 do pedido): container raiz das 3
+    // camadas (imagem/overlay/card) — nenhuma delas deveria vazar pra fora
+    // dos limites da tela, então isso é só uma trava de segurança, sem
+    // efeito visual esperado no dia a dia.
+    <div className="relative min-h-screen w-full overflow-hidden flex flex-col bg-background">
       {/* TESTE VISUAL: fundo em degradê (glow radial vermelho no canto
           superior, mesma paleta do tema — background #0f0f0f / primary
-          #e50914) no lugar da imagem estática. Pra reverter, é só trocar
-          USE_GRADIENT_BACKGROUND pra false abaixo — o bloco da imagem
-          original foi mantido intacto, só fica oculto enquanto a flag
-          estiver true.
-          Só o radial fica: existia também um linear diagonal por baixo dele
-          (bg-gradient-to-br from-primary/25 via-background to-background)
-          que criava uma segunda mancha avermelhada, no canto superior
-          ESQUERDO — não confundir com o radial abaixo, que nasce no
-          topo-CENTRO (at 50% -10%) e é o único gradiente que deve
-          permanecer aqui; removido por pedido explícito, sem alterar
-          posição/cores/opacidade/tamanho do radial. */}
-      {USE_GRADIENT_BACKGROUND ? (
+          #e50914), a imagem estática original ou o banner de tela cheia —
+          qual dos três aparece é definido pela constante FUNDO_LOGIN, acima.
+          Só o radial fica no caso 'gradiente': existia também um linear
+          diagonal por baixo dele (bg-gradient-to-br from-primary/25
+          via-background to-background) que criava uma segunda mancha
+          avermelhada, no canto superior ESQUERDO — não confundir com o
+          radial abaixo, que nasce no topo-CENTRO (at 50% -10%) e é o único
+          gradiente que deve permanecer aqui; removido por pedido explícito
+          numa tarefa anterior, sem alterar posição/cores/opacidade/tamanho
+          do radial. */}
+      {FUNDO_LOGIN === 'gradiente' && (
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-background">
           <div
             className="absolute inset-0"
             style={{ background: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(229,9,20,0.35), transparent 70%)' }}
           />
         </div>
-      ) : (
+      )}
+
+      {FUNDO_LOGIN === 'imagem-estatica' && (
         /* Imagem cobre a tela inteira (cover/center/no-repeat, sem distorcer —
            cover preserva a proporção original, só recorta o que sobra). Os
            elementos geométricos da arte ficam nos cantos opostos (topo-direito
@@ -149,12 +165,79 @@ export default function LoginPageClient({
           style={{ backgroundImage: "url('/imagens/telalogin.png')" }}
         />
       )}
+
+      {FUNDO_LOGIN === 'banner-netflix' && (
+        <>
+          {/* loginBackgroundUrl (Admin > Configurações > Fundo da Tela de
+              Login) — era um src fixo ("/bannerNetflix.jpg", depois
+              cogitado trocar pra "/hero-destaque.png") antes de virar
+              configurável pelo admin, pedido explícito. Sem valor
+              cadastrado ainda (upload nunca feito, ou removido pelo
+              admin): cai em "/hero-destaque.png" como fallback — a tela
+              nunca fica sem fundo. z-0 (não -z-10 — trocado numa tarefa
+              anterior: z-index NEGATIVO depende de nenhum ancestral no
+              caminho criar um stacking context isolado sem querer, senão
+              o elemento "vaza" pra fora da comparação esperada; z-0/10/20,
+              todos positivos e explícitos, comparados dentro do MESMO
+              contexto — o do container raiz, que não tem z-index próprio
+              — não têm essa ambiguidade: 0 < 10 < 20 sempre, sem depender
+              de nenhum comportamento implícito). */}
+          <Image
+            src={loginBackgroundUrl || '/hero-destaque.png'}
+            alt=""
+            fill
+            priority
+            className="z-0 object-cover object-center"
+          />
+          {/* Overlay em degradê RADIAL (era bg-gradient-to-br diagonal
+              preto/vermelho, trocado por pedido explícito) — mesma forma do
+              gradiente do <body> do sistema (app/globals.css:
+              radial-gradient(100% 60% at 50% 0%, ...), vermelho nascendo no
+              topo-centro e irradiando pra baixo/cantos), só que com
+              transparência (rgba, não hex sólido) em cada stop, pra
+              deixar a imagem de fundo perceptível por trás — principalmente
+              nas bordas e na parte de baixo da tela, onde o degradê do body
+              já clareia bastante. style inline (não classes Tailwind):
+              radial-gradient com múltiplos stops em rgba não tem um
+              utilitário Tailwind equivalente, mesmo padrão já usado no
+              glow radial da opção 'gradiente' deste arquivo (acima) e no
+              próprio <body>. z-10: acima da imagem (z-0), abaixo do
+              <main>/card (z-20, ver abaixo) — não é o mesmo <div>
+              compartilhado logo adiante (que só renderiza pros outros dois
+              fundos), pra não empilhar dois overlays. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-10"
+            style={{
+              backgroundImage:
+                'radial-gradient(100% 60% at 50% 0%, rgba(92,32,32,0.9) 0%, rgba(58,26,26,0.8) 30%, rgba(36,23,23,0.7) 55%, rgba(20,20,20,0.85) 100%)',
+            }}
+          />
+        </>
+      )}
+
       {/* Overlay escuro por cima do fundo — garante contraste do texto que
           fica direto sobre ele (logo, subtítulo, rodapé), sem um card atrás.
-          O formulário em si já tem bg-card opaco (abaixo). */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-black/45" />
+          O formulário em si já tem bg-card opaco (abaixo). Só pros dois
+          fundos "antigos" (sem z-index próprio, dependem da ordem no DOM) —
+          'banner-netflix' já tem o overlay dedicado dele acima, com seu
+          próprio z-index; renderizar este aqui TAMBÉM nesse caso empilharia
+          os dois overlays. */}
+      {FUNDO_LOGIN !== 'banner-netflix' && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-black/45" />
+      )}
 
-      <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-12">
+      {/* z-20 (era z-10) — item 5 do pedido: <main> já criava seu próprio
+          stacking context (position:relative + z-index não-auto), então o
+          z-20 do card, mais abaixo, só é comparado DENTRO deste contexto,
+          não diretamente contra a imagem/overlay acima; quem decide onde
+          o bloco main+card inteiro fica na pilha, em relação aos dois
+          irmãos de fundo, é o z-index do PRÓPRIO <main>. Antes era z-10,
+          empatando com o overlay do banner (também z-10) — funcionava por
+          desempate de ordem no DOM (o <main> vem depois no JSX), mas de
+          forma implícita; z-20 remove essa ambiguidade, deixando 0 < 10 <
+          20 explícito em vez de depender de quem foi escrito primeiro. */}
+      <main className="relative z-20 flex flex-1 flex-col items-center justify-center px-4 py-12">
         {/* Logo + subtítulo centralizados, acima do card */}
         <div className="mb-8 flex flex-col items-center text-center">
           <Image src="/logo.png" alt="MembersFlix" width={220} height={44} priority className="h-10 w-auto object-contain" />
@@ -168,7 +251,12 @@ export default function LoginPageClient({
             laterais) — com o blur, isso lia como uma mancha solta se
             deslocando atrás do card em vez de um contorno acompanhando o
             perímetro. Card só com bg-card + rounded-xl por enquanto. */}
-        <div className="w-full max-w-md rounded-xl bg-card p-8">
+        {/* z-20 explícito (item 4 do pedido) — redundante com o z-20 do
+            <main> pai (que já garante isso sozinho, ver comentário lá),
+            mas documentado aqui também: se algum dia o card ganhar um
+            irmão dentro do <main> que precise ficar atrás dele, o z-20
+            já está declarado no lugar certo, sem depender só do pai. */}
+        <div className="relative z-20 w-full max-w-md rounded-xl bg-card p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-on-surface">

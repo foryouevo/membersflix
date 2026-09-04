@@ -85,6 +85,45 @@ body {
   filter: grayscale(1);
 }
 
+/* Thumb customizado (bolinha vermelha) do slider de volume do player de
+   vídeo customizado (VideoPlayer.tsx) — bug relatado: sem isso, o slider só
+   contava com `accent-primary` (Tailwind, accent-color: #e50914) pra tingir
+   o thumb NATIVO do navegador de vermelho; isso funciona bem em Chrome/
+   Firefox/Safari desktop, mas o suporte de accent-color especificamente pro
+   thumb é inconsistente em navegadores mobile (alguns ignoram a cor pro
+   thumb e caem pro cinza padrão da plataforma, mesmo tingindo a trilha
+   certinho) — daí a "barrinha cinza" relatada. Desenhando o thumb à mão
+   (mesma técnica nos dois vendor prefixes) o resultado fica idêntico em
+   qualquer navegador/largura, sem depender de como cada um interpreta
+   accent-color. -webkit-appearance/appearance: none no próprio input (classe
+   `appearance-none` do Tailwind já cobre isso — mantido aqui como reforço
+   explícito, já que é justamente o que o navegador exige pra aceitar um
+   thumb customizado) + a versão ::-webkit-appearance: none/appearance: none
+   DENTRO do próprio ::-webkit-slider-thumb (abaixo) — sem isso o Chrome/
+   Safari ignoram o restante das propriedades do pseudo-elemento e desenham
+   o thumb nativo por cima mesmo assim. */
+.volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: #e50914;
+  cursor: pointer;
+}
+.volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: #e50914;
+  border: none;
+  cursor: pointer;
+}
+
 /* Campos de Email/Senha da tela de login: fundo #131313 explícito (mais
    escuro que o bg-card padrão de .input-field), texto digitado claro e
    placeholder em cinza médio — só nesses dois campos, não em .input-field

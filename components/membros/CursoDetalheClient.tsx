@@ -49,13 +49,11 @@ export default function CursoDetalheClient({
       {/* Hero: capa do curso, conteúdo (badge/título/descrição/botão) ancorado
           embaixo e à esquerda, sobre um gradiente — mesmo padrão reutilizado
           pra qualquer curso, tudo vindo de `curso` (nada fixo tipo "UI UX
-          DESIGN PRO" hardcoded). Altura no mobile: intrínseca ao conteúdo
-          (sem h-[Xvh] forçado) — o hero só ocupa o que precisa, sem
-          "adivinhar" uma porcentagem da tela, sobrando o máximo possível pra
-          seção de módulos (que é onde o card de 24.5rem precisa caber). Em
-          sm: volta a ser h-[44vh] fixo, como sempre foi. */}
+          DESIGN PRO" hardcoded). h-[36vh] no mobile (era intrínseco ao
+          conteúdo, sem altura forçada — trocado por pedido explícito) /
+          sm:h-[44vh] a partir de sm, como sempre foi. */}
       <div
-        className={`relative flex w-full shrink-0 items-center overflow-hidden sm:h-[44vh] ${!hasAccess ? 'locked-card' : ''}`}
+        className={`relative flex h-[36vh] w-full shrink-0 items-center overflow-hidden sm:h-[44vh] ${!hasAccess ? 'locked-card' : ''}`}
       >
         {curso.capa_url && <Image src={curso.capa_url} alt={curso.titulo} fill priority className="object-cover" />}
 
@@ -78,7 +76,7 @@ export default function CursoDetalheClient({
             </div>
           )}
 
-          <h1 className="text-[2.3rem] font-bold leading-tight text-white drop-shadow-lg sm:text-[3.5rem]">{curso.titulo}</h1>
+          <h1 className="text-[2rem] font-bold leading-tight text-white drop-shadow-lg sm:text-[3.5rem]">{curso.titulo}</h1>
 
           {curso.descricao && (
             <p className="mt-1.5 line-clamp-2 max-w-md text-sm leading-relaxed text-on-variant sm:mt-2 sm:line-clamp-3">{curso.descricao}</p>
@@ -219,7 +217,7 @@ function SecoesDeModulos({
             // Carousel trata isso normal, só sem setas (só 1 item).
             modulos={filhos.length > 0 ? filhos : [item]}
             titulo={formatTitulo(item.titulo)}
-            titleClassName="ml-[10px] font-medium text-2xl text-white"
+            titleClassName="ml-[10px] font-medium text-[1.3rem] text-white sm:text-2xl"
             hasAccess={hasAccess}
             trialModuloUnicoId={trialModuloUnicoId}
             onClickLocked={onClickLocked}
@@ -272,11 +270,12 @@ function ModuloCarrosselSecao({
       // py-6 (24px) cobre o scale-[1.04] do hover + a sombra sem cortar em
       // cima/embaixo; px-2 dá margem pros cards das pontas.
       trackClassName="flex gap-4 px-2 py-6"
-      // Largura fixa (17rem, igual em qualquer breakpoint — sem variação por
-      // sm:/lg: como antes), com aspect-[3/4] continuando a definir a altura
-      // a partir dela. shrink-0 impede o flex do carrossel (trackClassName)
-      // de comprimir o card.
-      itemClassName="aspect-[3/4] w-[17rem] shrink-0"
+      // w-[15rem] no mobile (era 17rem fixo em qualquer largura) / sm:w-[17rem]
+      // a partir de sm — trocado por pedido explícito; aspect-[3/4] continua
+      // definindo a altura a partir da largura, em qualquer breakpoint.
+      // shrink-0 impede o flex do carrossel (trackClassName) de comprimir o
+      // card.
+      itemClassName="aspect-[3/4] w-[15rem] shrink-0 sm:w-[17rem]"
       renderItem={(modulo) => (
         <ModuloCard
           modulo={modulo}

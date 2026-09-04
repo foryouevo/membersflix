@@ -7,6 +7,10 @@ type LoginConfig = {
   telefone_contato: string | null;
   termos_uso_url: string | null;
   numero_whatsapp: string | null;
+  // Fundo em tela cheia da tela de login, configurável pelo admin (Admin >
+  // Configurações > Fundo da Tela de Login). null: LoginPageClient cai no
+  // fallback estático /hero-destaque.png.
+  login_background_url: string | null;
 };
 
 // Busca a config da tela de login: o rodapé (Configurações > Rodapé da Tela
@@ -25,13 +29,14 @@ async function buscarLoginConfig(): Promise<LoginConfig> {
     telefone_contato: null,
     termos_uso_url: null,
     numero_whatsapp: null,
+    login_background_url: null,
   };
 
   try {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('configuracoes')
-      .select('desenvolvido_por, email_contato, telefone_contato, termos_uso_url, numero_whatsapp')
+      .select('desenvolvido_por, email_contato, telefone_contato, termos_uso_url, numero_whatsapp, login_background_url')
       .eq('id', 1)
    .maybeSingle() as { data: any, error: any };
 
@@ -46,6 +51,7 @@ async function buscarLoginConfig(): Promise<LoginConfig> {
       telefone_contato: data?.telefone_contato ?? null,
       termos_uso_url: data?.termos_uso_url ?? null,
       numero_whatsapp: data?.numero_whatsapp ?? null,
+      login_background_url: data?.login_background_url ?? null,
     };
   } catch (err) {
     console.error('[login] Erro inesperado ao buscar configuracoes (seguindo com fallback vazio):', err);
@@ -66,6 +72,7 @@ export default async function LoginPage() {
       telefoneContato={config.telefone_contato}
       termosUsoUrl={config.termos_uso_url}
       numeroWhatsapp={config.numero_whatsapp}
+      loginBackgroundUrl={config.login_background_url}
     />
   );
 }

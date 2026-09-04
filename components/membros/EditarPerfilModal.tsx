@@ -5,16 +5,18 @@ import { useRouter } from 'next/navigation';
 import { Pencil, Upload } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { atualizarMeuPerfil } from '@/app/membros/perfil/actions';
-import { initials } from '@/lib/utils';
+import { cn, initials } from '@/lib/utils';
 
 export default function EditarPerfilModal({
   nomeAtual,
   telefoneAtual,
   avatarAtual,
+  className,
 }: {
   nomeAtual: string;
   telefoneAtual: string;
   avatarAtual: string | null;
+  className?: string;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,7 +74,7 @@ export default function EditarPerfilModal({
 
   return (
     <>
-      <button type="button" onClick={handleOpen} className="btn-secondary flex items-center gap-2">
+      <button type="button" onClick={handleOpen} className={cn('btn-secondary flex items-center justify-center gap-2', className)}>
         <Pencil size={16} />
         Alterar Informações
       </button>

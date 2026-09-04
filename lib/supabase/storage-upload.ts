@@ -42,6 +42,11 @@ export async function uploadImagemPublica(
   const caminho = `${caminhoBase}.${extensao}`;
   const bytes = Buffer.from(await arquivo.arrayBuffer());
 
+  // TEMPORÁRIO — diagnóstico do "Invalid Compact JWS" relatado (item 2 do
+  // pedido). Só o comprimento, nunca a chave em si. Remover depois de
+  // confirmado o que está causando isso.
+  console.log('tamanho da service role key:', process.env.SUPABASE_SERVICE_ROLE_KEY?.length);
+
   const { error: erroUpload } = await admin.storage.from(bucket).upload(caminho, bytes, {
     contentType: arquivo.type,
     upsert: true,
