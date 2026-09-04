@@ -149,8 +149,27 @@ function CustomVideoPlayer({
   voltarLabel,
 }: VideoPlayerProps) {
   const supabase = createClient();
-  const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Pega o <video> DE VERDADE renderizado pelo react-player, direto no DOM
+  // — mesmo padrão já usado em togglePip() logo abaixo. NÃO existe mais um
+  // ref pro componente <ReactPlayer/> em si (removido — ver comentário
+  // dele mais abaixo): next/dynamic (usado pra importar o react-player só
+  // no client, ver topo do arquivo) embrulha o componente carregado num
+  // wrapper interno do Next ("LoadableComponent") que NÃO é forwardRef —
+  // então um `ref` posto no <ReactPlayer/> nunca chega no player de
+  // verdade (o React descarta e avisa no console: "Function components
+  // cannot be given refs"). playerRef.current.seekTo() SEMPRE foi
+  // silenciosamente um no-op por causa disso — inclusive o "retomar de
+  // onde parou" no onReady, abaixo — era esse o motivo real de arrastar a
+  // barra (e o seek em geral) não funcionar, em qualquer navegador/
+  // dispositivo (não é algo específico de iOS/mobile, então não tem
+  // relação com playsInline). Manipular o elemento <video> nativo direto
+  // (currentTime) contorna o problema por completo, sem precisar mexer em
+  // como o react-player é importado.
+  function pegarVideo(): HTMLVideoElement | null {
+    return containerRef.current?.querySelector('video') ?? null;
+  }
 
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState(false);
@@ -260,7 +279,7 @@ function CustomVideoPlayer({
     }
 
     const container = containerRef.current;
-    const video = container?.querySelector('video') as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+    const video = pegarVideo() as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
 
     if (container && typeof container.requestFullscreen === 'function') {
       container.requestFullscreen().catch(() => video?.webkitEnterFullscreen?.());
@@ -270,7 +289,7 @@ function CustomVideoPlayer({
   }
 
   function togglePip() {
-    const video = containerRef.current?.querySelector('video');
+    const video = pegarVideo();
     if (!video) return;
     if (document.pictureInPictureElement) {
       document.exitPictureInPicture();
@@ -313,7 +332,6 @@ function CustomVideoPlayer({
       <BotaoVoltar href={voltarHref} label={voltarLabel} />
 
       <ReactPlayer
-        ref={playerRef}
         url={videoUrl}
         playing={playing}
         volume={volume}
@@ -343,7 +361,13 @@ function CustomVideoPlayer({
         playsinline
         onReady={() => {
           setReady(true);
-          if (posicaoInicial > 0) playerRef.current?.seekTo(posicaoInicial, 'seconds');
+          // posicaoInicial já vem em segundos — atribuir direto em
+          // currentTime (ver pegarVideo(), acima) em vez do antigo
+          // playerRef.current?.seekTo(), que nunca funcionou de verdade.
+          if (posicaoInicial > 0) {
+            const video = pegarVideo();
+            if (video) video.currentTime = posicaoInicial;
+          }
         }}
         onDuration={setDuration}
         onProgress={(state: any) => !seeking && setPlayed(state.played)}
@@ -417,7 +441,14 @@ function CustomVideoPlayer({
           onChange={(e) => setPlayed(Number(e.target.value))}
           onMouseUp={(e) => {
             setSeeking(false);
-            playerRef.current?.seekTo(Number((e.target as HTMLInputElement).value));
+            // value é uma FRAÇÃO (0-1, ver min/max acima) — precisa
+            // multiplicar pela duração pra virar segundos, que é o que
+            // currentTime espera (playerRef.current?.seekTo() fazia essa
+            // conversão sozinho internamente; currentTime não, é sempre em
+            // segundos).
+            const fracao = Number((e.target as HTMLInputElement).value);
+            const video = pegarVideo();
+            if (video && duration > 0) video.currentTime = fracao * duration;
           }}
           className="mb-2 h-1 w-full cursor-pointer appearance-none rounded-full bg-border accent-primary"
         />
