@@ -172,6 +172,31 @@ function CustomVideoPlayer({
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
+  // webkitEnterFullscreen() (fallback do iOS, usado em toggleFullscreen
+  // abaixo) é uma API própria da Apple — não faz parte da Fullscreen API
+  // padrão, então não dispara 'fullscreenchange' nem atualiza
+  // document.fullscreenElement (o listener acima não pega esse caso). Sem
+  // isso, o ícone do botão (Maximize/Minimize) ficaria travado errado
+  // depois de entrar/sair desse fullscreen nativo pelo iOS. Os eventos
+  // certos pra esse caso são webkitbeginfullscreen/webkitendfullscreen,
+  // disparados pelo próprio <video>. Preso a `ready` (não a um efeito vazio
+  // no mount): o <video> interno do react-player só existe no DOM depois
+  // que o player montou de verdade — antes disso o querySelector abaixo
+  // sempre voltaria null.
+  useEffect(() => {
+    if (!ready) return;
+    const video = containerRef.current?.querySelector('video');
+    if (!video) return;
+    const onBegin = () => setFullscreen(true);
+    const onEnd = () => setFullscreen(false);
+    video.addEventListener('webkitbeginfullscreen', onBegin);
+    video.addEventListener('webkitendfullscreen', onEnd);
+    return () => {
+      video.removeEventListener('webkitbeginfullscreen', onBegin);
+      video.removeEventListener('webkitendfullscreen', onEnd);
+    };
+  }, [ready]);
+
   const salvarProgresso = useCallback(
     async (segundoAtual: number, concluida: boolean) => {
       await supabase.from('progresso_aulas').upsert(
@@ -205,11 +230,42 @@ function CustomVideoPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // iOS Safari no iPhone (antes do iOS 16.4) nunca implementou
+  // Element.requestFullscreen() em elementos arbitrários — só existe pro
+  // próprio <video>, via webkitEnterFullscreen() (API não-padrão da
+  // Apple, sem Promise, sem document.fullscreenElement correspondente —
+  // ver o efeito webkitbeginfullscreen/webkitendfullscreen acima, que é
+  // quem sincroniza o ícone nesse caso). Chamar requestFullscreen() no
+  // container nesses navegadores não dava erro nenhum, só não tinha
+  // efeito algum (a função existe no protótipo, só nunca resolve/nunca
+  // muda a tela) — por isso o botão "não fazia nada" depois do playsInline
+  // (antes, o vídeo já entrava sozinho no fullscreen nativo do iOS ao dar
+  // play, mascarando esse problema).
+  //
+  // Estratégia: tenta a API padrão primeiro (funciona em desktop, Android,
+  // iPad e iPhone 16.4+, mantendo os controles CUSTOMIZADOS — nada de
+  // controles nativos aparecendo). Só cai pro webkitEnterFullscreen() no
+  // <video> se o container não tiver requestFullscreen (iPhone mais
+  // antigo) ou se a chamada padrão for rejeitada. Ciente do trade-off: no
+  // fallback, é o PRÓPRIO iOS quem assume a tela — os controles nativos
+  // dele aparecem nessa hora, sem jeito de evitar (restrição da Apple, não
+  // bug daqui); mas isso só acontece quando o usuário aperta o botão de
+  // tela cheia de propósito, nunca mais sozinho ao só dar play (esse era o
+  // bug antigo, já corrigido pelo playsInline) — não é a mesma sobreposição
+  // de antes.
   function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen();
-    } else {
+    if (document.fullscreenElement) {
       document.exitFullscreen();
+      return;
+    }
+
+    const container = containerRef.current;
+    const video = container?.querySelector('video') as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null;
+
+    if (container && typeof container.requestFullscreen === 'function') {
+      container.requestFullscreen().catch(() => video?.webkitEnterFullscreen?.());
+    } else {
+      video?.webkitEnterFullscreen?.();
     }
   }
 
