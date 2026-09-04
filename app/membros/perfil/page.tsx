@@ -32,26 +32,29 @@ export default async function PerfilPage() {
 
   if (!profile) redirect('/membros/vitrine');
 
-  const [{ data: acessosRaw }, { data: aulas }, { data: progresso }] = (await Promise.all([
+  const [{ data: acessosRaw }, { data: progresso }] = (await Promise.all([
     supabase.from('acessos_curso').select('curso_id, bloqueado').eq('aluno_id', user.id),
-    supabase.from('aulas').select('id, modulo:modulos(curso_id)'),
     // Só concluida: sem o card "Aulas Concluídas" (removido), atualizado_em
     // não é mais usado em lugar nenhum da tela (era só pro badge "+N este
     // mês" desse card) — não busca à toa.
     supabase.from('progresso_aulas').select('concluida').eq('aluno_id', user.id),
-  ])) as [{ data: any[] | null }, { data: any[] | null }, { data: any[] | null }];
+  ])) as [{ data: any[] | null }, { data: any[] | null }];
 
   const meusCursoIds = (acessosRaw ?? []).filter((a) => !a.bloqueado).map((a) => a.curso_id);
-  const meusCursoIdsSet = new Set(meusCursoIds);
 
   // Progresso geral: aulas concluídas / total de aulas somando só os cursos
   // que o aluno de fato tem acesso hoje (não conta aulas de cursos que ele
-  // nunca teve ou que foram bloqueados).
-  let totalAulasDosMeusCursos = 0;
-  for (const a of aulas ?? []) {
-    const cursoId = (a as any).modulo?.curso_id;
-    if (cursoId && meusCursoIdsSet.has(cursoId)) totalAulasDosMeusCursos++;
-  }
+  // nunca teve ou que foram bloqueados). Filtra direto na query (via
+  // `modulos`) em vez de buscar a tabela `aulas` inteira (mais de 1200
+  // linhas hoje) e descartar tudo que não é de meusCursoIds depois.
+  const { data: modulosComAulas } =
+    meusCursoIds.length > 0
+      ? ((await supabase.from('modulos').select('aulas(id)').in('curso_id', meusCursoIds)) as {
+          data: { aulas: { id: string }[] }[] | null;
+        })
+      : { data: [] as { aulas: { id: string }[] }[] };
+  const totalAulasDosMeusCursos = (modulosComAulas ?? []).reduce((soma, m) => soma + (m.aulas ?? []).length, 0);
+
   const progressoRows = progresso ?? [];
   const aulasConcluidas = progressoRows.filter((p) => p.concluida).length;
   const progressoGeralPct = totalAulasDosMeusCursos > 0 ? Math.round((aulasConcluidas / totalAulasDosMeusCursos) * 100) : 0;

@@ -8,18 +8,27 @@ export default async function MeusCursosPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: acessos }, { data: aulas }, { data: progresso }, { data: config }] = (await Promise.all([
+  const [{ data: acessos }, { data: progresso }, { data: config }] = (await Promise.all([
     supabase.from('acessos_curso').select('curso_id, bloqueado, curso:cursos(*)').eq('aluno_id', user!.id),
-    supabase.from('aulas').select('id, modulo:modulos(curso_id)'),
     supabase.from('progresso_aulas').select('curso_id, concluida').eq('aluno_id', user!.id),
     supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle(),
-  ])) as [{ data: any[] | null }, { data: any[] | null }, { data: any[] | null }, { data: { numero_whatsapp: string | null } | null }];
+  ])) as [{ data: any[] | null }, { data: any[] | null }, { data: { numero_whatsapp: string | null } | null }];
+
+  // Nesta tela só existem cursos que o aluno tem alguma relação (comprou,
+  // mesmo que bloqueado) — dá pra filtrar a busca de aulas direto pelos
+  // curso_id de `acessos` em vez de buscar a tabela `aulas` inteira (mais
+  // de 1200 linhas hoje) só pra somar o total de cada curso.
+  const cursoIdsAqui = (acessos ?? []).map((a: any) => a.curso_id).filter(Boolean);
+  const { data: modulosComAulas } =
+    cursoIdsAqui.length > 0
+      ? ((await supabase.from('modulos').select('curso_id, aulas(id)').in('curso_id', cursoIdsAqui)) as {
+          data: { curso_id: string; aulas: { id: string }[] }[] | null;
+        })
+      : { data: [] as { curso_id: string; aulas: { id: string }[] }[] };
 
   const totalPorCurso = new Map<string, number>();
-  for (const a of aulas ?? []) {
-    const cursoId = (a as any).modulo?.curso_id;
-    if (!cursoId) continue;
-    totalPorCurso.set(cursoId, (totalPorCurso.get(cursoId) ?? 0) + 1);
+  for (const m of modulosComAulas ?? []) {
+    totalPorCurso.set(m.curso_id, (totalPorCurso.get(m.curso_id) ?? 0) + (m.aulas ?? []).length);
   }
   const concluidasPorCurso = new Map<string, number>();
   for (const p of (progresso ?? []) as any[]) {

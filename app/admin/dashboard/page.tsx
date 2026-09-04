@@ -6,10 +6,12 @@ export default async function DashboardPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: me } = await supabase.from('profiles').select('nome, avatar_url').eq('id', user!.id).single();
-
-  const [{ count: totalAlunos }, { count: alunosPagos }, { count: totalCursos }, { data: categorias }, { data: acessos }] =
+  // `me` (perfil do admin, só pro topbar) não depende de nenhuma das
+  // métricas abaixo — entra no mesmo Promise.all em vez de uma ida-e-volta
+  // à parte antes delas.
+  const [{ data: me }, { count: totalAlunos }, { count: alunosPagos }, { count: totalCursos }, { data: categorias }, { data: acessos }] =
     await Promise.all([
+      supabase.from('profiles').select('nome, avatar_url').eq('id', user!.id).single(),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('tipo', 'aluno'),
       supabase
         .from('profiles')

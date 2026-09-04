@@ -59,34 +59,50 @@ export default async function VitrinePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: cursos }, { data: acessosRaw }, { data: aulas }, { data: progresso }, config, { data: categorias }] =
-    await Promise.all([
-      // categoria:categorias(*) — mesmo padrão de join já usado em
-      // app/membros/curso/[id]/page.tsx e app/admin/cursos/page.tsx. Sem isso
-      // curso.categoria vem undefined (só categoria_id, o uuid cru) e não dá
-      // pra agrupar "Todos os Cursos" por categoria na Home.
-      supabase.from('cursos').select('*, categoria:categorias(*)').eq('status', 'active').order('ordem'),
-      supabase.from('acessos_curso').select('curso_id, bloqueado').eq('aluno_id', user!.id),
-      supabase.from('aulas').select('id, modulo:modulos(curso_id)'),
-      // aula_id/atualizado_em a mais (antes só curso_id/concluida): usados
-      // pra achar em qual aula o aluno estava mais recentemente, pro botão
-      // "Continuar assistindo" do banner — ver bloco abaixo.
-      supabase.from('progresso_aulas').select('curso_id, aula_id, concluida, atualizado_em').eq('aluno_id', user!.id),
-      buscarBannerConfig(supabase),
-      // Tabela crua (não via join de cursos) — usada só pela fileira de
-      // chips de categoria da Home mobile (CategoriaChipsMobile), pra
-      // aparecer mesmo categoria sem nenhum curso vinculado ainda (ex:
-      // "Idiomas"), o que o join acima nunca traria.
-      supabase.from('categorias').select('*').order('ordem'),
-    ]);
+  const [{ data: cursos }, { data: acessosRaw }, { data: progresso }, config, { data: categorias }] = await Promise.all([
+    // categoria:categorias(*) — mesmo padrão de join já usado em
+    // app/membros/curso/[id]/page.tsx e app/admin/cursos/page.tsx. Sem isso
+    // curso.categoria vem undefined (só categoria_id, o uuid cru) e não dá
+    // pra agrupar "Todos os Cursos" por categoria na Home.
+    supabase.from('cursos').select('*, categoria:categorias(*)').eq('status', 'active').order('ordem'),
+    supabase.from('acessos_curso').select('curso_id, bloqueado').eq('aluno_id', user!.id),
+    // aula_id/atualizado_em a mais (antes só curso_id/concluida): usados
+    // pra achar em qual aula o aluno estava mais recentemente, pro botão
+    // "Continuar assistindo" do banner — ver bloco abaixo.
+    supabase.from('progresso_aulas').select('curso_id, aula_id, concluida, atualizado_em').eq('aluno_id', user!.id),
+    buscarBannerConfig(supabase),
+    // Tabela crua (não via join de cursos) — usada só pela fileira de
+    // chips de categoria da Home mobile (CategoriaChipsMobile), pra
+    // aparecer mesmo categoria sem nenhum curso vinculado ainda (ex:
+    // "Idiomas"), o que o join acima nunca traria.
+    supabase.from('categorias').select('*').order('ordem'),
+  ]);
 
   const acessos = new Map<string, boolean>((acessosRaw ?? []).map((a: any) => [a.curso_id, !a.bloqueado]));
+  const todosCursos = (cursos ?? []) as Curso[];
+  // CourseCard só mostra a barra de progresso quando hasAccess é true (ver
+  // components/membros/CourseCard.tsx) — progressoPorCurso nunca é lido pra
+  // um curso que o aluno não tem acesso. Por isso o total de aulas só
+  // precisa ser calculado pros cursos que o aluno TEM acesso (meusCursos,
+  // computado abaixo), não pra todo mundo.
+  const meusCursos = todosCursos.filter((c) => acessos.get(c.id));
+  const meusCursoIds = meusCursos.map((c) => c.id);
+
+  // Total de aulas por curso: filtra direto na query (via `modulos`, que é
+  // onde mora o curso_id) em vez de buscar a tabela `aulas` inteira (mais de
+  // 1200 linhas hoje, crescendo com o catálogo) só pra descartar quase tudo
+  // depois — só os cursos do aluno importam aqui (ver comentário acima).
+  // `modulos.select('aulas(id)')` só traz o id de cada aula, só pra contar.
+  const { data: modulosComAulas } =
+    meusCursoIds.length > 0
+      ? ((await supabase.from('modulos').select('curso_id, aulas(id)').in('curso_id', meusCursoIds)) as {
+          data: { curso_id: string; aulas: { id: string }[] }[] | null;
+        })
+      : { data: [] as { curso_id: string; aulas: { id: string }[] }[] };
 
   const totalAulasPorCurso = new Map<string, number>();
-  for (const a of aulas ?? []) {
-    const cursoId = (a as any).modulo?.curso_id;
-    if (!cursoId) continue;
-    totalAulasPorCurso.set(cursoId, (totalAulasPorCurso.get(cursoId) ?? 0) + 1);
+  for (const m of modulosComAulas ?? []) {
+    totalAulasPorCurso.set(m.curso_id, (totalAulasPorCurso.get(m.curso_id) ?? 0) + (m.aulas ?? []).length);
   }
 
   const concluidasPorCurso = new Map<string, number>();
@@ -99,9 +115,6 @@ export default async function VitrinePage() {
     const concluidas = concluidasPorCurso.get(cursoId) ?? 0;
     progressoPorCurso.set(cursoId, total > 0 ? Math.round((concluidas / total) * 100) : 0);
   }
-
-  const todosCursos = (cursos ?? []) as Curso[];
-  const meusCursos = todosCursos.filter((c) => acessos.get(c.id));
 
   // Curso em destaque do card hero (CursoDestaque, agora igual em qualquer
   // largura de tela): reaproveita a mesma lógica de "o que importa agora

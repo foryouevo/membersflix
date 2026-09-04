@@ -9,22 +9,21 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
     data: { user },
   } = await supabase.auth.getUser();
 
-  // categoria:categorias(*) — junta a categoria real do curso (usada no badge
-  // do hero); antes a query só trazia categoria_id, então curso.categoria
-  // nunca vinha preenchido apesar do tipo Curso já prever esse campo.
-  const { data: curso } = await supabase.from('cursos').select('*, categoria:categorias(*)').eq('id', params.id).maybeSingle();
+  // curso/acesso/config não dependem um do outro (só de params.id/user.id,
+  // já disponíveis) — rodam em paralelo em vez de 3 idas-e-voltas em
+  // sequência. categoria:categorias(*) — junta a categoria real do curso
+  // (usada no badge do hero); antes a query só trazia categoria_id, então
+  // curso.categoria nunca vinha preenchido apesar do tipo Curso já prever
+  // esse campo.
+  const [{ data: curso }, { data: acesso }, { data: config }] = (await Promise.all([
+    supabase.from('cursos').select('*, categoria:categorias(*)').eq('id', params.id).maybeSingle(),
+    supabase.from('acessos_curso').select('bloqueado').eq('aluno_id', user!.id).eq('curso_id', params.id).maybeSingle(),
+    supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle(),
+  ])) as [{ data: any }, { data: any }, { data: any }];
+
   if (!curso) notFound();
 
-  const { data: acesso } = await supabase
-    .from('acessos_curso')
-    .select('bloqueado')
-    .eq('aluno_id', user!.id)
-    .eq('curso_id', params.id)
-   .maybeSingle() as any;
-
   const hasAccess = !!acesso && !acesso.bloqueado;
-
-   const { data: config } = await supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle() as any;
 
   let modulos: any[] = [];
   let jaComecou = false;
@@ -36,19 +35,19 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
   let trialModuloUnicoId: string | null = null;
 
   if (hasAccess) {
-    const { data } = await supabase
-      .from('modulos')
-      .select('*, aulas(*, documentos(*))')
-      .eq('curso_id', params.id)
-      .order('ordem');
+    // modulos/progresso/profile (status_pagamento, usado só mais abaixo pro
+    // cálculo do trial) não dependem um do outro — rodam em paralelo em vez
+    // de 3 idas-e-voltas em sequência (era: busca modulos, ESPERA, busca
+    // progresso, ESPERA... e o profile vinha bem mais abaixo, numa 3ª
+    // rodada separada).
+    const [{ data }, { data: progresso }, { data: profileTrial }] = (await Promise.all([
+      supabase.from('modulos').select('*, aulas(*, documentos(*))').eq('curso_id', params.id).order('ordem'),
+      supabase.from('progresso_aulas').select('aula_id, concluida').eq('aluno_id', user!.id).eq('curso_id', params.id),
+      supabase.from('profiles').select('status_pagamento').eq('id', user!.id).maybeSingle(),
+    ])) as [{ data: any[] | null }, { data: any[] | null }, { data: { status_pagamento: string } | null }];
     modulos = data ?? [];
 
-    const { data: progresso } = await supabase
-      .from('progresso_aulas')
-      .select('aula_id, concluida')
-      .eq('aluno_id', user!.id)
-      .eq('curso_id', params.id);
-const concluidaPorAula = new Map((progresso ?? []).map((p: any) => [p.aula_id, p.concluida]));
+    const concluidaPorAula = new Map((progresso ?? []).map((p: any) => [p.aula_id, p.concluida]));
     jaComecou = (progresso?.length ?? 0) > 0;
 
     modulos = modulos.map((m) => ({
@@ -57,6 +56,23 @@ const concluidaPorAula = new Map((progresso ?? []).map((p: any) => [p.aula_id, p
         .sort((a: any, b: any) => a.ordem - b.ordem)
         .map((a: any) => ({ ...a, concluida: concluidaPorAula.get(a.id) ?? false })),
     }));
+
+    // Diferente da versão anterior: módulo "pai" (guarda-chuva, ex: "[02]
+    // Filmmaking Avançado") continua na lista passada pro client — é o
+    // CursoDetalheClient quem decide como agrupar visualmente (seção
+    // própria por pai, com os filhos no carrossel dela). Aqui só o cálculo
+    // do trial precisa ignorar os pais: eles nunca têm aula própria, então
+    // não fazem sentido como "o Módulo 1 liberado" (mesma regra de sempre,
+    // só isolada numa lista à parte em vez de filtrar a lista principal).
+    // profileTrial já foi buscado junto com modulos/progresso acima — só
+    // precisa dos módulos já prontos (modulos.map logo acima) pra calcular.
+    if (profileTrial?.status_pagamento === 'pendente') {
+      const idsComFilho = new Set(modulos.map((m) => m.modulo_pai_id).filter(Boolean));
+      const folhas = modulos.filter((m) => !idsComFilho.has(m.id));
+      if (folhas.length > 0) {
+        trialModuloUnicoId = folhas.reduce((min: any, m: any) => (m.ordem < min.ordem ? m : min), folhas[0]).id;
+      }
+    }
   } else {
     // Estrutura só com títulos (sem video_url/documentos) para exibir o índice mesmo sem acesso.
     const admin = createAdminClient();
@@ -71,26 +87,6 @@ const concluidaPorAula = new Map((progresso ?? []).map((p: any) => [p.aula_id, p
         .sort((a: any, b: any) => a.ordem - b.ordem)
         .map((a: any) => ({ ...a, documentos: [], concluida: false })),
     }));
-  }
-
-  // Diferente da versão anterior: módulo "pai" (guarda-chuva, ex: "[02]
-  // Filmmaking Avançado") continua na lista passada pro client — é o
-  // CursoDetalheClient quem decide como agrupar visualmente (seção própria
-  // por pai, com os filhos no carrossel dela). Aqui só o cálculo do trial
-  // precisa ignorar os pais: eles nunca têm aula própria, então não fazem
-  // sentido como "o Módulo 1 liberado" (mesma regra de sempre, só isolada
-  // numa lista à parte em vez de filtrar a lista principal).
-  if (hasAccess) {
-    const { data: profile } = (await supabase.from('profiles').select('status_pagamento').eq('id', user!.id).maybeSingle()) as {
-      data: { status_pagamento: string } | null;
-    };
-    if (profile?.status_pagamento === 'pendente') {
-      const idsComFilho = new Set(modulos.map((m) => m.modulo_pai_id).filter(Boolean));
-      const folhas = modulos.filter((m) => !idsComFilho.has(m.id));
-      if (folhas.length > 0) {
-        trialModuloUnicoId = folhas.reduce((min: any, m: any) => (m.ordem < min.ordem ? m : min), folhas[0]).id;
-      }
-    }
   }
 
   const todasAulas = modulos.flatMap((m) => m.aulas);
