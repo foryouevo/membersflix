@@ -63,6 +63,36 @@ export function formatTitulo(titulo: string) {
     .replace(/^\p{Extended_Pictographic}+\s*/u, '');
 }
 
+// Capa padrão exibida no lugar da capa de um módulo quando ele não tem
+// nenhuma cadastrada — arquivo em public/, ver getCapaModulo abaixo.
+const CAPA_MODULO_PADRAO = '/modulo-capa-padrao.png';
+
+/**
+ * Resolve a URL da capa de um módulo com fallback centralizado: vazia, nula
+ * ou mal formada (não é uma URL válida) cai pra CAPA_MODULO_PADRAO, em vez
+ * de deixar o card sem imagem, quebrado, ou com ícone de erro do navegador.
+ * Só cobre o caso "não tem/está mal formada" — uma URL bem formada que
+ * aponta pra um arquivo que não existe mais (ex: apagado do Drive/Storage
+ * depois de cadastrada) só é pega em runtime, pelo onError do próprio
+ * <Image> de quem chama isto (ver ModuloCard em CursoDetalheClient.tsx).
+ *
+ * Centralizado aqui (em vez de repetir a checagem em cada lugar que exibe
+ * capa de módulo) pra não esquecer de aplicar o fallback num ponto novo no
+ * futuro — hoje só existe um lugar assim (ModuloCard), mas qualquer outro
+ * que vier a exibir capa_url de módulo deve chamar esta função em vez de
+ * usar o campo direto.
+ */
+export function getCapaModulo(url: string | null | undefined): string {
+  const limpa = url?.trim();
+  if (!limpa) return CAPA_MODULO_PADRAO;
+  try {
+    new URL(limpa);
+    return limpa;
+  } catch {
+    return CAPA_MODULO_PADRAO;
+  }
+}
+
 export function initials(name: string) {
   return name
     .split(' ')

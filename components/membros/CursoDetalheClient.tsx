@@ -7,7 +7,7 @@ import { Lock, Play } from 'lucide-react';
 import AccessModal from '@/components/membros/AccessModal';
 import Carousel from '@/components/membros/Carousel';
 import { useDificultarInspecao } from '@/hooks/useDificultarInspecao';
-import { formatTitulo } from '@/lib/utils';
+import { formatTitulo, getCapaModulo } from '@/lib/utils';
 import type { Aula, Curso, Documento, Modulo } from '@/types';
 
 type ModuloComAulas = Modulo & { aulas: (Aula & { documentos: Documento[]; concluida: boolean })[] };
@@ -305,6 +305,15 @@ function ModuloCard({
   // Continua de onde parou: primeira aula não assistida do módulo, ou a primeira aula se nenhuma foi assistida ainda.
   const proximaAulaDoModulo = modulo.aulas.find((a) => !a.concluida) ?? modulo.aulas[0] ?? null;
 
+  // getCapaModulo (lib/utils.ts) já resolve capa_url vazia/nula/mal formada
+  // pra CAPA_MODULO_PADRAO — capaComErro cobre o caso que só dá pra saber em
+  // runtime: URL bem formada mas que não carrega de verdade (arquivo
+  // apagado do Drive/Storage depois de cadastrada) — o <Image> abaixo troca
+  // pra ela sozinho via onError, em vez de ficar com o ícone de imagem
+  // quebrada do navegador.
+  const [capaComErro, setCapaComErro] = useState(false);
+  const capaSrc = capaComErro ? '/modulo-capa-padrao.png' : getCapaModulo(modulo.capa_url);
+
   const content = (
     // h-full em vez de aspect-[3/4]: a proporção 3/4 agora é definida no
     // wrapper do slide (ModulosCarousel), aqui só herda a altura/largura já
@@ -313,15 +322,14 @@ function ModuloCard({
       <div
         className={`relative h-full w-full overflow-hidden rounded-lg bg-surface-highest ring-1 ring-transparent transition-all duration-200 ease-out group-hover:scale-[1.04] group-hover:shadow-overlay group-hover:ring-primary/60 ${bloqueado ? 'locked-card' : ''}`}
       >
-        {modulo.capa_url && (
-          <Image
-            src={modulo.capa_url}
-            alt={modulo.titulo}
-            fill
-            className="object-cover"
-            sizes="320px"
-          />
-        )}
+        <Image
+          src={capaSrc}
+          alt={modulo.titulo}
+          fill
+          className="object-cover"
+          sizes="320px"
+          onError={() => setCapaComErro(true)}
+        />
 
         {/* Gradiente escuro na base pra legibilidade do nome do módulo por cima da imagem */}
         <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
