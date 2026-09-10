@@ -455,11 +455,18 @@ export default function PlayerPageClient({
             lg:pr-6: margem direita da página (simétrica ao lg:pl-14 da
             coluna de conteúdo) — o gap-6 da fileira acima já é o respiro
             ATÉ aqui, isso aqui é só o respiro depois daqui até a borda da
-            tela. lg:w-[32rem] (era lg:w-[28rem], antes disso lg:w-80/20rem):
-            largura fixa da sidebar em desktop, trocada por pedido explícito
-            — só entra em jogo a partir de lg (a <aside> é `hidden` abaixo
-            disso), então não afeta o mobile. */}
-        <aside className="hidden w-full shrink-0 flex-col border-t border-border/60 lg:flex lg:w-[32rem] lg:overflow-hidden lg:border-l lg:border-t-0 lg:pr-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh_-_6rem)]">
+            tela. lg:w-[22rem] xl:w-[32rem]: largura fixa da sidebar em duas
+            faixas de desktop — "notebook" (lg, 1024px+) com 22rem e
+            "desktop maior" (xl, 1280px+, sobrescreve lg a partir daí) com
+            32rem, valor que já era o de desktop antes desta tarefa (pedido
+            explícito: manter igual). Só entra em jogo a partir de lg (a
+            <aside> é `hidden` abaixo disso), então não afeta o mobile. A
+            coluna de conteúdo ao lado (flex-1, ver a div logo acima na
+            fileira) já ocupa automaticamente o que sobrar da largura em
+            cada uma das duas faixas — não precisa de ajuste complementar
+            nela, é exatamente pra isso que ela é flex-1 em vez de uma
+            largura própria fixa. */}
+        <aside className="hidden w-full shrink-0 flex-col border-t border-border/60 lg:flex lg:w-[22rem] xl:w-[32rem] lg:overflow-hidden lg:border-l lg:border-t-0 lg:pr-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh_-_6rem)]">
           {blocoModulo}
         </aside>
       </div>

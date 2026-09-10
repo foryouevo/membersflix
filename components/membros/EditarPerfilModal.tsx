@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Pencil, Upload } from 'lucide-react';
 import Modal from '@/components/Modal';
@@ -12,13 +12,37 @@ export default function EditarPerfilModal({
   telefoneAtual,
   avatarAtual,
   className,
+  // triggerLabel/variant: mesmo modal/formulário/submit de sempre — só o
+  // BOTÃO que abre ele muda de texto/cor conforme onde é usado (ex: "Editar
+  // Perfil" em destaque no card do topo da tela de Perfil vs. "Alterar
+  // Informações" ao lado de "Alterar Senha", mais abaixo). Sem isso, cada
+  // lugar precisaria de um componente próprio só pra trocar o rótulo do
+  // botão, duplicando toda a lógica de edição por baixo. Defaults batem
+  // exatamente com o único uso que já existia antes desta prop existir.
+  triggerLabel = 'Alterar Informações',
+  variant = 'secondary',
 }: {
   nomeAtual: string;
   telefoneAtual: string;
   avatarAtual: string | null;
   className?: string;
+  triggerLabel?: string;
+  variant?: 'primary' | 'secondary';
 }) {
   const router = useRouter();
+  // ids únicos por instância (useId): a tela de Perfil agora renderiza este
+  // componente DUAS vezes na mesma página (botão "Editar Perfil" no card do
+  // topo + "Alterar Informações" mais abaixo) — com id fixo, o segundo
+  // <label htmlFor="perfil-avatar-input"> (ou "perfil-nome"/"perfil-
+  // telefone") apontaria pro elemento da OUTRA instância (o navegador só
+  // associa o PRIMEIRO id igual que encontra no DOM), quebrando o clique em
+  // "Escolher foto"/o foco ao clicar no rótulo sempre que a instância que
+  // abre por último não for a primeira a aparecer no HTML. Como Modal.tsx
+  // desmonta por completo quando fechado (createPortal só entra no ar com
+  // open=true), as duas nunca chegam a coexistir no DOM ao mesmo tempo hoje
+  // (uma cobre a tela inteira, não dá pra abrir a outra por cima) — mas não
+  // é algo pra depender ficando refém dessa coincidência de UI.
+  const idBase = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [nome, setNome] = useState(nomeAtual);
@@ -74,9 +98,13 @@ export default function EditarPerfilModal({
 
   return (
     <>
-      <button type="button" onClick={handleOpen} className={cn('btn-secondary flex items-center justify-center gap-2', className)}>
+      <button
+        type="button"
+        onClick={handleOpen}
+        className={cn(variant === 'primary' ? 'btn-primary' : 'btn-secondary', 'flex items-center justify-center gap-2', className)}
+      >
         <Pencil size={16} />
-        Alterar Informações
+        {triggerLabel}
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Alterar informações" maxWidth="max-w-sm">
@@ -92,26 +120,33 @@ export default function EditarPerfilModal({
                 {initials(nome || 'Aluno')}
               </div>
             )}
-            <input ref={inputRef} type="file" accept="image/*" onChange={handleSelecionarArquivo} className="hidden" id="perfil-avatar-input" />
-            <label htmlFor="perfil-avatar-input" className="btn-secondary mt-3 flex cursor-pointer items-center gap-2 py-1.5 text-xs">
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleSelecionarArquivo}
+              className="hidden"
+              id={`${idBase}-avatar-input`}
+            />
+            <label htmlFor={`${idBase}-avatar-input`} className="btn-secondary mt-3 flex cursor-pointer items-center gap-2 py-1.5 text-xs">
               <Upload size={14} />
               Escolher foto
             </label>
           </div>
 
           <div>
-            <label htmlFor="perfil-nome" className="mb-1.5 block text-sm font-medium text-on-surface">
+            <label htmlFor={`${idBase}-nome`} className="mb-1.5 block text-sm font-medium text-on-surface">
               Nome
             </label>
-            <input id="perfil-nome" required value={nome} onChange={(e) => setNome(e.target.value)} className="input-field" />
+            <input id={`${idBase}-nome`} required value={nome} onChange={(e) => setNome(e.target.value)} className="input-field" />
           </div>
 
           <div>
-            <label htmlFor="perfil-telefone" className="mb-1.5 block text-sm font-medium text-on-surface">
+            <label htmlFor={`${idBase}-telefone`} className="mb-1.5 block text-sm font-medium text-on-surface">
               Telefone
             </label>
             <input
-              id="perfil-telefone"
+              id={`${idBase}-telefone`}
               value={telefone}
               onChange={(e) => setTelefone(e.target.value)}
               placeholder="(28) 99999-9999"

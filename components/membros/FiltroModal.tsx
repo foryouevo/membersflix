@@ -142,9 +142,21 @@ export default function FiltroModal({
     setInstrutorNomes((prev) => (prev.includes(nome) ? prev.filter((x) => x !== nome) : [...prev, nome]));
   }
 
+  // BUG corrigido: antes só limpava o rascunho local (setCategoriaIds/
+  // setInstrutorNomes daqui de cima) — a seleção "de verdade" (categoriaIds
+  // Ativos/instrutorNomesAtivos, dono é o pai — Header.tsx) nunca era
+  // tocada. Fechar sem clicar em "Aplicar" descarta o rascunho por design
+  // (ver o useEffect de reset no topo do arquivo), então reabrir o modal
+  // voltava a carregar a categoria antiga a partir daquele estado real
+  // nunca limpo. Agora chama `onApply([], [])` — a MESMA função que
+  // "Aplicar" já usa — reaproveitando a lógica existente em vez de duplicar
+  // ou criar um estado paralelo: ela atualiza o estado real em Header.tsx,
+  // navega pra /membros/buscar sem filtro nenhum e fecha o modal (mesmo
+  // comportamento de sempre pra um "Aplicar" com seleção vazia).
   function handleLimpar() {
     setCategoriaIds([]);
     setInstrutorNomes([]);
+    onApply([], []);
   }
 
   function handleAplicar() {

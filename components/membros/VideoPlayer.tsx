@@ -543,29 +543,32 @@ function CustomVideoPlayer({
     hideTimeout = setTimeout(() => playing && setControlsVisible(false), 2500);
   }
 
+  // BUG corrigido (corte no fullscreen mobile): h-0 + padding-bottom
+  // percentual (ver comentário de CONTAINER_NORMAL, abaixo) dá a altura do
+  // player a partir da LARGURA dele — funciona bem no layout normal da
+  // página, mas requestFullscreen() (toggleFullscreen, acima) é chamado
+  // nesta MESMA div (containerRef); em fullscreen o navegador estica a
+  // largura pra 100% da tela, então a altura calculada por esse padding
+  // (proporcional a essa largura) quase nunca bate com a altura de
+  // verdade da tela — sobra ou falta espaço, e é isso que cortava a barra
+  // de controles (absolute bottom-0 DENTRO desta div) e descentralizava o
+  // ícone de play (absolute inset-0, também relativo a ela). `fullscreen`
+  // já existia (estado sincronizado pelo listener de fullscreenchange, ver
+  // acima) — reaproveitado aqui, sem estado novo, só pra trocar de classe:
+  // em fullscreen a div passa a ser h-screen w-screen (100% da tela de
+  // verdade, sem depender de padding percentual nenhum) — com isso, tudo
+  // que já era `absolute inset-0`/`absolute bottom-0` por dentro dela
+  // passa a se posicionar certo sozinho, sem precisar mexer em mais nada.
+  const CONTAINER_NORMAL =
+    'group relative mx-auto h-0 w-full select-none overflow-hidden rounded-lg bg-black pb-[calc(49.6%+88px)] lg:max-h-[calc(100vh_-_10rem)]';
+  const CONTAINER_FULLSCREEN = 'group relative mx-auto h-screen w-screen select-none overflow-hidden rounded-lg bg-black';
+
   return (
-    // h-0 + pb-[calc(46.9%+88px)] (era h-[78vh]/h-[80vh] fixo antes disso,
-    // e aspect-video antes ainda): volta pra altura derivada da LARGURA do
-    // próprio elemento — técnica de "padding-bottom vira altura": como
-    // padding percentual é sempre relativo à largura, h-0 (zera a altura
-    // "de conteúdo") + esse padding-bottom dão a altura final em função da
-    // largura, sem depender de aspect-ratio nem JS/ResizeObserver. Os
-    // "+88px" replicam literalmente um valor pedido numa tarefa anterior,
-    // de quando existia um player separado pro Drive (removido — ver
-    // comentário no topo do arquivo) com uma UI própria que precisava desse
-    // respiro extra; aqui não tem o mesmo motivo de existir, mas manteve-se
-    // o valor tal como foi pedido, sem reverter por conta própria.
-    // lg:max-h-[calc(100vh-10rem)]: teto de segurança em telas largas/
-    // baixas — sem um lg:max-w correspondente desta vez (não foi pedido),
-    // então quando esse teto entra em ação a caixa fica mais LARGA do que
-    // um 16:9 puro pediria; o <video> por dentro (absolute inset-0 w-full
-    // h-full + object-contain, abaixo) absorve essa diferença como tarja
-    // (bg-black), sem cortar nem esticar.
     <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
       onContextMenu={(e) => e.preventDefault()}
-      className="group relative mx-auto h-0 w-full select-none overflow-hidden rounded-lg bg-black pb-[calc(46.9%+88px)] lg:max-h-[calc(100vh_-_10rem)]"
+      className={fullscreen ? CONTAINER_FULLSCREEN : CONTAINER_NORMAL}
     >
       <BotaoVoltar href={voltarHref} label={voltarLabel} />
 
@@ -746,11 +749,15 @@ function CustomVideoPlayer({
         )}
       </button>
 
-      {/* controles */}
+      {/* controles — pb-7 (1.75rem) de sempre, mas em fullscreen soma
+          env(safe-area-inset-bottom) por cima (0 em telas sem notch/barra
+          de gestos, então não muda nada nelas): sem isso, a barra ficava
+          embaixo da área de gesto do sistema em aparelhos com ela, mesmo
+          já corrigido o corte de tamanho do container acima. */}
       <div
-        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-8 pb-7 pt-10 transition-opacity ${
-          controlsVisible || !playing ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-8 pt-10 transition-opacity ${
+          fullscreen ? 'pb-[calc(1.75rem_+_env(safe-area-inset-bottom))]' : 'pb-7'
+        } ${controlsVisible || !playing ? 'opacity-100' : 'opacity-0'}`}
       >
         {/* seek bar */}
         <input
