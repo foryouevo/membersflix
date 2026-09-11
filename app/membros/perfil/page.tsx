@@ -8,8 +8,9 @@ import {
   Flame,
   MessageCircle,
   UserRound,
+  Phone,
+  Mail,
   LogOut,
-  PlayCircle,
   Play,
   ListVideo,
   type LucideIcon,
@@ -19,6 +20,7 @@ import { initials, buildSupportWhatsappLink, formatTitulo } from '@/lib/utils';
 import { calcularContinuarAssistindo } from '@/lib/membros/continuar-assistindo';
 import AlterarSenhaButton from '@/components/membros/AlterarSenhaButton';
 import EditarPerfilModal from '@/components/membros/EditarPerfilModal';
+import CardTitulo from '@/components/membros/CardTitulo';
 import CursosRecomendados from '@/components/membros/CursosRecomendados';
 import MeusCursosCard, { type MeuCursoItem } from '@/components/membros/MeusCursosCard';
 import LogoutButton from '@/components/LogoutButton';
@@ -251,7 +253,7 @@ export default async function PerfilPage() {
       href={suporteLink}
       target="_blank"
       rel="noopener noreferrer"
-      className="btn-secondary flex w-full items-center justify-center gap-2 md:w-auto"
+      className="btn-secondary flex w-full items-center justify-center gap-2 sm:w-auto"
     >
       <MessageCircle size={16} />
       Falar com o Suporte
@@ -259,7 +261,7 @@ export default async function PerfilPage() {
   ) : (
     <span
       title="Número de suporte não configurado pelo admin"
-      className="btn-secondary flex w-full cursor-not-allowed items-center justify-center gap-2 opacity-60 md:w-auto"
+      className="btn-secondary flex w-full cursor-not-allowed items-center justify-center gap-2 opacity-60 sm:w-auto"
     >
       <MessageCircle size={16} />
       Falar com o Suporte
@@ -270,14 +272,23 @@ export default async function PerfilPage() {
     // lg:-mt-20 + lg:pt-24 (cancela a folga aproximada de 5rem que <main>
     // reserva pro Header — md:pt-20, app/membros/layout.tsx — e repõe com o
     // valor real dele em desktop, md:h-24/6rem, ver Header.tsx) + lg:h-screen
-    // lg:overflow-hidden lg:flex lg:flex-col: PRIORIDADE MÁXIMA desta
-    // tarefa — página inteira cabendo na viewport em desktop, sem scroll.
-    // Como box-sizing é border-box, h-screen + este padding já resultam em
-    // "100vh menos a altura do Header", sem precisar de h-[calc(...)]
-    // (mesma técnica já validada em PlayerPageClient.tsx). Só a partir de
-    // lg — abaixo disso (mobile/tablet) nada muda, a página continua
-    // rolando normalmente (pedido explícito).
-    <div className="px-4 py-6 md:px-6 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden lg:px-16 lg:pb-6 lg:pt-24 lg:-mt-20">
+    // lg:flex lg:flex-col: objetivo de uma tarefa anterior — em telas onde o
+    // conteúdo CABE, a página preenche a viewport em desktop sem sobrar/faltar
+    // nada, sem precisar de h-[calc(...)] (mesma técnica já validada em
+    // PlayerPageClient.tsx).
+    //
+    // lg:overflow-y-auto (era lg:overflow-hidden — pedido desta tarefa): em
+    // telas grandes o suficiente pro conteúdo caber dentro do h-screen, o
+    // resultado visual é idêntico a antes (overflow-y-auto sem overflow de
+    // verdade não desenha barra nenhuma). Mas em resoluções menores (ex:
+    // notebook 1280x800/1366x768), onde os cards somados passam de 100vh, o
+    // overflow-hidden simplesmente CORTAVA o excesso, sem nenhum jeito de
+    // vê-lo — overflow-y-auto deixa essa sobra rolar por dentro deste
+    // container (que continua com a altura travada em h-screen), em vez de
+    // cortada. Só a partir de lg — abaixo disso (mobile/tablet) nada muda,
+    // a página continua rolando normalmente do jeito que sempre rolou
+    // (pedido explícito de uma tarefa anterior, mantido).
+    <div className="px-4 py-6 md:px-6 lg:flex lg:h-screen lg:flex-col lg:overflow-y-auto lg:px-16 lg:pb-6 lg:pt-24 lg:-mt-20">
       <h1 className="mb-6 shrink-0 text-2xl font-bold text-white">Meu Perfil</h1>
 
       {/* GRID PRINCIPAL — 2 colunas: esquerda mais larga (~63%) com Perfil
@@ -300,13 +311,29 @@ export default async function PerfilPage() {
           shrink-0, compactados o bastante nesta tarefa pra normalmente não
           precisar desse scroll de reserva. */}
       <div className="grid grid-cols-1 gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[1.7fr_1fr]">
-        {/* ═══ COLUNA ESQUERDA (~63%) ═══ */}
-        <div className="space-y-6 lg:flex lg:h-full lg:flex-col lg:gap-6 lg:space-y-0">
+        {/* ═══ COLUNA ESQUERDA (~63%) ═══ contents (era space-y-6):
+            "desembrulha" esta div no mobile — os 3 cards de dentro passam a
+            ser filhos DIRETOS do grid principal acima (junto com os 3 da
+            coluna direita), o que deixa `order-N` (pedido desta tarefa,
+            reordenação SÓ no mobile) reordenar livremente entre os dois
+            grupos originais, sem depender de qual coluna cada card veio.
+            gap-6 do grid principal já cobre o espaçamento entre eles nesse
+            estado (sem precisar de space-y aqui). A partir de lg, volta a
+            virar uma coluna flex de verdade (lg:flex lg:flex-col lg:gap-6)
+            — layout de desktop 100% igual ao de antes, DOM inalterado.
+            lg:min-w-0 (pedido de uma tarefa posterior, mesma causa raiz do
+            bug na coluna direita — ver comentário lá): por padrão um item
+            de grid tem min-width:auto, ou seja, NUNCA encolhe abaixo da
+            largura do seu conteúdo interno, mesmo com a fração 1.7fr
+            definida no grid pai — um carrossel com itens de sobra aqui
+            também empurraria a coluna (e a tela) pra fora. */}
+        <div className="contents lg:flex lg:h-full lg:flex-col lg:gap-6 lg:min-w-0">
           {/* 1. CARD DE PERFIL — foto, nome, badge de status (Pago/Pendente
               — dado real de profiles.status_pagamento), e-mail e "Membro
-              desde" à esquerda; "Editar Perfil"/"Falar com o Suporte" à
-              direita. */}
-          <div className="shrink-0 rounded-lg bg-card p-5">
+              desde" à esquerda; "Editar Perfil"/"Alterar Senha"/"Falar com
+              o Suporte" à direita. order-1 (mobile): primeiro card, igual
+              ao desktop. */}
+          <div className="order-1 shrink-0 rounded-lg bg-card p-5 lg:order-none">
             <div className="flex flex-col items-center gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-col items-center gap-3 text-center md:flex-row md:items-center md:gap-4 md:text-left">
                 {profile.avatar_url ? (
@@ -331,28 +358,48 @@ export default async function PerfilPage() {
                     </span>
                   </div>
                   <p className="mt-0.5 text-sm text-on-variant">{profile.email}</p>
+                  {/* Telefone (pedido desta tarefa) — mesmo `profile.telefone`
+                      já buscado uma vez no topo do arquivo e já exibido em
+                      "Informações da Conta" mais abaixo (dt/dd "Telefone");
+                      nenhuma busca nova, mesma fonte dos dois lugares, sem
+                      risco de ficarem dessincronizados. Só aparece se
+                      cadastrado (sem o fallback "—" que faz sentido lá
+                      embaixo, numa lista de campo por campo — aqui, no
+                      resumo do topo, a linha simplesmente some se não
+                      houver telefone). Mesmo estilo do e-mail acima. */}
+                  {profile.telefone && <p className="mt-0.5 text-sm text-on-variant">{profile.telefone}</p>}
                   <p className="mt-1.5 text-xs text-on-variant">
                     Membro desde {new Date(profile.created_at).toLocaleDateString('pt-BR')}
                   </p>
                 </div>
               </div>
 
-              <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row">
+              {/* 3 botões (pedido desta tarefa: "Editar Perfil"/"Alterar
+                  Senha"/"Falar com o Suporte" reunidos aqui — os dois
+                  primeiros saíram do card "Informações da Conta" mais
+                  abaixo). sm:flex-row sm:flex-wrap: empilhados só no
+                  mobile bem estreito (<640px); a partir daí ficam lado a
+                  lado, quebrando linha sozinhos se não couberem os 3 —
+                  sem espremer nenhum. */}
+              <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap md:w-auto">
                 <EditarPerfilModal
                   nomeAtual={profile.nome}
                   telefoneAtual={profile.telefone ?? ''}
+                  emailAtual={profile.email}
                   avatarAtual={profile.avatar_url}
                   triggerLabel="Editar Perfil"
                   variant="primary"
-                  className="w-full md:w-auto"
+                  className="w-full sm:w-auto"
                 />
+                <AlterarSenhaButton className="w-full sm:w-auto" />
                 {botaoSuporte}
               </div>
             </div>
           </div>
 
-          {/* 2. GRID DE MÉTRICAS — 4 cards. */}
-          <div className="grid shrink-0 grid-cols-2 items-start gap-4 lg:grid-cols-4">
+          {/* 2. GRID DE MÉTRICAS — 4 cards. order-3 (mobile): 3º card, vem
+              depois de "Informações da Conta" na nova ordem desta tarefa. */}
+          <div className="order-3 grid shrink-0 grid-cols-2 items-start gap-6 lg:order-none lg:grid-cols-4">
             <CardMetrica
               icon={GraduationCap}
               label="Cursos Matriculados"
@@ -407,38 +454,64 @@ export default async function PerfilPage() {
             />
           </div>
 
-          {/* 3. MEU(S) CURSO(S) — ocupa o resto da altura da coluna
-              esquerda (lg:flex-1 lg:min-h-0; ver comentário no topo do
-              grid principal, acima, e em MeusCursosCard.tsx). */}
-          <div className="lg:min-h-0 lg:flex-1">
+          {/* 3. MEU(S) CURSO(S) — agora um carrossel (pedido de uma tarefa
+              anterior, ver MeusCursosCard.tsx), ocupa o resto da altura da
+              coluna esquerda (lg:flex-1 lg:min-h-0; ver comentário no topo
+              do grid principal, acima). order-5 (mobile): penúltimo card,
+              logo antes de "Cursos Recomendados". lg:min-w-0 (preventivo —
+              mesmo bug de overflow corrigido em "Cursos Recomendados"
+              nesta tarefa, ver comentário na coluna direita: este bloco
+              também guarda um carrossel e é item do mesmo tipo de flex
+              container, correndo o mesmo risco se a lista de cursos
+              crescer bastante). */}
+          <div className="order-5 lg:order-none lg:min-h-0 lg:min-w-0 lg:flex-1">
             <MeusCursosCard cursos={meusCursosParaCard} />
           </div>
         </div>
 
-        {/* ═══ COLUNA DIREITA (~37%) ═══ lg:h-full (era lg:self-start): as
-            duas colunas agora têm a MESMA altura, vinda do teto de
-            viewport do grid principal — ver comentário lá em cima. Cursos
-            Recomendados (mais abaixo) é o bloco lg:flex-1 que absorve a
-            diferença dentro desta coluna. */}
-        <div className="space-y-6 lg:flex lg:h-full lg:flex-col lg:gap-6 lg:space-y-0">
-          {/* 4. CONTINUAR ASSISTINDO — grid 60/40 (pedido explícito desta
-              tarefa): thumbnail na coluna esquerda, detalhes na direita,
-              lado a lado a partir de lg — empilha em telas menores. */}
-          <div className="rounded-lg bg-card p-5">
-            <div className="mb-3 flex items-center gap-2 text-white">
-              <PlayCircle size={18} className="text-primary" />
-              <h2 className="font-semibold">Continuar Assistindo</h2>
-            </div>
+        {/* ═══ COLUNA DIREITA (~37%) ═══ contents (era space-y-6, mesma
+            razão da coluna esquerda acima): desembrulha esta div no
+            mobile pra `order-N` conseguir intercalar estes 3 cards com os
+            3 da coluna esquerda. lg:h-full lg:flex lg:flex-col lg:gap-6 —
+            a partir de lg volta a ser a coluna de verdade, igual a
+            antes (mesma altura das duas colunas, vinda do teto de
+            viewport do grid principal — ver comentário lá em cima).
+            Cursos Recomendados (mais abaixo) continua sendo o bloco
+            lg:flex-1 que absorve a diferença dentro desta coluna, só no
+            desktop.
+
+            lg:min-w-0 — CAUSA RAIZ do bug desta tarefa: por padrão, um item
+            de grid/flex tem min-width:auto (não min-width:0), ou seja,
+            NUNCA encolhe abaixo da largura do seu CONTEÚDO interno, mesmo
+            com uma fração fixa (aqui, 1fr) definida no grid pai
+            (grid-cols-[1.7fr_1fr] no wrapper acima). Com o carrossel de
+            "Cursos Recomendados" com itens de sobra, o conteúdo interno
+            "pede" mais largura do que o 1fr reservado, e sem min-w-0 o
+            NAVEGADOR cede: em vez do Swiper/Carousel rolar internamente
+            (que é o que overflow-hidden no viewport dele já faz), essa
+            coluna INTEIRA crescia pra acomodar o conteúdo, empurrando o
+            grid principal (e a tela) pra além do limite. min-w-0 devolve
+            ao 1fr o controle de verdade sobre a largura da coluna — o
+            conteúdo interno (Carousel) então é quem tem que se virar
+            dentro do espaço que sobrar (via overflow-hidden), não o
+            contrário. */}
+        <div className="contents lg:flex lg:h-full lg:flex-col lg:gap-6 lg:min-w-0">
+          {/* 4. CONTINUAR ASSISTINDO — grid 60/40 (pedido explícito de uma
+              tarefa anterior): thumbnail na coluna esquerda, detalhes na
+              direita, lado a lado a partir de lg — empilha em telas
+              menores. order-4 (mobile): vem depois da grid de métricas,
+              antes de "Meu(s) Curso(s)". */}
+          <div className="order-4 rounded-lg bg-card p-5 lg:order-none">
+            <CardTitulo className="mb-3">Continuar Assistindo</CardTitulo>
 
             {continuarAssistindo.cursoId && continuarAssistindo.aulaId && cursoContinuar ? (
-              // grid 60/40 (pedido explícito desta tarefa, em vez do
-              // empilhado de uma tarefa anterior): thumbnail na coluna
-              // esquerda (3fr = 60%), detalhes+botões na direita (2fr =
-              // 40%), lado a lado a partir de lg — empilha em telas
-              // menores (grid-cols-1 default). items-start: a coluna de
-              // detalhes não precisa esticar pra acompanhar a altura da
-              // thumbnail (evita vão vazio dentro dela).
-              <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[3fr_2fr]">
+              // grid (pedido explícito desta tarefa, em vez do empilhado de
+              // uma tarefa anterior): thumbnail na coluna esquerda (2.5fr),
+              // detalhes+botões na direita (2fr), lado a lado a partir de lg
+              // — empilha em telas menores (grid-cols-1 default). items-center
+              // (era items-start): centraliza a coluna de detalhes em relação
+              // à altura da thumbnail, sem esticar pra acompanhá-la.
+              <div className="grid grid-cols-1 items-center gap-4 lg:grid-cols-[2.5fr_2fr]">
                 <Link href={continuarAssistindo.href} className="group relative block">
                   <div className="relative aspect-video overflow-hidden rounded-lg bg-surface-high">
                     {imagemContinuar ? (
@@ -467,8 +540,17 @@ export default async function PerfilPage() {
 
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-wide text-on-variant">
-                    Módulo {continuarAssistindo.numeroModulo}
-                    {continuarAssistindo.moduloTitulo && ` · ${formatTitulo(continuarAssistindo.moduloTitulo)}`}
+                    {/* O nome do módulo já vem do banco com a própria numeração
+                        embutida (ex: "Módulo 1 - Introdução" — ver comentário em
+                        lib/membros/continuar-assistindo.ts sobre moduloTitulo).
+                        Prefixar de novo com `numeroModulo` (índice calculado à
+                        parte, mesmo dado, contagem diferente) duplicava o texto
+                        ("Módulo 2 · Módulo 1 - Introdução"). `numeroModulo` só
+                        entra como fallback, pro caso raro de o módulo não ter
+                        título cadastrado. */}
+                    {continuarAssistindo.moduloTitulo
+                      ? formatTitulo(continuarAssistindo.moduloTitulo)
+                      : `Módulo ${continuarAssistindo.numeroModulo}`}
                     {continuarAssistindo.totalAulasNoModulo > 0 &&
                       ` · Aula ${String(continuarAssistindo.numeroAulaNoModulo).padStart(2, '0')} de ${continuarAssistindo.totalAulasNoModulo}`}
                   </p>
@@ -525,67 +607,60 @@ export default async function PerfilPage() {
             )}
           </div>
 
-          {/* 5. INFORMAÇÕES DA CONTA — 2 colunas, botões lado a lado no
-              rodapé. p-5 (era p-6) + espaçamentos internos reduzidos:
-              compactação geral desta tarefa (item 4, prioridade máxima). */}
-          <div className="rounded-lg bg-card p-5">
-            <div className="mb-3 flex items-center gap-2 text-white">
-              <UserRound size={18} className="text-primary" />
-              <h2 className="font-semibold">Informações da Conta</h2>
-            </div>
+          {/* 5. INFORMAÇÕES DA CONTA — 2 colunas, só dados (Nome, Telefone,
+              E-mail, Cursos liberados). Sem botões de ação (Editar
+              Perfil/Alterar Senha foram pra cá — reposicionados no card de
+              perfil, no topo — pedido de uma tarefa anterior); sem altura
+              fixa aqui, então o card já encolhe sozinho com a remoção, sem
+              sobrar vão vazio. p-5 (era p-6) + espaçamentos internos
+              reduzidos: compactação geral de uma tarefa anterior (item 4,
+              prioridade máxima). order-2 (mobile, pedido desta tarefa):
+              logo depois do card de Perfil, bem antes de onde este card
+              fica no desktop (ele é o 5º ali). */}
+          <div className="order-2 rounded-lg bg-card p-5 lg:order-none">
+            <CardTitulo className="mb-3">Informações da Conta</CardTitulo>
 
             {/* 2 colunas: esquerda Nome+Telefone, direita E-mail+Cursos —
-                empilha em 1 coluna abaixo de sm (mobile). */}
+                empilha em 1 coluna abaixo de sm (mobile). Ícone por campo
+                (pedido desta tarefa, ver CampoConta mais abaixo). */}
             <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
               <div className="space-y-3">
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-on-variant">Nome completo</dt>
-                  <dd className="mt-1 text-sm text-white">{profile.nome}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-on-variant">Telefone</dt>
-                  <dd className="mt-1 text-sm text-white">{profile.telefone || '—'}</dd>
-                </div>
+                <CampoConta icon={UserRound} label="Nome completo">
+                  {profile.nome}
+                </CampoConta>
+                <CampoConta icon={Phone} label="Telefone">
+                  {profile.telefone || '—'}
+                </CampoConta>
               </div>
 
               <div className="space-y-3">
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-on-variant">E-mail cadastrado</dt>
-                  <dd className="mt-1 break-words text-sm text-white">{profile.email}</dd>
-                </div>
+                <CampoConta icon={Mail} label="E-mail cadastrado" ddClassName="mt-1 break-words text-sm text-white">
+                  {profile.email}
+                </CampoConta>
 
-                {/* "Cursos" (pedido desta tarefa: "quantidade/lista resumida
-                    de cursos... ou o dado equivalente já existente") — é o
-                    mesmo bloco "Cursos liberados" já implementado (dado
-                    real de acessos_curso.bloqueado; ver comentário
-                    original abaixo sobre por que não é "Status do Plano"),
-                    só reposicionado pra esta coluna. */}
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-on-variant">Cursos liberados</dt>
-                  <dd className="mt-1 flex items-center justify-between text-sm text-white">
-                    <span>
-                      {meusCursoIds.length} de {todosMeusCursoIdsIncluindoBloqueados.length}
-                    </span>
-                    <span
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                        profile.status_pagamento === 'pago' ? 'bg-primary/15 text-primary' : 'bg-secondary-container text-secondary'
-                      }`}
-                    >
-                      {profile.status_pagamento === 'pago' ? 'Ativo' : 'Pendente'}
-                    </span>
-                  </dd>
-                </div>
+                {/* "Cursos" (pedido de uma tarefa anterior: "quantidade/
+                    lista resumida de cursos... ou o dado equivalente já
+                    existente") — é o mesmo bloco "Cursos liberados" já
+                    implementado (dado real de acessos_curso.bloqueado; ver
+                    comentário original abaixo sobre por que não é "Status
+                    do Plano"), só reposicionado pra esta coluna. */}
+                <CampoConta
+                  icon={GraduationCap}
+                  label="Cursos liberados"
+                  ddClassName="mt-1 flex items-center justify-between text-sm text-white"
+                >
+                  <span>
+                    {meusCursoIds.length} de {todosMeusCursoIdsIncluindoBloqueados.length}
+                  </span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      profile.status_pagamento === 'pago' ? 'bg-primary/15 text-primary' : 'bg-secondary-container text-secondary'
+                    }`}
+                  >
+                    {profile.status_pagamento === 'pago' ? 'Ativo' : 'Pendente'}
+                  </span>
+                </CampoConta>
               </div>
-            </div>
-
-            <div className="mt-4 flex flex-row flex-wrap gap-3 border-t border-border/60 pt-4">
-              <AlterarSenhaButton className="flex-1" />
-              <EditarPerfilModal
-                nomeAtual={profile.nome}
-                telefoneAtual={profile.telefone ?? ''}
-                avatarAtual={profile.avatar_url}
-                className="flex-1"
-              />
             </div>
           </div>
 
@@ -594,8 +669,13 @@ export default async function PerfilPage() {
               absorve a diferença de altura nesta coluna (ver comentário no
               topo do grid principal) — com scroll próprio (o carrossel
               não precisa, mas o wrapper garante que nunca estoure a
-              página se um dia precisar). */}
-          <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+              página se um dia precisar). order-6 (mobile): último card,
+              igual ao desktop. lg:min-w-0 (bug desta tarefa — mesma causa
+              raiz do comentário na coluna direita, acima): este bloco
+              também é item de um flex container (a coluna) e herdaria o
+              mesmo min-width:auto padrão, então também precisa do reset
+              pra não repassar a largura de sobra do carrossel adiante. */}
+          <div className="order-6 lg:order-none lg:min-h-0 lg:min-w-0 lg:flex-1 lg:overflow-y-auto">
             <CursosRecomendados cursos={cursosRecomendados} numeroWhatsapp={numeroWhatsapp} />
           </div>
         </div>
@@ -631,7 +711,14 @@ function CardMetrica({
 }) {
   return (
     <div className="h-full min-w-0 rounded-lg bg-card p-4">
-      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-primary">
+      {/* rounded (era rounded-lg numa tarefa anterior, rounded-full antes
+          disso — pedido desta tarefa: reduzir ainda mais, cantos só
+          levemente arredondados). `rounded` (sem sufixo) já é o DEFAULT do
+          tema, 0.5rem/8px (ver tailwind.config.ts) — bate exatamente com o
+          piso da faixa pedida (8-10px), reaproveitando o token existente
+          em vez de um valor arbitrário novo. Fundo/ícone vermelho
+          translúcido/tamanho/posição mantidos como já eram. */}
+      <div className="mb-2 flex h-9 w-9 items-center justify-center rounded bg-primary/15 text-primary">
         <Icon size={18} />
       </div>
       <p className="truncate text-xs font-semibold uppercase tracking-wide text-on-variant">{label}</p>
@@ -640,6 +727,40 @@ function CardMetrica({
         {badge}
       </div>
       {extra && <div className="mt-2 text-xs text-on-variant">{extra}</div>}
+    </div>
+  );
+}
+
+// Campo do card "Informações da Conta" (item 2 do pedido desta tarefa) —
+// ícone pequeno "squircle" (rounded-md = 0.75rem/12px, mesmo espírito do
+// ajuste em CardMetrica acima, só que numa caixa menor de 32px) à esquerda
+// do label/valor, em vez do dt/dd soltos de antes. bg-surface-container:
+// o cinza escuro mais próximo do #212127 sugerido que já existe no tema
+// (ver tailwind.config.ts) — reaproveitado em vez de um hexadecimal novo,
+// sem diferença visual perceptível. `ddClassName` (opcional): 2 dos 4
+// campos precisam de classes extras no <dd> (E-mail quebra linha longa;
+// Cursos Liberados é um flex justify-between com 2 elementos) — default
+// cobre os outros 2 (Nome/Telefone, só texto).
+function CampoConta({
+  icon: Icon,
+  label,
+  ddClassName = 'mt-1 text-sm text-white',
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  ddClassName?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface-container text-primary">
+        <Icon size={16} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <dt className="text-xs font-medium uppercase tracking-wide text-on-variant">{label}</dt>
+        <dd className={ddClassName}>{children}</dd>
+      </div>
     </div>
   );
 }

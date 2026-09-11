@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Pencil, Upload } from 'lucide-react';
 import Modal from '@/components/Modal';
 import { atualizarMeuPerfil } from '@/app/membros/perfil/actions';
+import { createClient } from '@/lib/supabase/client';
 import { cn, initials } from '@/lib/utils';
 
 export default function EditarPerfilModal({
   nomeAtual,
   telefoneAtual,
+  emailAtual,
   avatarAtual,
   className,
   // triggerLabel/variant: mesmo modal/formulário/submit de sempre — só o
@@ -24,12 +26,14 @@ export default function EditarPerfilModal({
 }: {
   nomeAtual: string;
   telefoneAtual: string;
+  emailAtual: string;
   avatarAtual: string | null;
   className?: string;
   triggerLabel?: string;
   variant?: 'primary' | 'secondary';
 }) {
   const router = useRouter();
+  const supabase = createClient();
   // ids únicos por instância (useId): a tela de Perfil agora renderiza este
   // componente DUAS vezes na mesma página (botão "Editar Perfil" no card do
   // topo + "Alterar Informações" mais abaixo) — com id fixo, o segundo
@@ -47,17 +51,26 @@ export default function EditarPerfilModal({
   const [open, setOpen] = useState(false);
   const [nome, setNome] = useState(nomeAtual);
   const [telefone, setTelefone] = useState(telefoneAtual);
+  const [email, setEmail] = useState(emailAtual);
   const [preview, setPreview] = useState<string | null>(avatarAtual);
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  // true depois de disparar a troca de e-mail (supabase.auth.updateUser):
+  // o Supabase só aplica a mudança de verdade após o aluno confirmar o
+  // link recebido por e-mail ("secure email change") — até lá o modal fica
+  // preso numa tela de aviso em vez de fechar como se já tivesse concluído
+  // (ver handleSubmit e o JSX do Modal, mais abaixo).
+  const [emailPendente, setEmailPendente] = useState(false);
 
   function handleOpen() {
     setNome(nomeAtual);
     setTelefone(telefoneAtual);
+    setEmail(emailAtual);
     setPreview(avatarAtual);
     setArquivo(null);
     setErro(null);
+    setEmailPendente(false);
     setOpen(true);
   }
 
@@ -75,15 +88,47 @@ export default function EditarPerfilModal({
       setErro('O nome não pode ficar vazio.');
       return;
     }
+    const emailLimpo = email.trim();
+    if (!emailLimpo) {
+      setErro('O e-mail não pode ficar vazio.');
+      return;
+    }
 
     setSalvando(true);
     try {
+      // Nome/telefone/foto: continuam indo pela server action de sempre,
+      // gravados direto em profiles (sem confirmação nenhuma — nunca
+      // precisaram). E-mail é o login do sistema (ver
+      // components/LoginPageClient.tsx, supabase.auth.signInWithPassword),
+      // então NÃO é escrito em profiles por aqui — vai separado, abaixo,
+      // pelo próprio Supabase Auth (única fonte da verdade pro e-mail de
+      // login); profiles.email se atualiza sozinho quando a troca é
+      // confirmada, via trigger (ver
+      // supabase/migrations/010_sync_email_profiles.sql).
       const formData = new FormData();
       formData.set('nome', nome.trim());
       formData.set('telefone', telefone.trim());
       if (arquivo) formData.set('avatar', arquivo);
-
       await atualizarMeuPerfil(formData);
+
+      const emailMudou = emailLimpo !== emailAtual;
+      if (emailMudou) {
+        // supabase.auth.updateUser({ email }) só ENVIA o(s) e-mail(s) de
+        // confirmação — não troca o login na hora. Por padrão o Supabase
+        // Auth exige confirmar o link recebido no e-mail NOVO (e, se
+        // "Secure email change" estiver ligado no painel, também no
+        // e-mail ATUAL) antes de aplicar a mudança de verdade. emailRedirectTo
+        // manda o link de volta pra esta mesma tela depois de confirmado.
+        const { error: erroEmail } = await supabase.auth.updateUser(
+          { email: emailLimpo },
+          { emailRedirectTo: `${window.location.origin}/membros/perfil` }
+        );
+        if (erroEmail) throw new Error(erroEmail.message);
+
+        setEmailPendente(true);
+        router.refresh();
+        return;
+      }
 
       setOpen(false);
       // Server Component re-busca os dados frescos do perfil — sem reload
@@ -108,6 +153,17 @@ export default function EditarPerfilModal({
       </button>
 
       <Modal open={open} onClose={() => setOpen(false)} title="Alterar informações" maxWidth="max-w-sm">
+        {emailPendente ? (
+          <div className="space-y-4">
+            <p className="text-sm text-primary">
+              Nome, telefone e foto foram salvos. Enviamos um link de confirmação para o novo e-mail — a troca só entra em vigor depois
+              que ele for confirmado (verifique também a caixa de entrada do e-mail atual, caso o Supabase peça confirmação dupla).
+            </p>
+            <button type="button" onClick={() => setOpen(false)} className="btn-primary w-full">
+              Entendi
+            </button>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex flex-col items-center">
             {preview ? (
@@ -142,6 +198,27 @@ export default function EditarPerfilModal({
           </div>
 
           <div>
+            <label htmlFor={`${idBase}-email`} className="mb-1.5 block text-sm font-medium text-on-surface">
+              E-mail
+            </label>
+            <input
+              id={`${idBase}-email`}
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input-field"
+              autoComplete="email"
+            />
+            {/* Aviso só quando o campo já foi mexido e difere do valor
+                salvo — não polui o formulário quando o aluno só está
+                editando nome/telefone/foto. */}
+            {email.trim() !== emailAtual && (
+              <p className="mt-1 text-xs text-on-variant">Alterar o e-mail exigirá confirmação por link antes de valer para o login.</p>
+            )}
+          </div>
+
+          <div>
             <label htmlFor={`${idBase}-telefone`} className="mb-1.5 block text-sm font-medium text-on-surface">
               Telefone
             </label>
@@ -160,6 +237,7 @@ export default function EditarPerfilModal({
             {salvando ? 'Salvando...' : 'Salvar alterações'}
           </button>
         </form>
+        )}
       </Modal>
     </>
   );

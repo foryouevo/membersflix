@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type MutableRefObject, type ReactNode } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -20,6 +20,18 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 // (flex-basis) — os defaults abaixo reproduzem exatamente o comportamento
 // original dos módulos; quem usa fora desse contexto passa suas próprias
 // classes (ver VitrinePageClient).
+//
+// hideHeader/navControlsRef/onPodeNavegarChange (pedido de uma tarefa
+// posterior — "Meu(s) Curso(s)" precisou colocar as setas dentro do MESMO
+// cabeçalho onde já ficam os ícones de busca/filtro, fora deste
+// componente): com hideHeader, o Carousel não desenha seu próprio
+// título+setas (evita a linha vazia que sobrava quando o cabeçalho não
+// tinha pra onde ir); navControlsRef recebe irParaAnterior/irParaProxima
+// (as MESMAS funções que os botões internos chamariam — nada duplicado,
+// só exposto pra fora) e onPodeNavegarChange espelha `podeNavegar` pro pai
+// saber quando mostrar as setas dele. Ambos opcionais e sem efeito nos
+// demais usos deste componente (ModulosCarousel, Home, Cursos
+// Recomendados), que continuam com o cabeçalho/setas embutidos de sempre.
 export default function Carousel<T>({
   items,
   renderItem,
@@ -34,6 +46,9 @@ export default function Carousel<T>({
   viewportClassName = 'min-h-0 flex-1 overflow-hidden',
   trackClassName = 'flex h-full gap-4 px-2 py-6',
   itemClassName,
+  hideHeader = false,
+  navControlsRef,
+  onPodeNavegarChange,
 }: {
   items: T[];
   renderItem: (item: T) => ReactNode;
@@ -48,6 +63,9 @@ export default function Carousel<T>({
   viewportClassName?: string;
   trackClassName?: string;
   itemClassName: string;
+  hideHeader?: boolean;
+  navControlsRef?: MutableRefObject<{ irParaAnterior: () => void; irParaProxima: () => void } | null>;
+  onPodeNavegarChange?: (podeNavegar: boolean) => void;
 }) {
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: false, align: 'start', dragFree: false });
   const [podeNavegar, setPodeNavegar] = useState(false);
@@ -62,12 +80,17 @@ export default function Carousel<T>({
   // a tela, sem precisar calcular a mão quantos cards cada breakpoint mostra.
   useEffect(() => {
     if (!emblaApi) return;
-    const atualizar = () => setPodeNavegar(emblaApi.scrollSnapList().length > 1);
+    const atualizar = () => {
+      const valor = emblaApi.scrollSnapList().length > 1;
+      setPodeNavegar(valor);
+      onPodeNavegarChange?.(valor);
+    };
     atualizar();
     emblaApi.on('reInit', atualizar);
     return () => {
       emblaApi.off('reInit', atualizar);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emblaApi]);
 
   function irParaAnterior() {
@@ -93,37 +116,48 @@ export default function Carousel<T>({
     }
   }
 
+  // Expõe as MESMAS funções que os botões internos (abaixo) chamariam —
+  // pra quando hideHeader=true e é o componente-pai quem desenha os
+  // botões de seta em outro lugar da tela (ver comentário no topo do
+  // arquivo). Reatribuído a cada render (closures novas capturam
+  // emblaApi/podeNavegar atualizados) — custo desprezível.
+  useEffect(() => {
+    if (navControlsRef) navControlsRef.current = { irParaAnterior, irParaProxima };
+  });
+
   return (
     <div className={outerClassName}>
-      <div className={headerClassName}>
-        <h2 className={titleClassName}>{title}</h2>
-        {/* `podeNavegar` (não `items.length > 1`): só aparecem quando o
-            conteúdo de fato ultrapassa a largura visível do carrossel —
-            Embla já calcula isso sozinho via scrollSnapList().length > 1
-            (mais de 1 "página" de scroll = tem overflow de verdade), e
-            reavalia em resize através do evento `reInit` (useEffect acima).
-            Com todos os cards cabendo de uma vez (por mais itens que
-            existam) ou com 0/1 item, as setas somem por completo — não só
-            ficam desativadas. */}
-        {podeNavegar && (
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              onClick={irParaAnterior}
-              aria-label={prevLabel}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white"
-            >
-              <ChevronLeft size={20} strokeWidth={1.5} />
-            </button>
-            <button
-              onClick={irParaProxima}
-              aria-label={nextLabel}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white"
-            >
-              <ChevronRight size={20} strokeWidth={1.5} />
-            </button>
-          </div>
-        )}
-      </div>
+      {!hideHeader && (
+        <div className={headerClassName}>
+          <h2 className={titleClassName}>{title}</h2>
+          {/* `podeNavegar` (não `items.length > 1`): só aparecem quando o
+              conteúdo de fato ultrapassa a largura visível do carrossel —
+              Embla já calcula isso sozinho via scrollSnapList().length > 1
+              (mais de 1 "página" de scroll = tem overflow de verdade), e
+              reavalia em resize através do evento `reInit` (useEffect acima).
+              Com todos os cards cabendo de uma vez (por mais itens que
+              existam) ou com 0/1 item, as setas somem por completo — não só
+              ficam desativadas. */}
+          {podeNavegar && (
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                onClick={irParaAnterior}
+                aria-label={prevLabel}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white"
+              >
+                <ChevronLeft size={20} strokeWidth={1.5} />
+              </button>
+              <button
+                onClick={irParaProxima}
+                aria-label={nextLabel}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-high text-on-variant transition-colors hover:bg-primary hover:text-white"
+              >
+                <ChevronRight size={20} strokeWidth={1.5} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {items.length === 0 ? (
         <p className="text-sm text-on-variant">{emptyMessage}</p>

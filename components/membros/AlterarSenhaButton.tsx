@@ -8,11 +8,15 @@ import { cn } from '@/lib/utils';
 
 // Diferente do fluxo de "Esqueceu a senha?" (login, deslogado — precisa do
 // link por email porque não existe sessão ainda), aqui o aluno já está
-// autenticado, então dá pra trocar a senha direto com updateUser, sem
-// precisar de link nenhum.
+// autenticado, então a troca em si não precisa de link nenhum — só de
+// updateUser. Mas antes disso este componente reautentica com a SENHA
+// ATUAL (signInWithPassword), pra confirmar que é realmente o dono da
+// conta trocando a senha (ex: sessão esquecida aberta em outro
+// dispositivo) — ver handleSubmit.
 export default function AlterarSenhaButton({ className }: { className?: string } = {}) {
   const supabase = createClient();
   const [open, setOpen] = useState(false);
+  const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [erro, setErro] = useState<string | null>(null);
@@ -20,6 +24,7 @@ export default function AlterarSenhaButton({ className }: { className?: string }
   const [loading, setLoading] = useState(false);
 
   function handleOpen() {
+    setSenhaAtual('');
     setNovaSenha('');
     setConfirmarSenha('');
     setErro(null);
@@ -31,6 +36,10 @@ export default function AlterarSenhaButton({ className }: { className?: string }
     e.preventDefault();
     setErro(null);
 
+    if (!senhaAtual) {
+      setErro('Informe sua senha atual.');
+      return;
+    }
     if (novaSenha.length < 6) {
       setErro('A senha precisa ter pelo menos 6 caracteres.');
       return;
@@ -41,14 +50,35 @@ export default function AlterarSenhaButton({ className }: { className?: string }
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password: novaSenha });
-    setLoading(false);
+    try {
+      // Confirma a senha ATUAL antes de trocar (pedido desta tarefa — o
+      // fluxo antigo trocava direto, sem checar nada). O Supabase Auth não
+      // tem um "verifyPassword" isolado; o jeito de validar é reautenticar
+      // de verdade com signInWithPassword, usando o e-mail da PRÓPRIA
+      // sessão (getUser — nunca um valor vindo de fora) contra a senha
+      // digitada. Só chama updateUser se isso confirmar.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('Não foi possível confirmar sua identidade. Tente novamente.');
 
-    if (error) {
-      setErro('Não foi possível alterar a senha. Tente novamente.');
-      return;
+      const { error: erroReauth } = await supabase.auth.signInWithPassword({ email: user.email, password: senhaAtual });
+      if (erroReauth) {
+        setErro('Senha atual incorreta.');
+        return;
+      }
+
+      const { error } = await supabase.auth.updateUser({ password: novaSenha });
+      if (error) {
+        setErro('Não foi possível alterar a senha. Tente novamente.');
+        return;
+      }
+      setSucesso(true);
+    } catch (err: any) {
+      setErro(err.message ?? 'Erro ao alterar a senha.');
+    } finally {
+      setLoading(false);
     }
-    setSucesso(true);
   }
 
   return (
@@ -63,6 +93,20 @@ export default function AlterarSenhaButton({ className }: { className?: string }
           <p className="text-sm text-primary">Senha alterada com sucesso.</p>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="perfil-senha-atual" className="mb-1.5 block text-sm font-medium text-on-surface">
+                Senha atual
+              </label>
+              <input
+                id="perfil-senha-atual"
+                type="password"
+                required
+                value={senhaAtual}
+                onChange={(e) => setSenhaAtual(e.target.value)}
+                className="input-field"
+                autoComplete="current-password"
+              />
+            </div>
             <div>
               <label htmlFor="perfil-nova-senha" className="mb-1.5 block text-sm font-medium text-on-surface">
                 Nova senha
