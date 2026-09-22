@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { LogOut, Search, SlidersHorizontal, User, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useHeaderScrolled } from '@/hooks/useHeaderScrolled';
-import { buildSupportWhatsappLink, cn } from '@/lib/utils';
+import { cn, slugify } from '@/lib/utils';
 import FiltroModal from '@/components/membros/FiltroModal';
 import type { Profile } from '@/types';
 
@@ -25,8 +25,8 @@ import type { Profile } from '@/types';
  * na própria Home; aqui aparece em toda página, igual a como a logo
  * completa do desktop também é sempre visível, não só na Home). No
  * desktop/tablet (`hidden md:flex`), a logo completa "MEMBERSFLIX" + a
- * navegação em linha (Início/Meus Cursos/Meu Perfil/Suporte, destaque
- * vermelho no ativo) — exatamente como já era.
+ * navegação em linha (Início/Cursos/Perfil/Suporte, destaque vermelho no
+ * ativo) — exatamente como já era.
  *
  * Lado direito sempre visível nas duas larguras, sem duplicar a LÓGICA de
  * busca/filtro/perfil nenhuma vez — só a apresentação de dois deles muda
@@ -78,7 +78,7 @@ import type { Profile } from '@/types';
  *
  * Busca/filtro aqui não filtram nenhuma lista local (esse header existe em
  * toda página, não só na Home) — eles escrevem direto na URL da tela de
- * busca dedicada (/membros/buscar?q=/categoria=/instrutor=), navegando pra
+ * busca dedicada (/cursos/buscar?q=/categoria=/instrutor=), navegando pra
  * lá se for preciso. Do outro lado, BuscarPageClient lê essa URL via
  * useSearchParams (reativo — refiltra sozinho a cada mudança, sem precisar
  * remontar), então essa tela nunca guarda a busca/filtro "sujos"
@@ -96,6 +96,11 @@ export default function Header({
   onFiltroModalAbertoChange,
 }: {
   profile: Pick<Profile, 'nome' | 'avatar_url'> | null;
+  // Não usado mais AQUI pro link "Suporte" (virou rota /suporte de verdade
+  // — pedido desta tarefa; a página /suporte é quem busca/usa o WhatsApp
+  // agora). Mantido no componente (e em MembrosChrome.tsx/
+  // MembrosLayoutShell.tsx, que continuam buscando/repassando) por não ser
+  // exclusivo do Header — outra coisa pode vir a precisar aqui depois.
   numeroWhatsapp: string | null;
   // Agrupada por nome (dado legado tem linhas duplicadas de categoria) — ver
   // comentário em app/membros/layout.tsx. `ids`: todas as linhas daquele
@@ -123,7 +128,6 @@ export default function Header({
   const pathname = usePathname();
   const router = useRouter();
   const scrolled = useHeaderScrolled();
-  const suporteLink = numeroWhatsapp ? buildSupportWhatsappLink(numeroWhatsapp) : null;
 
   // Estado só de "staging" pro input/painel — a filtragem de verdade
   // acontece na tela de busca, pra onde toda mudança aqui navega (ver
@@ -208,24 +212,47 @@ export default function Header({
     };
   }, [onFiltroModalAbertoChange]);
 
+  // id -> nome, "desagrupando" a prop `categorias` (cada entrada já
+  // representa um NOME distinto, com todos os ids que compartilham esse
+  // nome em `ids`) — pra converter os ids que o FiltroModal seleciona
+  // (categoriaIds, continua em espaço de id — é o que o checkbox precisa)
+  // no slug daquele nome, na hora de montar a URL. useMemo: `categorias`
+  // só muda se a lista de categorias em si mudar, não a cada render.
+  const nomePorCategoriaId = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const grupo of categorias) {
+      for (const id of grupo.ids) mapa.set(id, grupo.nome);
+    }
+    return mapa;
+  }, [categorias]);
+
   // router.replace (não push): busca em tempo real gera uma atualização de
   // URL a cada pausa na digitação — com push, cada uma dessas viraria uma
   // entrada no histórico, e o botão "voltar" do navegador ficaria inútil
   // (precisaria de uma entrada por letra digitada pra sair da busca).
   // replace mantém só a navegação real (entrar/sair da tela de busca) no
-  // histórico.
+  // histórico. /cursos/buscar (era /membros/buscar — pedido de uma tarefa
+  // posterior).
   function irParaBusca(next: { busca?: string; categoriaIds?: string[]; instrutorNomes?: string[] }) {
     const alvoBusca = next.busca ?? busca;
     const alvoCategoriaIds = next.categoriaIds ?? categoriaIds;
     const alvoInstrutorNomes = next.instrutorNomes ?? instrutorNomes;
 
+    // Slug do NOME na URL (era o id cru — pedido de uma tarefa posterior:
+    // "?categoria=criacao-de-sites" em vez de "?categoria=<uuid>"). Set
+    // dedup: 2+ ids do mesmo nome (categoria duplicada, dado legado) geram
+    // o mesmo slug, então colapsam numa entrada só sozinhos.
+    const alvoCategoriaSlugs = Array.from(
+      new Set(alvoCategoriaIds.map((id) => nomePorCategoriaId.get(id)).filter((nome): nome is string => !!nome).map(slugify))
+    );
+
     const params = new URLSearchParams();
     if (alvoBusca.trim()) params.set('q', alvoBusca.trim());
-    if (alvoCategoriaIds.length > 0) params.set('categoria', alvoCategoriaIds.join(','));
+    if (alvoCategoriaSlugs.length > 0) params.set('categoria', alvoCategoriaSlugs.join(','));
     if (alvoInstrutorNomes.length > 0) params.set('instrutor', alvoInstrutorNomes.join(','));
 
     const query = params.toString();
-    router.replace(`/membros/buscar${query ? `?${query}` : ''}`);
+    router.replace(`/cursos/buscar${query ? `?${query}` : ''}`);
   }
 
   // Debounce de 300ms: dispara sozinho conforme a pessoa digita, sem
@@ -334,41 +361,42 @@ export default function Header({
       >
       {/* Mobile (md:hidden): favicon + "Início", sempre visível — não a
           logo completa "MEMBERSFLIX" (essa é só desktop, ao lado). */}
-      <Link href="/membros/vitrine" aria-label="Início" className="flex shrink-0 items-center gap-2 drop-shadow-md md:hidden">
+      <Link href="/inicio" aria-label="Início" className="flex shrink-0 items-center gap-2 drop-shadow-md md:hidden">
         <Image src="/imagens/logohome.png" alt="" width={28} height={28} className="h-7 w-auto object-contain" />
         <span className="text-base font-bold text-white">Início</span>
       </Link>
 
       {/* Desktop/tablet (hidden md:block): logo completa, como já era. */}
-      <Link href="/membros/vitrine" className="hidden shrink-0 drop-shadow-md md:block">
+      <Link href="/inicio" className="hidden shrink-0 drop-shadow-md md:block">
         <Image src="/logo.png" alt="MembersFlix" width={140} height={32} priority className="h-[1.7rem] w-auto object-contain" />
       </Link>
 
       {/* Navegação em linha — só desktop/tablet (hidden md:flex); no mobile
           quem navega entre seções é a BottomNav (fixed embaixo), sem
-          duplicar aqui. */}
+          duplicar aqui. Rotas /inicio, /cursos, /perfil (pedido de uma
+          tarefa anterior) — as antigas /membros/vitrine, /membros/meus-
+          cursos, /membros/perfil continuam existindo (ver app/membros/*),
+          só o MENU passou a apontar pras novas. Rótulos "Cursos"/"Perfil"
+          (eram "Meus Cursos"/"Meu Perfil" — pedido desta tarefa, só o
+          texto, mesma rota). "Suporte" (pedido desta tarefa): agora é uma
+          rota de verdade (/suporte, nova página com FAQ + formulário +
+          WhatsApp/e-mail) em vez de abrir o WhatsApp direto — por isso
+          virou Link normal, sem depender de `suporteLink`/numeroWhatsapp
+          configurado (a página /suporte é quem trata o WhatsApp não
+          configurado, se for o caso). */}
       <nav className="hidden shrink-0 items-center gap-2 md:flex">
-        <Link href="/membros/vitrine" className={itemClasses(pathname.startsWith('/membros/vitrine'))}>
+        <Link href="/inicio" className={itemClasses(pathname.startsWith('/inicio'))}>
           Início
         </Link>
-        <Link href="/membros/meus-cursos" className={itemClasses(pathname.startsWith('/membros/meus-cursos'))}>
-          Meus Cursos
+        <Link href="/cursos" className={itemClasses(pathname.startsWith('/cursos'))}>
+          Cursos
         </Link>
-        <Link href="/membros/perfil" className={itemClasses(pathname.startsWith('/membros/perfil'))}>
-          Meu Perfil
+        <Link href="/perfil" className={itemClasses(pathname.startsWith('/perfil'))}>
+          Perfil
         </Link>
-        {suporteLink ? (
-          <a href={suporteLink} target="_blank" rel="noopener noreferrer" className={itemClasses(false)}>
-            Suporte
-          </a>
-        ) : (
-          <span
-            title="Número de suporte não configurado pelo admin"
-            className="cursor-not-allowed text-sm font-medium text-on-variant/50 drop-shadow-md"
-          >
-            Suporte
-          </span>
-        )}
+        <Link href="/suporte" className={itemClasses(pathname.startsWith('/suporte'))}>
+          Suporte
+        </Link>
       </nav>
 
       {/* Grupo de ícones: busca, filtro (categoria/instrutor, painel
@@ -481,7 +509,7 @@ export default function Header({
             aria-expanded={perfilMenuAberto}
             className={cn(
               'flex h-9 w-9 items-center justify-center rounded-full bg-transparent [transition:color_0.25s_ease,background-color_0.25s_ease] hover:bg-white/10 hover:text-white',
-              pathname.startsWith('/membros/perfil') || perfilMenuAberto ? 'text-primary' : 'text-white/70'
+              pathname.startsWith('/perfil') || perfilMenuAberto ? 'text-primary' : 'text-white/70'
             )}
           >
             <User size={20} />

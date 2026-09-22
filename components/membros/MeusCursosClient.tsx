@@ -26,7 +26,10 @@ export default function MeusCursosClient({
       {cursos.length === 0 ? (
         <div className="flex flex-col items-start gap-3">
           <p className="text-sm text-on-variant">Você ainda não possui cursos.</p>
-          <Link href="/membros/vitrine" className="btn-primary">
+          {/* /cursos (era /membros/vitrine): catálogo completo com
+              busca/filtro (ver app/(portal)/cursos/page.tsx), mais direto
+              que mandar pra Home pra "explorar o catálogo". */}
+          <Link href="/cursos" className="btn-primary">
             Explorar catálogo
           </Link>
         </div>

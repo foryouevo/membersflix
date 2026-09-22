@@ -27,23 +27,32 @@ export default function BuscarPageClient({
   acessos,
   progressoPorCurso,
   numeroWhatsapp,
+  hrefsPorCurso,
 }: {
   todosCursos: Curso[];
   acessos: Record<string, boolean>;
   progressoPorCurso: Record<string, number>;
   numeroWhatsapp: string | null;
+  // Repassado pra TodosCursosPorCategoria (ver comentário lá — dicionário
+  // curso.id -> href, não uma função, por causa da fronteira Server/Client
+  // Component) — default é a rota clássica, usada por /membros/buscar sem
+  // passar nada; a rota nova (/cursos) passa a versão por slug.
+  hrefsPorCurso?: Record<string, string>;
 }) {
   const [modalCurso, setModalCurso] = useState<Curso | null>(null);
   const searchParams = useSearchParams();
 
   const busca = searchParams.get('q') ?? '';
-  const categoriaIds = useMemo(() => searchParams.get('categoria')?.split(',').filter(Boolean) ?? [], [searchParams]);
+  // categoriaSlugs (era categoriaIds — pedido de uma tarefa posterior):
+  // a URL agora carrega slugs (?categoria=criacao-de-sites), não ids —
+  // ver comentário completo em hooks/useCursoFiltro.ts (FiltroCursos).
+  const categoriaSlugs = useMemo(() => searchParams.get('categoria')?.split(',').filter(Boolean) ?? [], [searchParams]);
   const instrutorNomes = useMemo(() => searchParams.get('instrutor')?.split(',').filter(Boolean) ?? [], [searchParams]);
-  const filtroAtivo = busca.trim() !== '' || categoriaIds.length > 0 || instrutorNomes.length > 0;
+  const filtroAtivo = busca.trim() !== '' || categoriaSlugs.length > 0 || instrutorNomes.length > 0;
 
   const cursosFiltrados = useMemo(
-    () => filtrarCursos(todosCursos, { busca, categoriaIds, instrutorNomes }),
-    [todosCursos, busca, categoriaIds, instrutorNomes]
+    () => filtrarCursos(todosCursos, { busca, categoriaSlugs, instrutorNomes }),
+    [todosCursos, busca, categoriaSlugs, instrutorNomes]
   );
   const gruposPorCategoria = useMemo(() => agruparPorCategoria(cursosFiltrados), [cursosFiltrados]);
 
@@ -59,6 +68,7 @@ export default function BuscarPageClient({
         progressoPorCurso={progressoPorCurso}
         onClickLocked={setModalCurso}
         emptyMessage={filtroAtivo ? 'Nenhum curso encontrado com esse filtro.' : 'Use a busca ou o filtro pra encontrar um curso.'}
+        hrefsPorCurso={hrefsPorCurso}
       />
 
       <AccessModal open={!!modalCurso} onClose={() => setModalCurso(null)} curso={modalCurso} numeroWhatsapp={numeroWhatsapp} />

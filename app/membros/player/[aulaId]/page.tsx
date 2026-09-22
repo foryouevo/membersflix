@@ -1,10 +1,12 @@
 import { notFound, redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import PlayerPageClient from '@/components/membros/PlayerPageClient';
+import { carregarPlayerDados } from '@/lib/membros/player-dados';
 
 export default async function PlayerPage({ params }: { params: { aulaId: string } }) {
   // DIAGNÓSTICO TEMPORÁRIO (investigação de travamento na tela da aula,
-  // remover depois de identificar a causa).
+  // remover depois de identificar a causa) — mantido aqui como já estava;
+  // não fazia parte do escopo desta tarefa de rotas/slugs.
   const inicio = Date.now();
   console.log(`[PlayerPage] iniciando carregamento da página (aula ${params.aulaId})`);
 
@@ -28,44 +30,23 @@ export default async function PlayerPage({ params }: { params: { aulaId: string 
   const curso = modulo?.curso;
   if (!modulo || !curso) notFound();
 
-  const { data: todosModulos } = await supabase
-    .from('modulos')
-    .select('*, aulas(*)')
-    .eq('curso_id', curso.id)
-    .order('ordem');
+  // Módulos/progresso/aula-anterior/próxima: lógica extraída pra
+  // lib/membros/player-dados.ts, reaproveitada também por
+  // app/(portal)/curso/[slug]/[aulaSlug]/page.tsx.
+  const { modulosComStatus, indiceAtual, aulaAnterior, proximaAula, posicaoInicial } = await carregarPlayerDados(
+    supabase,
+    user!.id,
+    curso.id,
+    aula.id
+  );
+  // curso.slug || fallback pro id: mesma proteção usada em todo lugar que
+  // monta link por slug — enquanto a migration 011 não rodar em produção.
+  if (indiceAtual === -1) redirect(curso.slug ? `/curso/${curso.slug}` : `/membros/curso/${curso.id}`);
 
-  const { data: progresso } = await supabase.from('progresso_aulas').select('aula_id, concluida, segundo_atual').eq('aluno_id', user!.id);
-  const progressoPorAula = new Map((progresso ?? []).map((p: any) => [p.aula_id, p]));
-
-  // video_url nunca sai daqui pro client — nem o da aula atual, nem o das
-  // outras aulas do curso (que também apareceriam na lista lateral se não
-  // fossem removidos). O VideoPlayer busca a URL sob demanda via
-  // /api/membros/aulas/[aulaId]/video só quando precisa tocar o vídeo.
-  // Módulo "pai" (guarda-chuva) nunca tem aula própria — filtrado aqui pra
-  // não contar como uma posição a mais em "Módulo X" no cabeçalho do player
-  // (ver numeroModulo em PlayerPageClient) nem aparecer com uma lista de
-  // aulas vazia em lugar nenhum.
-  const idsComFilho = new Set((todosModulos ?? []).map((m: any) => m.modulo_pai_id).filter(Boolean));
-  const modulosComStatus = (todosModulos ?? [])
-    .filter((m: any) => !idsComFilho.has(m.id))
-    .map((m: any) => ({
-      ...m,
-      aulas: (m.aulas ?? [])
-        .sort((a: any, b: any) => a.ordem - b.ordem)
-        .map(({ video_url, ...a }: any) => ({ ...a, concluida: progressoPorAula.get(a.id)?.concluida ?? false })),
-    }));
-
-  const todasAulasOrdenadas = modulosComStatus.flatMap((m: any) => m.aulas);
-  const indiceAtual = todasAulasOrdenadas.findIndex((a: any) => a.id === aula.id);
-  if (indiceAtual === -1) redirect(`/membros/curso/${curso.id}`);
-
-  const aulaAnteriorId = indiceAtual > 0 ? todasAulasOrdenadas[indiceAtual - 1].id : null;
-  const proximaAulaId = indiceAtual < todasAulasOrdenadas.length - 1 ? todasAulasOrdenadas[indiceAtual + 1].id : null;
-  const posicaoInicial = progressoPorAula.get(aula.id)?.segundo_atual ?? 0;
   const { video_url: _videoUrl, ...aulaSemVideoUrl } = aula as any;
 
   console.log(
-    `[PlayerPage] dados completos em ${Date.now() - inicio}ms (aula ${params.aulaId}, módulos=${modulosComStatus.length}, aulas do curso=${todasAulasOrdenadas.length}) — renderizando PlayerPageClient`
+    `[PlayerPage] dados completos em ${Date.now() - inicio}ms (aula ${params.aulaId}, módulos=${modulosComStatus.length}) — renderizando PlayerPageClient`
   );
 
   return (
@@ -75,8 +56,13 @@ export default async function PlayerPage({ params }: { params: { aulaId: string 
       aula={aulaSemVideoUrl}
       documentos={(aula as any).documentos ?? []}
       modulos={modulosComStatus as any}
-      aulaAnteriorId={aulaAnteriorId}
-      proximaAulaId={proximaAulaId}
+      // Sem hrefsPorAula/hrefCurso: usa os defaults/fallback de
+      // PlayerPageClient, que já apontam pra rota por slug
+      // (/curso/[slug]/[slug-da-aula] e /curso/[slug]) — só a rota nova
+      // (app/(portal)/curso/[slug]/[aulaSlug]/page.tsx) passa um
+      // dicionário explícito em vez de depender do fallback.
+      aulaAnterior={aulaAnterior ? { id: aulaAnterior.id, slug: aulaAnterior.slug } : null}
+      proximaAula={proximaAula ? { id: proximaAula.id, slug: proximaAula.slug } : null}
       posicaoInicial={posicaoInicial}
     />
   );

@@ -14,6 +14,13 @@ export interface Profile {
   status_pagamento: StatusPagamento;
   liberado_em: string;
   bloqueado: boolean;
+  // true só pra contas criadas pelo próprio aluno na tela de login (aba
+  // "Cadastra-se") — false (default) pra toda conta criada pelo admin
+  // (app/admin/alunos/actions.ts). Diferencia qual regra de bloqueio
+  // pós-trial de 30min se aplica: conta inteira (false, ver
+  // bloquear_pagamentos_pendentes) ou só o curso escolhido (true, ver
+  // bloquear_acessos_curso_pendentes) — migration 012.
+  cadastro_publico: boolean;
   created_at: string;
 }
 
@@ -26,6 +33,11 @@ export interface Categoria {
 
 export interface Curso {
   id: string;
+  // Gerado automaticamente pelo banco (trigger, ver
+  // supabase/migrations/011_slugs_curso_aula.sql) a partir de `titulo` na
+  // criação — nunca muda depois, mesmo que o título seja editado (URL
+  // estável). Usado nas rotas novas /curso/[slug] (ver app/(portal)/).
+  slug: string;
   titulo: string;
   descricao: string | null;
   categoria_id: string | null;
@@ -59,6 +71,9 @@ export interface Modulo {
 export interface Aula {
   id: string;
   modulo_id: string;
+  // Mesma ideia de Curso.slug acima — gerado pelo mesmo tipo de trigger
+  // (gerar_slug_aula), único GLOBALMENTE (não só dentro do módulo/curso).
+  slug: string;
   titulo: string;
   descricao: string | null;
   video_origem: VideoOrigem;

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import CursoDetalheClient from '@/components/membros/CursoDetalheClient';
+import { carregarCursoDetalhe } from '@/lib/membros/curso-detalhe';
 
 export default async function CursoDetalhePage({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -9,102 +9,28 @@ export default async function CursoDetalhePage({ params }: { params: { id: strin
     data: { user },
   } = await supabase.auth.getUser();
 
-  // curso/acesso/config não dependem um do outro (só de params.id/user.id,
-  // já disponíveis) — rodam em paralelo em vez de 3 idas-e-voltas em
-  // sequência. categoria:categorias(*) — junta a categoria real do curso
-  // (usada no badge do hero); antes a query só trazia categoria_id, então
-  // curso.categoria nunca vinha preenchido apesar do tipo Curso já prever
-  // esse campo.
-  const [{ data: curso }, { data: acesso }, { data: config }] = (await Promise.all([
+  const [{ data: curso }, { data: config }] = (await Promise.all([
     supabase.from('cursos').select('*, categoria:categorias(*)').eq('id', params.id).maybeSingle(),
-    supabase.from('acessos_curso').select('bloqueado').eq('aluno_id', user!.id).eq('curso_id', params.id).maybeSingle(),
     supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle(),
-  ])) as [{ data: any }, { data: any }, { data: any }];
+  ])) as [{ data: any }, { data: any }];
 
   if (!curso) notFound();
 
-  const hasAccess = !!acesso && !acesso.bloqueado;
-
-  let modulos: any[] = [];
-  let jaComecou = false;
-  // Durante o trial de 30min (status_pagamento = 'pendente'), só o módulo de
-  // menor `ordem` fica acessível — calculado aqui só pro cadeado visual dos
-  // outros módulos. A trava de verdade é a RLS de `aulas`/`documentos` (ver
-  // supabase/migrations/004_trial_30min_modulo1.sql): mesmo que o aluno
-  // acesse a URL de uma aula de outro módulo direto, a query volta vazia.
-  let trialModuloUnicoId: string | null = null;
-
-  if (hasAccess) {
-    // modulos/progresso/profile (status_pagamento, usado só mais abaixo pro
-    // cálculo do trial) não dependem um do outro — rodam em paralelo em vez
-    // de 3 idas-e-voltas em sequência (era: busca modulos, ESPERA, busca
-    // progresso, ESPERA... e o profile vinha bem mais abaixo, numa 3ª
-    // rodada separada).
-    const [{ data }, { data: progresso }, { data: profileTrial }] = (await Promise.all([
-      supabase.from('modulos').select('*, aulas(*, documentos(*))').eq('curso_id', params.id).order('ordem'),
-      supabase.from('progresso_aulas').select('aula_id, concluida').eq('aluno_id', user!.id).eq('curso_id', params.id),
-      supabase.from('profiles').select('status_pagamento').eq('id', user!.id).maybeSingle(),
-    ])) as [{ data: any[] | null }, { data: any[] | null }, { data: { status_pagamento: string } | null }];
-    modulos = data ?? [];
-
-    const concluidaPorAula = new Map((progresso ?? []).map((p: any) => [p.aula_id, p.concluida]));
-    jaComecou = (progresso?.length ?? 0) > 0;
-
-    modulos = modulos.map((m) => ({
-      ...m,
-      aulas: (m.aulas ?? [])
-        .sort((a: any, b: any) => a.ordem - b.ordem)
-        .map((a: any) => ({ ...a, concluida: concluidaPorAula.get(a.id) ?? false })),
-    }));
-
-    // Diferente da versão anterior: módulo "pai" (guarda-chuva, ex: "[02]
-    // Filmmaking Avançado") continua na lista passada pro client — é o
-    // CursoDetalheClient quem decide como agrupar visualmente (seção
-    // própria por pai, com os filhos no carrossel dela). Aqui só o cálculo
-    // do trial precisa ignorar os pais: eles nunca têm aula própria, então
-    // não fazem sentido como "o Módulo 1 liberado" (mesma regra de sempre,
-    // só isolada numa lista à parte em vez de filtrar a lista principal).
-    // profileTrial já foi buscado junto com modulos/progresso acima — só
-    // precisa dos módulos já prontos (modulos.map logo acima) pra calcular.
-    if (profileTrial?.status_pagamento === 'pendente') {
-      const idsComFilho = new Set(modulos.map((m) => m.modulo_pai_id).filter(Boolean));
-      const folhas = modulos.filter((m) => !idsComFilho.has(m.id));
-      if (folhas.length > 0) {
-        trialModuloUnicoId = folhas.reduce((min: any, m: any) => (m.ordem < min.ordem ? m : min), folhas[0]).id;
-      }
-    }
-  } else {
-    // Estrutura só com títulos (sem video_url/documentos) para exibir o índice mesmo sem acesso.
-    const admin = createAdminClient();
-    const { data } = await admin
-      .from('modulos')
-      .select('id, curso_id, titulo, capa_url, ordem, modulo_pai_id, aulas(id, titulo, ordem, duracao_segundos)')
-      .eq('curso_id', params.id)
-      .order('ordem');
-    modulos = (data ?? []).map((m: any) => ({
-      ...m,
-      aulas: (m.aulas ?? [])
-        .sort((a: any, b: any) => a.ordem - b.ordem)
-        .map((a: any) => ({ ...a, documentos: [], concluida: false })),
-    }));
-  }
-
-  const todasAulas = modulos.flatMap((m) => m.aulas);
-  const totalAulas = todasAulas.length;
-  const concluidas = todasAulas.filter((a: any) => a.concluida).length;
-  const proximaAula = todasAulas.find((a: any) => !a.concluida) ?? todasAulas[0] ?? null;
+  // Módulos/aulas/progresso/trial: lógica extraída pra
+  // lib/membros/curso-detalhe.ts, reaproveitada também por
+  // app/(portal)/curso/[slug]/page.tsx (mesma busca, só muda como o
+  // cursoId é descoberto a partir da URL — por id aqui, por slug lá).
+  const detalhe = await carregarCursoDetalhe(supabase, user!.id, curso.id);
 
   return (
     <CursoDetalheClient
       curso={curso}
-      hasAccess={hasAccess}
-      modulos={modulos}
-      trialModuloUnicoId={trialModuloUnicoId}
-      totalAulas={totalAulas}
-      concluidas={concluidas}
       numeroWhatsapp={config?.numero_whatsapp ?? null}
-      proximaAulaId={proximaAula?.id ?? null}
-      jaComecou={jaComecou}
+      // Sem hrefsPorAula: cai no fallback de CursoDetalheClient, que já
+      // aponta pra rota por slug (/curso/[slug-do-curso]/[slug-da-aula])
+      // — só a rota nova (app/(portal)/curso/[slug]/page.tsx) passa um
+      // dicionário explícito em vez de depender do fallback.
+      {...detalhe}
     />
   );
 }

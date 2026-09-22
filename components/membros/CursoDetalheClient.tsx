@@ -7,10 +7,21 @@ import { Lock, Play } from 'lucide-react';
 import AccessModal from '@/components/membros/AccessModal';
 import Carousel from '@/components/membros/Carousel';
 import { useDificultarInspecao } from '@/hooks/useDificultarInspecao';
-import { formatTitulo, getCapaModulo } from '@/lib/utils';
+import { formatTitulo } from '@/lib/utils';
 import type { Aula, Curso, Documento, Modulo } from '@/types';
 
 type ModuloComAulas = Modulo & { aulas: (Aula & { documentos: Documento[]; concluida: boolean })[] };
+
+// Fallback pra rota clássica quando cursoSlug/aula.slug vier vazio —
+// acontece se a migration 011 (coluna `slug`) ainda não rodou em produção,
+// não é um bug de query/nome de campo (a coluna literalmente não existe
+// ainda no banco, então todo `select` volta sem ela). Sem isso, o link
+// virava `/curso/undefined/undefined` (404) — com isso, cai de volta pra
+// rota que já funciona hoje. Usado nos dois pontos que montam link de
+// aula neste arquivo (hero + ModuloCard).
+function hrefAulaFallback(cursoSlug: string, aula: { id: string; slug: string }) {
+  return cursoSlug && aula.slug ? `/curso/${cursoSlug}/${aula.slug}` : `/membros/player/${aula.id}`;
+}
 
 export default function CursoDetalheClient({
   curso,
@@ -18,7 +29,8 @@ export default function CursoDetalheClient({
   modulos,
   trialModuloUnicoId,
   numeroWhatsapp,
-  proximaAulaId,
+  proximaAula,
+  hrefsPorAula = {},
 }: {
   curso: Curso;
   hasAccess: boolean;
@@ -27,7 +39,20 @@ export default function CursoDetalheClient({
   totalAulas: number;
   concluidas: number;
   numeroWhatsapp: string | null;
-  proximaAulaId: string | null;
+  // Objeto (era só o id) — passa a carregar `slug` também (usado só pelo
+  // fallback do href, ver `hrefsPorAula` abaixo).
+  proximaAula: { id: string; slug: string } | null;
+  // Dicionário aulaId -> href PRONTO (era uma função `(aula) => string`,
+  // mas função não pode atravessar a fronteira Server->Client Component:
+  // este é um Client Component ['use client' no topo], e as páginas que o
+  // usam são Server Components — só dados serializáveis passam, não
+  // funções). Sem entrada pro id (default {}, ou id ausente do mapa), cai
+  // no fallback /curso/[slug-do-curso]/[slug-da-aula] (usando `curso.slug`
+  // + o slug da própria aula — ver os dois usos de `cursoSlug` mais
+  // abaixo) — mesma rota nova que app/membros/curso/[id]/page.tsx (a
+  // clássica, sem passar nada aqui) e app/(portal)/curso/[slug]/page.tsx
+  // (que monta o dicionário completo) acabam usando de qualquer forma.
+  hrefsPorAula?: Record<string, string>;
   jaComecou: boolean;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
@@ -84,8 +109,11 @@ export default function CursoDetalheClient({
 
           <div className="mt-3 flex items-center gap-3 sm:mt-4">
             {hasAccess ? (
-              proximaAulaId ? (
-                <Link href={`/membros/player/${proximaAulaId}`} className="btn-primary flex items-center gap-2">
+              proximaAula ? (
+                <Link
+                  href={hrefsPorAula[proximaAula.id] ?? hrefAulaFallback(curso.slug, proximaAula)}
+                  className="btn-primary flex items-center gap-2"
+                >
                   <Play size={16} className="fill-white" />
                   Assistir Agora
                 </Link>
@@ -130,6 +158,8 @@ export default function CursoDetalheClient({
           hasAccess={hasAccess}
           trialModuloUnicoId={trialModuloUnicoId}
           onClickLocked={() => setModalOpen(true)}
+          hrefsPorAula={hrefsPorAula}
+          cursoSlug={curso.slug}
         />
       </div>
 
@@ -165,11 +195,15 @@ function SecoesDeModulos({
   hasAccess,
   trialModuloUnicoId,
   onClickLocked,
+  hrefsPorAula,
+  cursoSlug,
 }: {
   modulos: ModuloComAulas[];
   hasAccess: boolean;
   trialModuloUnicoId: string | null;
   onClickLocked: () => void;
+  hrefsPorAula: Record<string, string>;
+  cursoSlug: string;
 }) {
   const filhosPorPai = new Map<string, ModuloComAulas[]>();
   for (const m of modulos) {
@@ -202,6 +236,8 @@ function SecoesDeModulos({
         hasAccess={hasAccess}
         trialModuloUnicoId={trialModuloUnicoId}
         onClickLocked={onClickLocked}
+        hrefsPorAula={hrefsPorAula}
+        cursoSlug={cursoSlug}
       />
     );
   }
@@ -221,6 +257,8 @@ function SecoesDeModulos({
             hasAccess={hasAccess}
             trialModuloUnicoId={trialModuloUnicoId}
             onClickLocked={onClickLocked}
+            hrefsPorAula={hrefsPorAula}
+            cursoSlug={cursoSlug}
           />
         );
       })}
@@ -235,6 +273,8 @@ function ModuloCarrosselSecao({
   hasAccess,
   trialModuloUnicoId,
   onClickLocked,
+  hrefsPorAula,
+  cursoSlug,
 }: {
   modulos: ModuloComAulas[];
   titulo: string;
@@ -242,6 +282,8 @@ function ModuloCarrosselSecao({
   hasAccess: boolean;
   trialModuloUnicoId: string | null;
   onClickLocked: () => void;
+  hrefsPorAula: Record<string, string>;
+  cursoSlug: string;
 }) {
   return (
     // Carrossel genérico (components/membros/Carousel.tsx — Embla: drag com
@@ -282,6 +324,8 @@ function ModuloCarrosselSecao({
           hasAccess={hasAccess}
           bloqueadoPorTrial={hasAccess && trialModuloUnicoId !== null && trialModuloUnicoId !== modulo.id}
           onClickLocked={onClickLocked}
+          hrefsPorAula={hrefsPorAula}
+          cursoSlug={cursoSlug}
         />
       )}
     />
@@ -293,11 +337,15 @@ function ModuloCard({
   hasAccess,
   bloqueadoPorTrial,
   onClickLocked,
+  hrefsPorAula,
+  cursoSlug,
 }: {
   modulo: ModuloComAulas;
   hasAccess: boolean;
   bloqueadoPorTrial: boolean;
   onClickLocked: () => void;
+  hrefsPorAula: Record<string, string>;
+  cursoSlug: string;
 }) {
   const bloqueado = !hasAccess || bloqueadoPorTrial;
   const assistidas = modulo.aulas.filter((a) => a.concluida).length;
@@ -305,34 +353,36 @@ function ModuloCard({
   // Continua de onde parou: primeira aula não assistida do módulo, ou a primeira aula se nenhuma foi assistida ainda.
   const proximaAulaDoModulo = modulo.aulas.find((a) => !a.concluida) ?? modulo.aulas[0] ?? null;
 
-  // getCapaModulo (lib/utils.ts) já resolve capa_url vazia/nula/mal formada
-  // pra CAPA_MODULO_PADRAO — capaComErro cobre o caso que só dá pra saber em
-  // runtime: URL bem formada mas que não carrega de verdade (arquivo
-  // apagado do Drive/Storage depois de cadastrada) — o <Image> abaixo troca
-  // pra ela sozinho via onError, em vez de ficar com o ícone de imagem
-  // quebrada do navegador.
-  const [capaComErro, setCapaComErro] = useState(false);
-  const capaSrc = capaComErro ? '/modulo-capa-padrao.png' : getCapaModulo(modulo.capa_url);
-
   const content = (
     // h-full em vez de aspect-[3/4]: a proporção 3/4 agora é definida no
     // wrapper do slide (ModulosCarousel), aqui só herda a altura/largura já
     // calculadas — repetir aspect-ratio nos dois níveis seria redundante.
     <div className="group relative h-full w-full hover:z-10">
       <div
-        className={`relative h-full w-full overflow-hidden rounded-lg bg-surface-highest ring-1 ring-transparent transition-all duration-200 ease-out group-hover:scale-[1.04] group-hover:shadow-overlay group-hover:ring-primary/60 ${bloqueado ? 'locked-card' : ''}`}
+        className={`relative flex h-full w-full flex-col overflow-hidden rounded-lg px-4 pb-4 ring-1 ring-transparent transition-all duration-200 ease-out group-hover:scale-[1.04] group-hover:shadow-overlay group-hover:ring-primary/60 ${bloqueado ? 'locked-card' : ''}`}
+        // Fundo em gradiente (pedido explícito — era uma imagem de capa
+        // antes) — MESMA paleta/formula do gradiente vermelho/escuro já
+        // usado no resto da plataforma (app/globals.css, regra `body`),
+        // só como linear em vez de radial: pra um card pequeno e
+        // vertical como este, um degradê de cima pra baixo fica mais
+        // natural que uma elipse pensada pra tela cheia — as CORES são
+        // exatamente as mesmas, não inventei nenhuma nova.
+        style={{ background: 'linear-gradient(180deg, #5c2020 0%, #3a1a1a 30%, #241717 55%, #141414 100%)' }}
       >
-        <Image
-          src={capaSrc}
-          alt={modulo.titulo}
-          fill
-          className="object-cover"
-          sizes="320px"
-          onError={() => setCapaComErro(true)}
-        />
+        {/* Logo centralizada (horizontal e verticalmente) na área
+            disponível ACIMA do título — flex-1 ocupa todo o espaço que
+            sobra no card, empurrando o título (fora desta div) pro final.
+            Mesmo arquivo já usado no Header (public/logo.png). Altura
+            aumentada pra h-8 (2rem) — pedido explícito desta tarefa. */}
+        <div className="flex flex-1 items-center justify-center">
+          <Image src="/logo.png" alt="" width={140} height={28} className="h-8 w-auto object-contain opacity-90" />
+        </div>
 
-        {/* Gradiente escuro na base pra legibilidade do nome do módulo por cima da imagem */}
-        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+        {/* font-size 1.1rem / font-weight 400 mantidos (eram o estilo já
+            usado antes desta tarefa); posição fixa no final do card (fora
+            do flex-1 acima). text-start (era text-center) — pedido
+            explícito desta tarefa. */}
+        <p className="text-start text-[1.1rem] font-normal leading-tight text-white">{formatTitulo(modulo.titulo)}</p>
 
         {bloqueado && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -340,16 +390,8 @@ function ModuloCard({
           </div>
         )}
 
-        {/* font-size 1.1rem / font-weight 400 substituem o estilo anterior
-            (0.95rem / font-semibold); margin: 10px e padding: 0 5px continuam
-            os mesmos de antes. Cor branca e posição (canto inferior, sobre a
-            imagem) também continuam. Sem ícone antes do texto — não havia
-            nenhum aqui pra remover. */}
-        <p className="absolute inset-x-0 bottom-2 m-[10px] px-[5px] py-0 text-[1.1rem] font-normal leading-tight text-white">
-          {formatTitulo(modulo.titulo)}
-        </p>
-
-        {/* Barra de progresso fina na borda inferior do card */}
+        {/* Barra de progresso fina na borda inferior do card — mantida
+            como estava (pedido explícito). */}
         <div className="absolute inset-x-0 bottom-0 h-1 bg-surface-high">
           <div className="h-full bg-primary" style={{ width: `${progressoModulo}%` }} />
         </div>
@@ -381,7 +423,10 @@ function ModuloCard({
   }
 
   return (
-    <Link href={`/membros/player/${proximaAulaDoModulo.id}`} className="block h-full w-full">
+    <Link
+      href={hrefsPorAula[proximaAulaDoModulo.id] ?? hrefAulaFallback(cursoSlug, proximaAulaDoModulo)}
+      className="block h-full w-full"
+    >
       {content}
     </Link>
   );

@@ -189,34 +189,36 @@ export default function CursoDestaque({
               (w-full herdado do .btn-primary). md:px-8/md:py-3 continuam
               (padding interno mantido); md:text-[1.1rem] md:leading-6
               (tamanho/altura de linha) são novos, pedidos explicitamente.
-              href em âncora (#todos-os-cursos, id novo em
-              VitrinePageClient.tsx): rola até a seção "Todos os Cursos" da
-              própria Home, não navega pra outra rota. */}
-          <a
-            href="#todos-os-cursos"
+              href /cursos (era âncora #todos-os-cursos, rolando até a
+              seção "Todos os Cursos" da própria Home — pedido de uma
+              tarefa posterior: virou navegação de rota de verdade, pro
+              catálogo completo com busca/filtro, ver
+              app/(portal)/cursos/page.tsx). Link (não mais <a>). */}
+          <Link
+            href="/cursos"
             className="btn-primary flex w-full items-center justify-center gap-2 rounded-full py-2.5 md:w-fit md:px-8 md:py-3 md:text-[1.1rem] md:leading-6"
           >
             Explorar cursos
-          </a>
+          </Link>
 
-          {/* Segundo botão, "Meus cursos" — pedido explícito, em todas as
-              telas. Mesmas classes de tamanho/padding/altura/border-radius
-              do botão acima (flex w-full items-center justify-center gap-2
-              rounded-full px-4 py-2.5 md:w-fit md:px-8 md:py-3
-              md:text-[1.1rem] md:leading-6 + text-sm font-semibold, que no
-              botão de cima vêm do .btn-primary) — só a cor muda: fundo
-              branco/texto #141414
+          {/* Segundo botão, "Meus cursos". Mesmas classes de tamanho/
+              padding/altura/border-radius do botão acima (flex w-full
+              items-center justify-center gap-2 rounded-full px-4 py-2.5
+              md:w-fit md:px-8 md:py-3 md:text-[1.1rem] md:leading-6 +
+              text-sm font-semibold, que no botão de cima vêm do
+              .btn-primary) — só a cor muda: fundo branco/texto #141414
               (bg-white text-[#141414], não dá pra usar .btn-primary/
               .btn-secondary aqui, nenhum dos dois tem essa combinação) +
               hover branco levemente acinzentado (hover:bg-white/90),
               coerente com o hover do vermelho (.btn-primary usa
               hover:bg-primary-hover, um vermelho um pouco mais escuro — aqui
               é a mesma ideia de "escurecer um pouco no hover", só que a
-              partir do branco). Link (não <a>): rota de verdade
-              (/membros/meus-cursos), diferente do âncora de rolagem ao
-              lado. */}
+              partir do branco). href /cursos (era /membros/meus-cursos —
+              pedido de uma tarefa posterior: os dois botões agora vão pro
+              MESMO catálogo completo, não só os cursos que o aluno já
+              tem). */}
           <Link
-            href="/membros/meus-cursos"
+            href="/cursos"
             className="flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-[#141414] transition-colors hover:bg-white/90 md:w-fit md:px-8 md:py-3 md:text-[1.1rem] md:leading-6"
           >
             Meus cursos

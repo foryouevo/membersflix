@@ -24,6 +24,9 @@ const ITEM_BASIS_CLASSES = 'flex-[0_0_100%] lg:flex-[0_0_calc((100%-2rem)/3)]';
 
 export type MeuCursoItem = {
   id: string;
+  // Pra montar o link pro curso por slug (/curso/[slug] — pedido de uma
+  // tarefa posterior, era /membros/curso/[id]) sem precisar do id.
+  slug: string;
   titulo: string;
   thumbnail_url: string | null;
   capa_url: string | null;
@@ -379,12 +382,15 @@ export default function MeusCursosCard({ cursos }: { cursos: MeuCursoItem[] }) {
 // exibidos aqui são diferentes (categoria + nº de aulas, progresso em %
 // sempre visível) e mudar CourseCard pra isso afetaria aquelas outras
 // telas, fora do escopo deste pedido. Reaproveita sim o comportamento de
-// navegação (Link direto pra /membros/curso/[id] — essa página já resolve
+// navegação (Link direto pra /curso/[slug] — essa página já resolve
 // sozinha o caso de curso bloqueado, sem precisar de modal aqui).
 function CardMeuCurso({ curso }: { curso: MeuCursoItem }) {
   const imagem = curso.thumbnail_url || curso.capa_url;
   return (
-    <Link href={`/membros/curso/${curso.id}`} className="group block">
+    // curso.slug || fallback pro id: mesma proteção de CourseCard.tsx —
+    // enquanto a migration 011 (coluna slug) não rodar em produção,
+    // curso.slug chega undefined aqui também.
+    <Link href={curso.slug ? `/curso/${curso.slug}` : `/membros/curso/${curso.id}`} className="group block">
       <div className="relative aspect-video overflow-hidden rounded-lg bg-surface-high">
         {imagem ? (
           <Image

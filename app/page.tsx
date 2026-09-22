@@ -13,5 +13,11 @@ export default async function RootPage() {
     data: { tipo: string } | null;
   };
 
-  redirect(profile?.tipo === 'admin' ? '/admin/dashboard' : '/membros/vitrine');
+  // /inicio (era /membros/vitrine — pedido explícito): LoginPageClient.tsx
+  // faz router.replace('/') logo após o login, que cai bem aqui — este é
+  // o ponto real que decide pra onde o aluno vai depois de logar.
+  // /membros/vitrine continua existindo (mesma página, só outra URL — ver
+  // app/(portal)/inicio/page.tsx), não precisa mudar mais nada além do
+  // destino do redirect.
+  redirect(profile?.tipo === 'admin' ? '/admin/dashboard' : '/inicio');
 }

@@ -151,7 +151,7 @@ export default function FiltroModal({
   // nunca limpo. Agora chama `onApply([], [])` — a MESMA função que
   // "Aplicar" já usa — reaproveitando a lógica existente em vez de duplicar
   // ou criar um estado paralelo: ela atualiza o estado real em Header.tsx,
-  // navega pra /membros/buscar sem filtro nenhum e fecha o modal (mesmo
+  // navega pra /cursos/buscar sem filtro nenhum e fecha o modal (mesmo
   // comportamento de sempre pra um "Aplicar" com seleção vazia).
   function handleLimpar() {
     setCategoriaIds([]);

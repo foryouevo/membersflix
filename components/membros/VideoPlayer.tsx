@@ -31,8 +31,13 @@ interface VideoPlayerProps {
   cursoId: string;
   videoUrl: string;
   posicaoInicial: number;
-  aulaAnteriorId: string | null;
-  proximaAulaId: string | null;
+  // Hrefs prontos (eram só o id, com a montagem `/membros/player/${id}`
+  // feita aqui dentro) — quem chama (PlayerPageClient) já resolve a URL
+  // certa pra rota em que está (clássica ou /curso/[slug]/[slug-da-aula]),
+  // este componente só usa o que recebeu, sem saber nada sobre o formato
+  // da URL.
+  aulaAnteriorHref: string | null;
+  proximaAulaHref: string | null;
   voltarHref: string;
   voltarLabel: string;
 }
@@ -176,8 +181,8 @@ function CustomVideoPlayer({
   cursoId,
   videoUrl,
   posicaoInicial,
-  aulaAnteriorId,
-  proximaAulaId,
+  aulaAnteriorHref,
+  proximaAulaHref,
   voltarHref,
   voltarLabel,
 }: VideoPlayerProps) {
@@ -654,7 +659,7 @@ function CustomVideoPlayer({
         onProgress={(state: any) => !seeking && setPlayed(state.played)}
         onEnded={() => {
           salvarProgresso(duration, true);
-          if (proximaAulaId) window.location.href = `/membros/player/${proximaAulaId}`;
+          if (proximaAulaHref) window.location.href = proximaAulaHref;
         }}
         onClickPreview={() => setPlaying(true)}
         // Chunk de um Range falhou/expirou (rede instável até o proxy, ou o
@@ -786,15 +791,15 @@ function CustomVideoPlayer({
           <div className="flex items-center gap-4">
             <button onClick={() => setPlaying((p) => !p)}>{playing ? <Pause size={20} /> : <Play size={20} />}</button>
 
-            {aulaAnteriorId ? (
-              <Link href={`/membros/player/${aulaAnteriorId}`}>
+            {aulaAnteriorHref ? (
+              <Link href={aulaAnteriorHref}>
                 <SkipBack size={18} />
               </Link>
             ) : (
               <SkipBack size={18} className="opacity-30" />
             )}
-            {proximaAulaId ? (
-              <Link href={`/membros/player/${proximaAulaId}`}>
+            {proximaAulaHref ? (
+              <Link href={proximaAulaHref}>
                 <SkipForward size={18} />
               </Link>
             ) : (

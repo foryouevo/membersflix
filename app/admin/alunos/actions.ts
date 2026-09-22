@@ -67,7 +67,11 @@ export async function atualizarStatusPagamento(alunoId: string, status: 'pendent
     patch.liberado_em = new Date().toISOString();
   }
 
-  const { error } = await admin.from('profiles').update(patch).eq('id', alunoId);
+  // as any: Profile (types/index.ts) ganhou `cadastro_publico`
+  // (migration 012), mas types/database.types.ts (gerado) ainda não
+  // conhece essa coluna — mesmo motivo/cast já usado em todo lugar que
+  // lida com uma coluna de migration pendente neste projeto (ver `slug`).
+  const { error } = await admin.from('profiles').update(patch as any).eq('id', alunoId);
   if (error) throw new Error(error.message);
   revalidatePath('/admin/alunos');
 }

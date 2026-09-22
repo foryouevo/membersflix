@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, GraduationCap, ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { verificarStatusPorEmail } from '@/app/login/actions';
+import { verificarStatusPorEmail, cadastrarAlunoPublico } from '@/app/login/actions';
 import TrocarSenhaModal from '@/components/TrocarSenhaModal';
 import { preloadLoginIntro, playLoginIntro } from '@/lib/loginIntro';
 
@@ -21,14 +22,13 @@ const FUNDO_LOGIN: 'gradiente' | 'imagem-estatica' | 'banner-netflix' = 'banner-
 export default function LoginPageClient({
   desenvolvidoPor,
   emailContato,
-  telefoneContato,
   termosUsoUrl,
   numeroWhatsapp,
   loginBackgroundUrl,
+  cursos,
 }: {
   desenvolvidoPor: string | null;
   emailContato: string | null;
-  telefoneContato: string | null;
   termosUsoUrl: string | null;
   numeroWhatsapp: string | null;
   // Fundo em tela cheia configurável pelo admin (Admin > Configurações >
@@ -36,6 +36,9 @@ export default function LoginPageClient({
   // /hero-destaque.png, ver uso mais abaixo (bloco FUNDO_LOGIN ===
   // 'banner-netflix') — a tela nunca fica sem imagem de fundo.
   loginBackgroundUrl: string | null;
+  // Cursos ativos pro <select> do cadastro ("Qual curso gostaria de ter
+  // acesso inicial?") — ver app/login/page.tsx (buscarCursosParaCadastro).
+  cursos: { id: string; titulo: string }[];
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -55,6 +58,54 @@ export default function LoginPageClient({
   const [verificando, setVerificando] = useState(false);
   const [verificarErro, setVerificarErro] = useState<string | null>(null);
   const [recuperacaoMsg, setRecuperacaoMsg] = useState<string | null>(null);
+
+  // Cadastro público (verso do card, flip 180°) — estado isolado do
+  // formulário de login acima, só entra em jogo quando `flipped` é true.
+  const [flipped, setFlipped] = useState(false);
+  const [nomeCad, setNomeCad] = useState('');
+  const [emailCad, setEmailCad] = useState('');
+  const [senhaCad, setSenhaCad] = useState('');
+  const [confirmarSenhaCad, setConfirmarSenhaCad] = useState('');
+  const [cursoIdCad, setCursoIdCad] = useState('');
+  const [erroCad, setErroCad] = useState<string | null>(null);
+  const [loadingCad, setLoadingCad] = useState(false);
+
+  // Altura dinâmica do card com flip (bug reportado: com as duas faces
+  // sobrepostas via CSS Grid — col-start-1 row-start-1 — a célula do grid
+  // sempre cresce pro MAIOR dos dois lados, então o lado de login (mais
+  // curto) ficava com espaço vazio embaixo quando visível. Troca de
+  // abordagem: as faces agora são `absolute inset-0` (saem do fluxo, não
+  // definem mais a altura do pai sozinhas) e a altura do "flipper" pai é
+  // medida via ref na face ativa e aplicada via state — sempre bate com o
+  // conteúdo real de quem está visível no momento, dos dois lados.
+  const loginFaceRef = useRef<HTMLDivElement>(null);
+  const cadastroFaceRef = useRef<HTMLDivElement>(null);
+  const [cardHeight, setCardHeight] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const faceAtivaRef = flipped ? cadastroFaceRef : loginFaceRef;
+    function medirAltura() {
+      if (faceAtivaRef.current) setCardHeight(faceAtivaRef.current.scrollHeight);
+    }
+    medirAltura();
+
+    // ResizeObserver (não só a troca de `flipped`): acompanha mudanças de
+    // altura DENTRO da própria face ativa sem precisar de um flip pra
+    // re-medir — ex.: mensagem de erro de login/cadastro aparecendo abaixo
+    // do formulário, que aumenta a altura do conteúdo na hora.
+    const observer = new ResizeObserver(medirAltura);
+    if (faceAtivaRef.current) observer.observe(faceAtivaRef.current);
+    return () => observer.disconnect();
+  }, [flipped]);
+
+  // Limpa erro de AMBOS os lados ao virar o card — sem isso, um erro de
+  // "senha inválida" do login ficava visível (fora de contexto) depois de
+  // virar pro cadastro, e vice-versa.
+  function handleFlip(paraCadastro: boolean) {
+    setErro(null);
+    setErroCad(null);
+    setFlipped(paraCadastro);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -120,9 +171,58 @@ export default function LoginPageClient({
     }
   }
 
-  // Cada item só aparece se o admin configurou (Configurações > Rodapé da
-  // Tela de Login) — nada hardcoded aqui além dos rótulos/formatação.
-  const temRodape = !!(desenvolvidoPor || emailContato || telefoneContato || termosUsoUrl);
+  async function handleSubmitCadastro(e: React.FormEvent) {
+    e.preventDefault();
+    setErroCad(null);
+
+    if (senhaCad.length < 6) {
+      setErroCad('A senha precisa ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (senhaCad !== confirmarSenhaCad) {
+      setErroCad('As senhas não coincidem.');
+      return;
+    }
+    if (!cursoIdCad) {
+      setErroCad('Escolha um curso pra começar.');
+      return;
+    }
+
+    setLoadingCad(true);
+    preloadLoginIntro();
+
+    try {
+      // Server action cria a conta (status "pendente", 30min de trial no
+      // curso escolhido — ver app/login/actions.ts) e devolve email/senha
+      // só pra este login automático logo abaixo; nunca fica guardado em
+      // lugar nenhum além da memória deste componente.
+      const { email: emailCriado, senha: senhaCriada } = await cadastrarAlunoPublico({
+        nome: nomeCad,
+        email: emailCad,
+        senha: senhaCad,
+        cursoId: cursoIdCad,
+      });
+
+      // Login imediato (pedido explícito: "já consegue logar
+      // imediatamente") — reaproveita o MESMO signInWithPassword do
+      // formulário de login acima, não um mecanismo à parte.
+      const { error } = await supabase.auth.signInWithPassword({ email: emailCriado, password: senhaCriada });
+      if (error) {
+        setErroCad('Cadastro criado, mas não foi possível entrar automaticamente. Faça login normalmente.');
+        setLoadingCad(false);
+        handleFlip(false);
+        return;
+      }
+
+      playLoginIntro(() => {
+        router.replace('/');
+        router.refresh();
+      });
+    } catch (err: any) {
+      setErroCad(err.message ?? 'Erro ao criar cadastro.');
+      setLoadingCad(false);
+    }
+  }
 
   return (
     // overflow-hidden (novo, item 1 do pedido): container raiz das 3
@@ -255,8 +355,64 @@ export default function LoginPageClient({
             <main> pai (que já garante isso sozinho, ver comentário lá),
             mas documentado aqui também: se algum dia o card ganhar um
             irmão dentro do <main> que precise ficar atrás dele, o z-20
-            já está declarado no lugar certo, sem depender só do pai. */}
-        <div className="relative z-20 w-full max-w-md rounded-xl bg-card p-8">
+            já está declarado no lugar certo, sem depender só do pai.
+
+            FLIP 180° (pedido explícito) — 3 camadas:
+            1) [perspective:1600px] no wrapper mais externo: dá profundidade
+               3D pra rotação do filho — sem isso rotateY vira um
+               "achatamento" 2D em vez de parecer girar no espaço.
+            2) O "flipper" (relative + [transform-style:preserve-3d] +
+               rotateY condicional): é ele que gira. As duas faces usam
+               `absolute inset-x-0 top-0` (saem do fluxo do documento, mas
+               SEM fixar `bottom` — de propósito: `inset-0` (com bottom
+               junto) força height:auto a virar "100% do pai" pela regra do
+               CSS pra absolutamente posicionados com top+bottom setados,
+               o que era o BUG real da correção anterior — a face media a
+               própria altura, mas essa altura já tinha sido esticada pra
+               bater com o pai, então a medição só devolvia o valor antigo
+               de volta, nunca encolhia). Sem `bottom`, a altura da face
+               fica `auto` de verdade (dirigida pelo conteúdo) — é isso que
+               o useLayoutEffect + ResizeObserver (abaixo) mede e aplica ao
+               flipper via state (`cardHeight`) a cada troca de face.
+            3) Cada FACE (login/cadastro) com [backface-visibility:hidden]:
+               esconde o verso "cru" de cada uma. A face de cadastro já
+               nasce com rotateY(180deg) fixo nela mesma — soma com o
+               rotateY do flipper: quando o flipper vira 180°, a soma dá
+               360°/0° (de frente, legível); quando o flipper está a 0°, a
+               face de cadastro fica a 180° (de costas, escondida pelo
+               backface-visibility). Mesmo mecanismo de sempre pra "virar
+               a carta", só com Tailwind arbitrary values em vez de CSS à
+               parte — sem framer-motion (não é dependência deste
+               projeto). */}
+        <div className="relative z-20 w-full max-w-md [perspective:1600px]">
+          <div
+            className="relative [transform-style:preserve-3d]"
+            style={{
+              transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+              height: cardHeight ? `${cardHeight}px` : undefined,
+              // transition única via style (não dá pra combinar com as
+              // classes transition-transform/duration-700 do Tailwind: a
+              // propriedade `transition` inline é shorthand e sobrescreve
+              // qualquer transition-property/duration setada por classe) —
+              // duração da altura mais curta que a do giro (300ms vs
+              // 700ms) pra não deixar o card "esticando" visivelmente
+              // durante o meio do flip.
+              transition: 'transform 700ms ease-out, height 300ms ease-out',
+            }}
+          >
+            {/* FRENTE — formulário de login (conteúdo/lógica inalterados,
+                só ganhou o link "Cadastra-se" no fim). aria-hidden +
+                pointer-events-none quando virado: sem isso, os campos
+                continuavam alcançáveis via Tab mesmo escondidos atrás do
+                card. */}
+            <div
+              ref={loginFaceRef}
+              aria-hidden={flipped}
+              // absolute inset-x-0 top-0, SEM bottom (ver comentário do
+              // flipper, acima) — a altura fica auto/dirigida pelo
+              // conteúdo, é isso que é medido e aplicado ao pai via state.
+              className={`absolute inset-x-0 top-0 w-full rounded-xl bg-card p-8 [backface-visibility:hidden] ${flipped ? 'pointer-events-none' : ''}`}
+            >
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-on-surface">
@@ -334,32 +490,213 @@ export default function LoginPageClient({
               className="btn-primary flex w-full items-center justify-center gap-2 py-3 text-base shadow-[0_0_18px_2px_rgba(229,9,20,0.35)]"
             >
               {loading ? 'Entrando...' : 'Entrar'}
-              {!loading && <ArrowRight size={18} />}
             </button>
+
+            {/* "Você não tem conta? Cadastra-se" (pedido explícito) —
+                hover vermelho só no "Cadastra-se" (o resto do texto fica
+                neutro, text-on-variant, igual ao resto de texto
+                secundário desta tela). break-words + w-full (bugfix: em
+                telas estreitas o texto estava estourando a borda direita
+                do card em vez de quebrar linha dentro do padding). */}
+            <p className="w-full break-words pt-1 text-center text-sm text-on-variant">
+              Você não tem conta?{' '}
+              <button type="button" onClick={() => handleFlip(true)} className="font-medium text-white hover:text-primary">
+                Cadastra-se
+              </button>
+            </p>
           </form>
+            </div>
+
+            {/* VERSO — formulário de cadastro público (novo). Mesmo
+                rotateY(180deg) fixo + backface-visibility:hidden do
+                comentário acima do flipper. */}
+            <div
+              ref={cadastroFaceRef}
+              aria-hidden={!flipped}
+              // absolute inset-x-0 top-0, SEM bottom (mesmo motivo da face
+              // de login, acima).
+              className={`absolute inset-x-0 top-0 w-full rounded-xl bg-card p-8 [backface-visibility:hidden] ${!flipped ? 'pointer-events-none' : ''}`}
+              style={{ transform: 'rotateY(180deg)' }}
+            >
+              <form onSubmit={handleSubmitCadastro} className="space-y-3">
+                <div>
+                  <label htmlFor="cadastro-nome" className="mb-1.5 block text-sm font-medium text-on-surface">
+                    Nome
+                  </label>
+                  <div className="relative">
+                    <User size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-on-variant" />
+                    <input
+                      id="cadastro-nome"
+                      required
+                      placeholder="Seu nome"
+                      value={nomeCad}
+                      onChange={(e) => setNomeCad(e.target.value)}
+                      className="input-field login-input-dark pl-10"
+                      autoComplete="name"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="cadastro-email" className="mb-1.5 block text-sm font-medium text-on-surface">
+                    E-mail
+                  </label>
+                  <div className="relative">
+                    <Mail size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-on-variant" />
+                    <input
+                      id="cadastro-email"
+                      type="email"
+                      required
+                      placeholder="seu@email.com"
+                      value={emailCad}
+                      onChange={(e) => setEmailCad(e.target.value)}
+                      className="input-field login-input-dark pl-10"
+                      autoComplete="email"
+                    />
+                  </div>
+                </div>
+
+                {/* Senha + Confirmar senha lado a lado — cabem bem numa
+                    grade de 2 colunas mesmo com os ícones, e ajuda a
+                    manter o verso do card mais compacto (o grid do
+                    flipper já cresce pro maior dos dois lados; menos
+                    altura aqui = flip mais discreto). */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="cadastro-senha" className="mb-1.5 block text-sm font-medium text-on-surface">
+                      Senha
+                    </label>
+                    <div className="relative">
+                      <Lock size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-on-variant" />
+                      <input
+                        id="cadastro-senha"
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={senhaCad}
+                        onChange={(e) => setSenhaCad(e.target.value)}
+                        className="input-field login-input-dark pl-10"
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="cadastro-confirmar-senha" className="mb-1.5 block text-sm font-medium text-on-surface">
+                      Confirmar
+                    </label>
+                    <div className="relative">
+                      <Lock size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-on-variant" />
+                      <input
+                        id="cadastro-confirmar-senha"
+                        type="password"
+                        required
+                        placeholder="••••••••"
+                        value={confirmarSenhaCad}
+                        onChange={(e) => setConfirmarSenhaCad(e.target.value)}
+                        className="input-field login-input-dark pl-10"
+                        autoComplete="new-password"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="cadastro-curso" className="mb-1.5 block text-sm font-medium text-on-surface">
+                    Curso de interesse
+                  </label>
+                  <div className="relative">
+                    <GraduationCap size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-on-variant" />
+                    <select
+                      id="cadastro-curso"
+                      required
+                      value={cursoIdCad}
+                      onChange={(e) => setCursoIdCad(e.target.value)}
+                      className="input-field login-input-dark pl-10"
+                    >
+                      <option value="" disabled>
+                        Selecione um curso
+                      </option>
+                      {cursos.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.titulo}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {cursos.length === 0 && (
+                    <p className="mt-1.5 text-xs text-on-variant">Nenhum curso disponível no momento — tente novamente mais tarde.</p>
+                  )}
+                </div>
+
+                {erroCad && <p className="text-sm text-error">{erroCad}</p>}
+
+                <button
+                  type="submit"
+                  disabled={loadingCad || cursos.length === 0}
+                  className="btn-primary flex w-full items-center justify-center gap-2 py-3 text-base shadow-[0_0_18px_2px_rgba(229,9,20,0.35)]"
+                >
+                  {loadingCad ? 'Criando conta...' : 'Criar minha conta'}
+                </button>
+
+                {/* "Já tenho conta" — volta (flip de volta) pro login,
+                    pedido explícito. w-full + max-w-full no botão
+                    inline-flex (bugfix: um <button inline-flex> é uma caixa
+                    inline atômica — o navegador não quebra linha por
+                    dentro dele sozinho; sem max-w-full + flex-wrap, ele
+                    podia estourar a borda direita do card em telas
+                    estreitas em vez de quebrar). */}
+                <p className="w-full pt-1 text-center text-sm text-on-variant">
+                  <button
+                    type="button"
+                    onClick={() => handleFlip(false)}
+                    className="inline-flex max-w-full flex-wrap items-center justify-center gap-1.5 font-medium text-white hover:text-primary"
+                  >
+                    <ArrowLeft size={14} />
+                    Já tenho conta
+                  </button>
+                </p>
+              </form>
+            </div>
+          </div>
         </div>
       </main>
 
-      {temRodape && (
-        <footer className="relative z-10 flex flex-col items-center gap-2 px-6 py-5 text-center text-xs text-on-variant sm:flex-row sm:justify-center sm:gap-6">
-          {desenvolvidoPor && <span>Desenvolvido por {desenvolvidoPor}</span>}
-          {emailContato && (
-            <a href={`mailto:${emailContato}`} className="hover:text-white">
-              {emailContato}
-            </a>
-          )}
-          {telefoneContato && (
-            <a href={`tel:${telefoneContato.replace(/\D/g, '')}`} className="hover:text-white">
-              {telefoneContato}
-            </a>
-          )}
-          {termosUsoUrl && (
-            <a href={termosUsoUrl} target="_blank" rel="noopener noreferrer" className="hover:text-white">
-              Termos de Uso
-            </a>
-          )}
-        </footer>
-      )}
+      {/* Sem `temRodape` (era condicionado a ter pelo menos 1 item
+          configurado pelo admin) — "Política de Privacidade" agora é
+          permanente, não vem de config nenhuma, então o rodapé sempre tem
+          pelo menos esse item; não faz mais sentido esconder o <footer>
+          inteiro. Telefone removido de vez (pedido explícito) — nem o
+          campo é mais lido/passado como prop (ver app/login/page.tsx),
+          só a coluna/UI do admin continuam existindo, fora do escopo
+          deste pedido. */}
+      <footer className="relative z-10 flex flex-col items-center gap-2 px-6 py-5 text-center text-xs text-on-variant sm:flex-row sm:justify-center sm:gap-6">
+        {/* "membersflix.com" (o texto configurado pelo admin) virando o
+            próprio link — pedido explícito, apontando pra home (/). */}
+        {desenvolvidoPor && (
+          <span>
+            Desenvolvido por{' '}
+            <Link href="/" className="hover:text-white">
+              {desenvolvidoPor}
+            </Link>
+          </span>
+        )}
+        {emailContato && (
+          <a href={`mailto:${emailContato}`} className="hover:text-white">
+            {emailContato}
+          </a>
+        )}
+        {termosUsoUrl && (
+          <a href={termosUsoUrl} target="_blank" rel="noopener noreferrer" className="hover:text-white">
+            Termos de Uso
+          </a>
+        )}
+        {/* Política de Privacidade — item NOVO, pedido explícito: sempre
+            visível (não vem de `configuracoes`, ao contrário dos itens
+            acima), rota interna /politicas (ver app/politicas/page.tsx). */}
+        <Link href="/politicas" className="hover:text-white">
+          Política de Privacidade
+        </Link>
+      </footer>
 
       <TrocarSenhaModal
         open={modalTrocarSenhaAberto}

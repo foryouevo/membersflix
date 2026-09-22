@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, PlaySquare, MessageCircle, User as UserIcon, type LucideIcon } from 'lucide-react';
-import { cn, buildSupportWhatsappLink } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 /**
  * Bottom nav flutuante mobile — antes vivia dentro de MembrosSidebar.tsx
@@ -11,7 +11,7 @@ import { cn, buildSupportWhatsappLink } from '@/lib/utils';
  * colapsável no mesmo componente); a sidebar saiu de vez (substituída pelo
  * Header, o menu horizontal fixo no topo — ver app/membros/layout.tsx),
  * então este arquivo agora só tem o que sempre foi mobile-only:
- * Início/Meus Cursos/Suporte/Meu Perfil, `md:hidden`. Buscar saiu daqui
+ * Início/Cursos/Suporte/Perfil, `md:hidden`. Buscar saiu daqui
  * (removida por pedido explícito) — já existe a lupa do Header, comum às
  * duas larguras (Header.tsx), então esse ícone virou redundante.
  *
@@ -26,9 +26,12 @@ import { cn, buildSupportWhatsappLink } from '@/lib/utils';
  * do Header como um todo, não por dentro dele — ver o comentário completo
  * em MembrosChrome.tsx).
  */
+// numeroWhatsapp: não usado mais AQUI pro item "Suporte" (virou rota
+// /suporte de verdade — pedido de uma tarefa; a página /suporte é quem usa
+// o WhatsApp agora). Mantido na assinatura por não ser exclusivo deste
+// componente (MembrosChrome.tsx continua buscando/repassando pra cá).
 export default function BottomNav({ numeroWhatsapp, oculto = false }: { numeroWhatsapp: string | null; oculto?: boolean }) {
   const pathname = usePathname();
-  const suporteLink = numeroWhatsapp ? buildSupportWhatsappLink(numeroWhatsapp) : null;
 
   // Inativo: só o ícone, quadrado (w-11 h-11), branco, fundo transparente
   // (hover cinza sutil). Ativo: vira uma pílula que engloba ícone + rótulo
@@ -82,32 +85,32 @@ export default function BottomNav({ numeroWhatsapp, oculto = false }: { numeroWh
         oculto ? 'translate-y-24 opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
       )}
     >
-      <Link href="/membros/vitrine" title="Início" className={itemClasses(pathname.startsWith('/membros/vitrine'))}>
-        <ItemConteudo active={pathname.startsWith('/membros/vitrine')} icon={Home} label="Início" />
+      {/* /inicio, /cursos, /perfil (pedido de uma tarefa anterior — mesma
+          troca do menu superior/Header.tsx, pra mobile navegar pros
+          mesmos lugares que o desktop); /membros/vitrine, /membros/meus-
+          cursos, /membros/perfil continuam existindo, só a navegação
+          passou a apontar pras novas. Rótulos "Cursos"/"Perfil" (eram
+          "Meus Cursos"/"Meu Perfil" — pedido desta tarefa, só o texto,
+          mesma rota). */}
+      <Link href="/inicio" title="Início" className={itemClasses(pathname.startsWith('/inicio'))}>
+        <ItemConteudo active={pathname.startsWith('/inicio')} icon={Home} label="Início" />
       </Link>
-      <Link
-        href="/membros/meus-cursos"
-        title="Meus Cursos"
-        className={itemClasses(pathname.startsWith('/membros/meus-cursos'))}
-      >
-        <ItemConteudo active={pathname.startsWith('/membros/meus-cursos')} icon={PlaySquare} label="Meus Cursos" />
+      <Link href="/cursos" title="Cursos" className={itemClasses(pathname.startsWith('/cursos'))}>
+        <ItemConteudo active={pathname.startsWith('/cursos')} icon={PlaySquare} label="Cursos" />
       </Link>
-      {suporteLink ? (
-        <a href={suporteLink} target="_blank" rel="noopener noreferrer" title="Suporte" className={itemClasses(false)}>
-          <ItemConteudo active={false} icon={MessageCircle} label="Suporte" />
-        </a>
-      ) : (
-        <span
-          title="Número de suporte não configurado pelo admin"
-          className="flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full text-white/40"
-        >
-          <MessageCircle size={20} />
-        </span>
-      )}
-      {/* Meu Perfil por último de propósito — ordem final: Início, Meus
-          Cursos, Suporte, Meu Perfil. */}
-      <Link href="/membros/perfil" title="Meu Perfil" className={itemClasses(pathname.startsWith('/membros/perfil'))}>
-        <ItemConteudo active={pathname.startsWith('/membros/perfil')} icon={UserIcon} label="Meu Perfil" />
+      {/* "Suporte" (pedido desta tarefa): agora é uma rota de verdade
+          (/suporte) em vez de abrir o WhatsApp direto — por isso virou
+          Link normal, com o mesmo destaque de ativo dos outros itens
+          (antes sempre `active={false}`, já que abria numa aba nova; o
+          estado "sem WhatsApp configurado" que existia aqui não faz mais
+          sentido — a página /suporte trata isso sozinha). */}
+      <Link href="/suporte" title="Suporte" className={itemClasses(pathname.startsWith('/suporte'))}>
+        <ItemConteudo active={pathname.startsWith('/suporte')} icon={MessageCircle} label="Suporte" />
+      </Link>
+      {/* Perfil por último de propósito — ordem final: Início, Cursos,
+          Suporte, Perfil. */}
+      <Link href="/perfil" title="Perfil" className={itemClasses(pathname.startsWith('/perfil'))}>
+        <ItemConteudo active={pathname.startsWith('/perfil')} icon={UserIcon} label="Perfil" />
       </Link>
     </nav>
   );
@@ -128,7 +131,7 @@ export default function BottomNav({ numeroWhatsapp, oculto = false }: { numeroWh
  * `max-width` não tem essa ambiguidade: é sempre um valor definido, então
  * o `<nav>` sempre sabe exatamente quanto espaço reservar.
  *
- * 7rem (112px) é generoso o bastante pro maior rótulo ("Meus Cursos") —
+ * 7rem (112px) é generoso o bastante pro maior rótulo ("Suporte") —
  * como `max-width` só limita um teto (não força a caixa a ocupar todo esse
  * espaço), rótulos mais curtos ("Início") ficam do próprio tamanho, sem
  * sobrar vão. `overflow-hidden` + `whitespace-nowrap` garantem que o texto

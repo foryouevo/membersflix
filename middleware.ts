@@ -7,7 +7,19 @@ export async function middleware(request: NextRequest) {
 
   const isAuthRoute = pathname === '/login';
   const isBloqueadoRoute = pathname === '/bloqueado';
-  const isProtectedRoute = pathname.startsWith('/admin') || pathname.startsWith('/membros');
+  // /inicio, /cursos, /perfil, /curso/[slug]... (rotas novas) são a MESMA
+  // área de aluno que /membros/* — precisam das mesmas checagens
+  // (autenticado + tipo='aluno') que a área antiga já tinha, senão um
+  // acesso direto e deslogado a /inicio só seria barrado depois, dentro de
+  // MembrosLayoutShell (redirect ali continua existindo como reforço, mas
+  // sem isso aqui o middleware deixaria passar até lá).
+  const isAreaAluno =
+    pathname.startsWith('/membros') ||
+    pathname.startsWith('/inicio') ||
+    pathname.startsWith('/cursos') ||
+    pathname.startsWith('/perfil') ||
+    pathname.startsWith('/curso');
+  const isProtectedRoute = pathname.startsWith('/admin') || isAreaAluno;
 
   if (!user) {
     if (isProtectedRoute) {
@@ -41,17 +53,18 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // /inicio (era /membros/vitrine — mesma correção de app/page.tsx, pra
+  // ficar consistente: qualquer caminho que "manda o aluno pra home" cai
+  // no mesmo lugar agora).
   if (isAuthRoute || isBloqueadoRoute) {
-    return NextResponse.redirect(
-      new URL(profile.tipo === 'admin' ? '/admin/dashboard' : '/membros/vitrine', request.url)
-    );
+    return NextResponse.redirect(new URL(profile.tipo === 'admin' ? '/admin/dashboard' : '/inicio', request.url));
   }
 
   if (pathname.startsWith('/admin') && profile.tipo !== 'admin') {
-    return NextResponse.redirect(new URL('/membros/vitrine', request.url));
+    return NextResponse.redirect(new URL('/inicio', request.url));
   }
 
-  if (pathname.startsWith('/membros') && profile.tipo !== 'aluno') {
+  if (isAreaAluno && profile.tipo !== 'aluno') {
     return NextResponse.redirect(new URL('/admin/dashboard', request.url));
   }
 

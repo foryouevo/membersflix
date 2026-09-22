@@ -19,6 +19,7 @@ export default function TodosCursosPorCategoria({
   progressoPorCurso,
   onClickLocked,
   emptyMessage,
+  hrefsPorCurso,
 }: {
   titulo: string;
   grupos: GrupoCategoria[];
@@ -26,6 +27,17 @@ export default function TodosCursosPorCategoria({
   progressoPorCurso: Record<string, number>;
   onClickLocked: (curso: Curso) => void;
   emptyMessage: string;
+  // Como cada card linka pro curso — dicionário curso.id -> href PRONTO
+  // (era uma função `(curso) => string`, mas função não pode atravessar a
+  // fronteira Server->Client Component: este é um Client Component
+  // ['use client' no topo], e a página que o usa é Server Component — só
+  // dados serializáveis passam, não funções). Sem isso, cai no default de
+  // CourseCard (rota clássica /membros/curso/[id]) — usado pela Home e
+  // pela busca clássica (/membros/buscar) sem passar nada. A rota nova
+  // (/cursos, ver app/(portal)/cursos/page.tsx) monta o dicionário
+  // {[curso.id]: `/curso/${curso.slug}`} no Server Component e passa só
+  // isso — MESMO componente, sem fork.
+  hrefsPorCurso?: Record<string, string>;
 }) {
   return (
     <section>
@@ -58,6 +70,7 @@ export default function TodosCursosPorCategoria({
                   hasAccess={acessos[curso.id] ?? false}
                   progresso={progressoPorCurso[curso.id]}
                   onClickLocked={onClickLocked}
+                  hrefCurso={hrefsPorCurso?.[curso.id]}
                 />
               )}
             />

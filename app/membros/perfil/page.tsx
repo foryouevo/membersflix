@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { initials, buildSupportWhatsappLink, formatTitulo } from '@/lib/utils';
+import { initials, formatTitulo } from '@/lib/utils';
 import { calcularContinuarAssistindo } from '@/lib/membros/continuar-assistindo';
 import AlterarSenhaButton from '@/components/membros/AlterarSenhaButton';
 import EditarPerfilModal from '@/components/membros/EditarPerfilModal';
@@ -59,7 +59,11 @@ export default async function PerfilPage() {
     } | null;
   };
 
-  if (!profile) redirect('/membros/vitrine');
+  // /inicio (era /membros/vitrine — mesma correção de app/page.tsx):
+  // fallback raro (perfil sem linha em `profiles`), mas esta mesma página
+  // agora também é servida em /perfil (ver app/(portal)/perfil/page.tsx),
+  // então "voltar pra home" deve cair no mesmo lugar de sempre.
+  if (!profile) redirect('/inicio');
 
   // curso:cursos(*, categoria:categorias(nome)): mesmo padrão de embed já
   // usado em app/membros/meus-cursos/page.tsx, com a categoria a mais
@@ -134,6 +138,7 @@ export default async function PerfilPage() {
     const concluidas = concluidasPorCurso.get(curso.id) ?? 0;
     return {
       id: curso.id,
+      slug: curso.slug,
       titulo: curso.titulo,
       thumbnail_url: curso.thumbnail_url,
       capa_url: curso.capa_url,
@@ -246,26 +251,15 @@ export default async function PerfilPage() {
     console.error('[perfil] Erro inesperado ao buscar numero_whatsapp:', err);
   }
 
-  const suporteLink = numeroWhatsapp ? buildSupportWhatsappLink(numeroWhatsapp, 'Olá, preciso de suporte com minha conta.') : null;
-
-  const botaoSuporte = suporteLink ? (
-    <a
-      href={suporteLink}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="btn-secondary flex w-full items-center justify-center gap-2 sm:w-auto"
-    >
+  // Antes era um link direto pro WhatsApp (target="_blank"), condicionado a
+  // numeroWhatsapp estar configurado. Agora /suporte existe como página própria
+  // (com os mesmos links de e-mail/WhatsApp + formulário lá dentro), então o
+  // botão aqui só navega pra ela — sempre disponível, sem condicional.
+  const botaoSuporte = (
+    <Link href="/suporte" className="btn-secondary flex w-full items-center justify-center gap-2 sm:w-auto">
       <MessageCircle size={16} />
       Falar com o Suporte
-    </a>
-  ) : (
-    <span
-      title="Número de suporte não configurado pelo admin"
-      className="btn-secondary flex w-full cursor-not-allowed items-center justify-center gap-2 opacity-60 sm:w-auto"
-    >
-      <MessageCircle size={16} />
-      Falar com o Suporte
-    </span>
+    </Link>
   );
 
   return (
@@ -588,7 +582,11 @@ export default async function PerfilPage() {
                       Continuar Aula
                     </Link>
                     <Link
-                      href={`/membros/curso/${continuarAssistindo.cursoId}`}
+                      // cursoContinuar.slug || fallback pro id: mesma
+                      // proteção usada em todo lugar que monta link por
+                      // slug — enquanto a migration 011 não rodar em
+                      // produção, .slug chega undefined.
+                      href={cursoContinuar.slug ? `/curso/${cursoContinuar.slug}` : `/membros/curso/${cursoContinuar.id}`}
                       className="btn-secondary flex items-center justify-center gap-2 py-2 text-sm"
                     >
                       <ListVideo size={14} />
@@ -600,7 +598,10 @@ export default async function PerfilPage() {
             ) : (
               <div className="flex flex-col items-start gap-3">
                 <p className="text-sm text-on-variant">Você ainda não começou nenhuma aula.</p>
-                <Link href="/membros/vitrine" className="btn-primary">
+                {/* /cursos (era /membros/vitrine): mesmo destino do botão
+                    "Explorar cursos" do hero da Home (CursoDestaque.tsx) —
+                    o catálogo completo com busca/filtro, não só a Home. */}
+                <Link href="/cursos" className="btn-primary">
                   Explorar cursos
                 </Link>
               </div>

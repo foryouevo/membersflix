@@ -27,7 +27,9 @@ export async function calcularContinuarAssistindo(
   supabase: ReturnType<typeof createClient>,
   alunoId: string,
   meusCursoIds: string[],
-  fallbackHref = '/membros/vitrine'
+  // /cursos (era /membros/vitrine): sem nenhum curso pra continuar, o
+  // destino mais útil é o catálogo completo, não a Home de novo.
+  fallbackHref = '/cursos'
 ): Promise<{
   href: string;
   temProgresso: boolean;
@@ -84,11 +86,20 @@ export async function calcularContinuarAssistindo(
   };
   if (!cursoAlvoId) return vazio;
 
-  const { data: modulosAlvo } = await supabase
-    .from('modulos')
-    .select('id, ordem, titulo, aulas(id, ordem, titulo, descricao, duracao_segundos)')
-    .eq('curso_id', cursoAlvoId)
-    .order('ordem');
+  // cursoAlvoRow: só o slug, pra montar o href novo (/curso/[slug]/[slug-
+  // da-aula] — pedido de uma tarefa posterior, era /membros/player/[id]).
+  // Roda em paralelo com modulosAlvo (nenhum depende do outro).
+  // as {...} na 2ª query: types/database.types.ts (gerado) ainda não
+  // conhece a coluna slug (migration 011) — mesmo cast usado em todo
+  // lugar que já lê `slug` neste projeto.
+  const [{ data: modulosAlvo }, { data: cursoAlvoRow }] = (await Promise.all([
+    supabase
+      .from('modulos')
+      .select('id, ordem, titulo, aulas(id, slug, ordem, titulo, descricao, duracao_segundos)')
+      .eq('curso_id', cursoAlvoId)
+      .order('ordem'),
+    supabase.from('cursos').select('slug').eq('id', cursoAlvoId).maybeSingle(),
+  ])) as [{ data: any }, { data: { slug: string } | null }];
 
   const concluidaPorAula = new Map(progressoRows.map((p) => [p.aula_id, p.concluida]));
   const todasAulasDoCursoAlvo = (modulosAlvo ?? [])
@@ -107,7 +118,17 @@ export async function calcularContinuarAssistindo(
   const progressoPct = proximaAula.duracao_segundos > 0 ? Math.min(100, Math.round((segundoAtual / proximaAula.duracao_segundos) * 100)) : 0;
 
   return {
-    href: `/membros/player/${proximaAula.id}`,
+    // /curso/[slug]/[slug-da-aula] (era /membros/player/[id] — pedido de
+    // uma tarefa anterior). Só usa a rota nova se os DOIS slugs vieram de
+    // verdade — se a migration 011 (coluna slug) ainda não rodou em
+    // produção, cursoAlvoRow?.slug/proximaAula.slug chegam undefined (não
+    // é bug de query/nome de campo, a coluna não existe ainda) e o link
+    // virava `/curso/undefined/undefined` (404); com a checagem, cai de
+    // volta pra rota clássica, que já funciona hoje.
+    href:
+      cursoAlvoRow?.slug && proximaAula.slug
+        ? `/curso/${cursoAlvoRow.slug}/${proximaAula.slug}`
+        : `/membros/player/${proximaAula.id}`,
     temProgresso,
     cursoId: cursoAlvoId,
     moduloId: proximaAula.moduloId,

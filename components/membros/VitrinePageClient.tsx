@@ -151,11 +151,12 @@ export default function VitrinePageClient({
           </section>
         )}
 
-        {/* id="todos-os-cursos": alvo do botão "Explorar cursos" do hero
-            institucional (CursoDestaque) — scroll-mt-14/md:scroll-mt-20
-            (mesma folga de pt-14/md:pt-20 usada pelo restante da página)
-            compensa o header fixo, senão ele cobriria o topo da seção ao
-            rolar até aqui. */}
+        {/* id="todos-os-cursos" (scroll-mt-14/md:scroll-mt-20) não tem mais
+            nenhum link apontando pra ele — "Explorar cursos" (CursoDestaque)
+            virou navegação de rota de verdade (/cursos) numa tarefa
+            posterior, em vez de rolar até aqui. Deixado como estava
+            (id/scroll-mt não atrapalham nada) em vez de mexer numa seção
+            fora do escopo desta tarefa. */}
         <div id="todos-os-cursos" className="scroll-mt-14 md:scroll-mt-20">
           <TodosCursosPorCategoria
             titulo="Todos os Cursos"

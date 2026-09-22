@@ -15,7 +15,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .eq('id', user.id)
 .maybeSingle() as { data: any };
 
-  if (!profile || profile.tipo !== 'admin') redirect('/membros/vitrine');
+  // /inicio (era /membros/vitrine — mesma correção de app/page.tsx e
+  // middleware.ts, pra ficar consistente).
+  if (!profile || profile.tipo !== 'admin') redirect('/inicio');
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

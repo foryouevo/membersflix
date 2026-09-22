@@ -49,20 +49,48 @@ export default function PlayerPageClient({
   aula,
   documentos,
   modulos,
-  aulaAnteriorId,
-  proximaAulaId,
+  aulaAnterior,
+  proximaAula,
   posicaoInicial,
+  hrefsPorAula = {},
+  hrefCurso,
 }: {
   curso: Curso;
   modulo: Modulo;
   aula: AulaSemVideoUrl;
   documentos: Documento[];
   modulos: ModuloComAulas[];
-  aulaAnteriorId: string | null;
-  proximaAulaId: string | null;
+  // Objetos (eram só o id) — carregam `slug` também (usado só pelo
+  // fallback do href, ver `hrefsPorAula` abaixo).
+  aulaAnterior: { id: string; slug: string } | null;
+  proximaAula: { id: string; slug: string } | null;
   posicaoInicial: number;
+  // Dicionário aulaId -> href PRONTO (era uma função `(aula) => string`,
+  // mas função não pode atravessar a fronteira Server->Client Component:
+  // este é um Client Component ['use client' no topo], e as páginas que o
+  // usam são Server Components — só dados serializáveis passam, não
+  // funções). Sem entrada pro id (default {}, ou id ausente do mapa), cai
+  // no fallback /curso/[slug-do-curso]/[slug-da-aula] (`curso.slug` +
+  // `a.slug`) — mesma rota nova que app/membros/player/[aulaId]/page.tsx
+  // (a clássica, sem passar nada aqui) e
+  // app/(portal)/curso/[slug]/[aulaSlug]/page.tsx (que monta o dicionário
+  // completo) acabam usando de qualquer forma.
+  hrefsPorAula?: Record<string, string>;
+  // "Voltar para o curso" (botão do VideoPlayer) — já é uma string, sem
+  // problema nenhum de serialização; default é /curso/[slug].
+  hrefCurso?: string;
 }) {
   const supabase = createClient();
+
+  // Fallback pra rota nova por slug quando o id não está em hrefsPorAula
+  // (mapa vazio por padrão) — ver comentário completo na prop, acima.
+  // curso.slug && a.slug: se a migration 011 (coluna slug) ainda não
+  // rodou em produção, os dois chegam undefined — sem essa checagem o
+  // link virava `/curso/undefined/undefined` (404); com ela, cai de
+  // volta pra rota clássica, que já funciona hoje.
+  function hrefAula(a: { id: string; slug: string }) {
+    return hrefsPorAula[a.id] ?? (curso.slug && a.slug ? `/curso/${curso.slug}/${a.slug}` : `/membros/player/${a.id}`);
+  }
 
   // `concluida` chega do servidor no carregamento da página; `overrides` guarda
   // só o que o aluno mudou nesta sessão marcando/desmarcando manualmente pelo
@@ -204,7 +232,7 @@ export default function PlayerPageClient({
                   </>
                 )}
               </button>
-              <Link href={`/membros/player/${a.id}`} className="min-w-0 flex-1">
+              <Link href={hrefAula(a)} className="min-w-0 flex-1">
                 <p
                   className={`break-words font-medium ${concluida ? 'text-on-variant line-through' : ativa ? 'text-primary' : 'text-white'}`}
                 >
@@ -265,9 +293,9 @@ export default function PlayerPageClient({
             aulaId={aula.id}
             cursoId={curso.id}
             posicaoInicial={posicaoInicial}
-            aulaAnteriorId={aulaAnteriorId}
-            proximaAulaId={proximaAulaId}
-            voltarHref={`/membros/curso/${curso.id}`}
+            aulaAnteriorHref={aulaAnterior ? hrefAula(aulaAnterior) : null}
+            proximaAulaHref={proximaAula ? hrefAula(proximaAula) : null}
+            voltarHref={hrefCurso ?? (curso.slug ? `/curso/${curso.slug}` : `/membros/curso/${curso.id}`)}
             voltarLabel={`Voltar para ${curso.titulo}`}
           />
 
@@ -316,16 +344,16 @@ export default function PlayerPageClient({
                 encolha dentro do flex-row do desktop. */}
             <div className="order-first mb-2 flex w-full shrink-0 gap-3 lg:order-none lg:mb-0 lg:w-auto lg:gap-2">
               <Link
-                href={aulaAnteriorId ? `/membros/player/${aulaAnteriorId}` : '#'}
-                aria-disabled={!aulaAnteriorId}
-                className={`btn-secondary flex flex-1 items-center justify-center gap-1 lg:flex-none ${!aulaAnteriorId ? 'pointer-events-none opacity-40' : ''}`}
+                href={aulaAnterior ? hrefAula(aulaAnterior) : '#'}
+                aria-disabled={!aulaAnterior}
+                className={`btn-secondary flex flex-1 items-center justify-center gap-1 lg:flex-none ${!aulaAnterior ? 'pointer-events-none opacity-40' : ''}`}
               >
                 <ChevronLeft size={16} /> Aula Anterior
               </Link>
               <Link
-                href={proximaAulaId ? `/membros/player/${proximaAulaId}` : '#'}
-                aria-disabled={!proximaAulaId}
-                className={`btn-primary flex flex-1 items-center justify-center gap-1 lg:flex-none ${!proximaAulaId ? 'pointer-events-none opacity-40' : ''}`}
+                href={proximaAula ? hrefAula(proximaAula) : '#'}
+                aria-disabled={!proximaAula}
+                className={`btn-primary flex flex-1 items-center justify-center gap-1 lg:flex-none ${!proximaAula ? 'pointer-events-none opacity-40' : ''}`}
               >
                 Próxima Aula <ChevronRight size={16} />
               </Link>

@@ -16,6 +16,25 @@ async function assertAdmin() {
   if (profile?.tipo !== 'admin') throw new Error('Acesso negado.');
 }
 
+// Revalida tanto /membros/curso/[id] (clássica) quanto /curso/[slug] —
+// mesmo componente reaproveitado nas duas rotas (ver
+// app/(portal)/curso/[slug]/page.tsx), mas Next.js trata cada uma como uma
+// entrada de cache SEPARADA: revalidar só a clássica deixava /curso/[slug]
+// com dado desatualizado depois de criar/editar um módulo. Busca o slug
+// aqui (não vem de graça — quem chama só tem o id) só pra montar o path.
+async function revalidarCurso(admin: ReturnType<typeof createAdminClient>, cursoId: string) {
+  revalidatePath(`/membros/curso/${cursoId}`);
+  // as {...}: types/database.types.ts (gerado) ainda não conhece a coluna
+  // slug (migration 011, ver comentário lá) — mesmo cast usado em todo
+  // lugar que já lê `slug` neste projeto (curso-detalhe.ts, player-
+  // dados.ts etc.), não regenerei esse arquivo (ver relatório da tarefa
+  // que criou os slugs).
+  const { data: curso } = (await admin.from('cursos').select('slug').eq('id', cursoId).maybeSingle()) as {
+    data: { slug: string } | null;
+  };
+  if (curso?.slug) revalidatePath(`/curso/${curso.slug}`);
+}
+
 export interface ModuloInput {
   titulo: string;
   capa_url?: string | null;
@@ -31,7 +50,7 @@ export async function criarModulo(cursoId: string, input: ModuloInput, ordem: nu
     .single();
   if (error) throw new Error(error.message);
   revalidatePath(`/admin/cursos/${cursoId}/aulas`);
-  revalidatePath(`/membros/curso/${cursoId}`);
+  await revalidarCurso(admin, cursoId);
   return data;
 }
 
@@ -41,7 +60,7 @@ export async function atualizarModulo(id: string, cursoId: string, input: Modulo
   const { error } = await admin.from('modulos').update({ titulo: input.titulo, capa_url: input.capa_url ?? null }).eq('id', id);
   if (error) throw new Error(error.message);
   revalidatePath(`/admin/cursos/${cursoId}/aulas`);
-  revalidatePath(`/membros/curso/${cursoId}`);
+  await revalidarCurso(admin, cursoId);
 }
 
 /** Upload de capa de módulo. Não grava no banco — devolve a URL pra quem chamou aplicar (igual uploadImagemCurso). */

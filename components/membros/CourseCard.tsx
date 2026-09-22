@@ -11,11 +11,26 @@ export default function CourseCard({
   hasAccess,
   progresso,
   onClickLocked,
+  // curso.slug || fallback: se a migration 011 (coluna `slug` em cursos)
+  // ainda não rodou no banco de produção, `curso.slug` chega `undefined`
+  // em TODA consulta (não é bug de query/nome de campo — column
+  // literalmente não existe ainda) — sem esse fallback, o link virava
+  // `/curso/undefined` (404). Com o fallback, o card continua linkando
+  // pra rota clássica (que funciona hoje) até a migration rodar, em vez
+  // de quebrar. Ver relatório da tarefa que investigou isso.
+  hrefCurso = curso.slug ? `/curso/${curso.slug}` : `/membros/curso/${curso.id}`,
 }: {
   curso: Curso;
   hasAccess: boolean;
   progresso?: number;
   onClickLocked: (curso: Curso) => void;
+  // Default é a rota por slug (era /membros/curso/[id] — pedido de uma
+  // tarefa anterior: nenhum card no site deveria mais linkar pro UUID),
+  // com fallback defensivo pro UUID enquanto `slug` não existir de
+  // verdade no banco (ver comentário acima). `hrefCurso` continua
+  // existindo como prop só por precaução — nenhum dos usos atuais
+  // precisa mais sobrescrever isso.
+  hrefCurso?: string;
 }) {
   // thumbnail_url é a imagem certa pra card pequeno (cadastrada como tal no
   // admin); capa_url é o banner 16:9 do hero de /membros/curso/[id] — só
@@ -63,7 +78,7 @@ export default function CourseCard({
 
   if (hasAccess) {
     return (
-      <Link href={`/membros/curso/${curso.id}`} className="block w-full">
+      <Link href={hrefCurso} className="block w-full">
         {content}
       </Link>
     );

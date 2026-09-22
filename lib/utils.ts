@@ -16,6 +16,34 @@ export function onlyDigits(value: string) {
   return value.replace(/\D/g, '');
 }
 
+/**
+ * Minúsculo, sem acento, qualquer sequência de caracteres que não seja
+ * a-z/0-9 vira um único hífen, sem hífen sobrando na ponta — MESMO
+ * algoritmo da função `slugify()` do Postgres (ver
+ * supabase/migrations/011_slugs_curso_aula.sql), só que em TypeScript:
+ * usada pro filtro de categoria na URL (?categoria=criacao-de-sites, ver
+ * Header.tsx/BuscarPageClient.tsx/useCursoFiltro.ts) — categorias não têm
+ * uma coluna `slug` persistida no banco (decisão explícita: computar aqui
+ * na hora, a partir de `nome`, em vez de nova migration — mantém
+ * categorias com o mesmo nome contando como "uma opção só" de filtro,
+ * automaticamente, sem precisar do agrupamento por ids que o painel de
+ * filtro já faz por outro motivo). `normalize('NFD')` separa a letra do
+ * acento em dois codepoints (ex: "é" -> "e" + acento combinante);
+ * SLUGIFY_MARCAS_COMBINANTES (bloco Unicode U+0300-U+036F, "Combining
+ * Diacritical Marks" — via escape \u, não caractere literal no arquivo)
+ * remove só esse acento combinante, deixando a letra base.
+ */
+const SLUGIFY_MARCAS_COMBINANTES = new RegExp('[\\u0300-\\u036f]', 'g');
+
+export function slugify(valor: string) {
+  return valor
+    .normalize('NFD')
+    .replace(SLUGIFY_MARCAS_COMBINANTES, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 /** Monta o link wa.me com mensagem pré-preenchida (Regra 3). */
 export function buildWhatsappLink(numeroWhatsapp: string, mensagemTemplate: string, cursoTitulo: string) {
   const numero = onlyDigits(numeroWhatsapp);

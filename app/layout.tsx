@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Poppins } from 'next/font/google';
 import './globals.css';
 import LoginIntroOverlay from '@/components/LoginIntroOverlay';
+import CookieConsentBanner from '@/components/CookieConsentBanner';
 
 // next/font: fonte auto-hospedada (o Next baixa os arquivos no build e
 // serve pelo próprio domínio) em vez de um <link>/@import pro Google Fonts
@@ -44,6 +45,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             qualquer outra página (só existe algo na tela quando o próprio
             fluxo de login chama preload()/play() via lib/loginIntro.ts). */}
         <LoginIntroOverlay />
+        {/* Fixo, fora da árvore de qualquer página — vale pra QUALQUER
+            rota (/, /login, /inicio, /cursos, /perfil, /suporte, área de
+            admin, etc.), pedido explícito. Só aparece antes de uma
+            resposta salva (ver localStorage dentro do componente). */}
+        <CookieConsentBanner />
       </body>
     </html>
   );

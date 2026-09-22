@@ -1,11 +1,22 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { slugify } from '@/lib/utils';
 import type { Categoria, Curso } from '@/types';
 
 type GrupoCategoria = { id: string; nome: string; ordem: number; cursos: Curso[] };
 
-export type FiltroCursos = { busca: string; categoriaIds: string[]; instrutorNomes: string[] };
+// categoriaSlugs (era categoriaIds — pedido de uma tarefa posterior, pra
+// URL de filtro usar algo legível: ?categoria=criacao-de-sites em vez de
+// ?categoria=<uuid>): slug calculado NA HORA a partir de `categoria.nome`
+// (slugify, lib/utils.ts) — sem coluna nova no banco. Efeito colateral
+// desejado: duas categorias com o MESMO nome (dado legado, ver
+// categoriasAgrupadas em MembrosLayoutShell.tsx) geram o MESMO slug,
+// então já contam como "uma opção só" de filtro automaticamente, sem
+// precisar do agrupamento por ids que o painel de filtro (FiltroModal)
+// ainda faz por outro motivo (a UI de checkbox continua em cima dos ids
+// de verdade — só a URL/o filtro de curso passaram a usar slug).
+export type FiltroCursos = { busca: string; categoriaSlugs: string[]; instrutorNomes: string[] };
 
 /**
  * Funções puras (sem estado/hook) por trás do filtro — extraídas pra serem
@@ -27,8 +38,11 @@ export function filtrarCursos(todosCursos: Curso[], filtro: FiltroCursos): Curso
       // marcadas: passa se o curso for de QUALQUER UMA delas (OR dentro
       // do filtro). Mesma lógica pro instrutor. Os dois filtros (categoria
       // e instrutor) combinam entre si com AND — se ambos tiverem seleção,
-      // o curso precisa bater nos dois.
-      (filtro.categoriaIds.length === 0 || (!!curso.categoria && filtro.categoriaIds.includes(curso.categoria.id))) &&
+      // o curso precisa bater nos dois. Comparação por SLUG (era por id —
+      // ver comentário de FiltroCursos acima), calculado na hora a partir
+      // do nome real da categoria do curso.
+      (filtro.categoriaSlugs.length === 0 ||
+        (!!curso.categoria && filtro.categoriaSlugs.includes(slugify(curso.categoria.nome)))) &&
       (filtro.instrutorNomes.length === 0 || (!!curso.instrutor_nome && filtro.instrutorNomes.includes(curso.instrutor_nome)))
   );
 }
@@ -110,10 +124,10 @@ export function agruparPorCategoria(cursosFiltrados: Curso[]): GrupoCategoria[] 
 export function useCursoFiltro(
   todosCursos: Curso[],
   todasCategorias: Categoria[] = [],
-  initial?: { busca?: string; categoriaIds?: string[]; instrutorNomes?: string[] }
+  initial?: { busca?: string; categoriaSlugs?: string[]; instrutorNomes?: string[] }
 ) {
   const [busca, setBusca] = useState(initial?.busca ?? '');
-  const [categoriaFiltro, setCategoriaFiltro] = useState<string[]>(initial?.categoriaIds ?? []);
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string[]>(initial?.categoriaSlugs ?? []);
   const [instrutorFiltro, setInstrutorFiltro] = useState<string[]>(initial?.instrutorNomes ?? []);
   const filtroAtivo = busca.trim() !== '' || categoriaFiltro.length > 0 || instrutorFiltro.length > 0;
 
@@ -168,7 +182,7 @@ export function useCursoFiltro(
   const instrutoresDisponiveis = useMemo(() => listarInstrutoresDisponiveis(todosCursos), [todosCursos]);
 
   const todosCursosFiltrados = useMemo(
-    () => filtrarCursos(todosCursos, { busca, categoriaIds: categoriaFiltro, instrutorNomes: instrutorFiltro }),
+    () => filtrarCursos(todosCursos, { busca, categoriaSlugs: categoriaFiltro, instrutorNomes: instrutorFiltro }),
     [todosCursos, busca, categoriaFiltro, instrutorFiltro]
   );
 
