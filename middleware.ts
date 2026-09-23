@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
+import { bloquearAcessosComTrialExpirado } from '@/lib/membros/trial';
 
 export async function middleware(request: NextRequest) {
   const { response, supabase, user } = await updateSession(request);
@@ -21,6 +22,12 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/curso');
   const isProtectedRoute = pathname.startsWith('/admin') || isAreaAluno;
 
+  // /redefinir-senha (destino do link de "Esqueceu a senha?") passa sempre,
+  // logado ou não, bloqueado ou não: o link de recuperação cria uma sessão, e
+  // sem essa exceção um aluno bloqueado/expirado seria mandado pra /bloqueado
+  // e nunca conseguiria redefinir a senha.
+  if (pathname.startsWith('/redefinir-senha')) return response;
+
   if (!user) {
     if (isProtectedRoute) {
       return NextResponse.redirect(new URL('/login', request.url));
@@ -39,12 +46,26 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Regra 1: pendente há mais de 30min (trial) vira bloqueado (o cron já
-  // marca isso no banco; aqui fazemos uma checagem redundante em tempo real
-  // como reforço, pra não depender só do cron rodar a cada 5min).
-  const liberadoEm = new Date(profile.liberado_em).getTime();
-  const expirado = profile.status_pagamento === 'pendente' && Date.now() - liberadoEm > 30 * 60 * 1000;
-  const bloqueado = profile.bloqueado || expirado;
+  // Trial expirado (pendente há mais de 30min) NÃO bloqueia mais a conta
+  // inteira (era a antiga "Regra 1": redirect forçado pra /bloqueado —
+  // tela cheia só com "Sair", sem navegar em lugar nenhum). Agora o
+  // bloqueio é POR CURSO: aqui só marcamos o(s) acesso(s) vencido(s) como
+  // bloqueado (ver lib/membros/trial.ts) e o aluno segue logando/navegando
+  // normalmente, vendo só o curso com cadeado + um pop-up de aviso (ver
+  // TrialExpiradoAviso, montado no layout do aluno).
+  //
+  // Consequência: pra conta com pagamento PENDENTE, profiles.bloqueado é
+  // ignorado (era o que o pg_cron antigo — bloquear_pagamentos_pendentes —
+  // gravava automaticamente no trial, indistinguível de um bloqueio manual
+  // do admin; a migration 012 desliga essa função). Bloqueio de conta
+  // inteira continua valendo pro que sobra: conta JÁ PAGA bloqueada pelo
+  // admin (toggleBloqueioConta) segue indo pra /bloqueado.
+  const pendente = profile.status_pagamento === 'pendente';
+  if (pendente && profile.tipo === 'aluno') {
+    await bloquearAcessosComTrialExpirado(user.id);
+  }
+
+  const bloqueado = profile.bloqueado && !pendente;
 
   if (bloqueado) {
     if (!isBloqueadoRoute) {

@@ -13,30 +13,37 @@
 -- toda conta já existente.
 alter table public.profiles add column if not exists cadastro_publico boolean not null default false;
 
--- REGRA 1 (bloqueio de CONTA INTEIRA) — só muda o WHERE: agora ignora
--- contas de cadastro público, que têm a regra própria abaixo (REGRA 3).
--- Sem essa exclusão, uma conta de cadastro público ficaria bloqueada nos
--- DOIS níveis (conta inteira E curso), contradizendo "continua logando
--- normalmente".
+-- Backfill: contas criadas pelo cadastro público ANTES desta coluna existir
+-- (a server action grava `cadastro_publico: true` em auth.users.
+-- raw_user_meta_data desde sempre) recebem a marca agora. Idempotente.
+update public.profiles p
+set cadastro_publico = true
+from auth.users u
+where u.id = p.id
+  and u.raw_user_meta_data->>'cadastro_publico' = 'true'
+  and p.cadastro_publico = false;
+
+-- REGRA 1 (bloqueio de CONTA INTEIRA pós-trial) — DESLIGADA. Decisão
+-- (regressão reportada): trial expirado nunca mais bloqueia a conta
+-- inteira (tela cheia "Acesso pendente", só com "Sair") — o aluno continua
+-- logando/navegando e só o CURSO fica bloqueado (REGRA 3 abaixo, valendo
+-- pra QUALQUER conta com pagamento pendente, não só cadastro público).
+-- Mantém a função (o job pg_cron antigo continua chamando ela) mas sem
+-- fazer nada; bloqueio manual de conta pelo admin (profiles.bloqueado via
+-- toggleBloqueioConta) não passa por aqui e segue funcionando.
 create or replace function public.bloquear_pagamentos_pendentes()
 returns void
 language sql
 security definer
 set search_path = public
 as $$
-  update public.profiles
-  set bloqueado = true
-  where status_pagamento = 'pendente'
-    and bloqueado = false
-    and cadastro_publico = false
-    and liberado_em + interval '30 minutes' < now();
+  select 1;
 $$;
 
--- REGRA 3 (NOVA) — equivalente à Regra 1, mas por CURSO em vez de conta
--- inteira: só entra em ação pra `cadastro_publico = true`. Usa
--- `acessos_curso.liberado_em` (coluna que já existia, preenchida desde
--- sempre em todo INSERT — ver criarAluno em app/admin/alunos/actions.ts —
--- mas até agora nada LIA esse valor pra tomar decisão nenhuma).
+-- REGRA 3 — bloqueio POR CURSO: acesso cujo trial (liberado_em + 30min)
+-- venceu, de conta com pagamento pendente, vira bloqueado. O app também
+-- aplica isso em tempo real (lib/membros/trial.ts, chamado pelo
+-- middleware) — este job é a rede de segurança pra quem não abre o site.
 create or replace function public.bloquear_acessos_curso_pendentes()
 returns void
 language sql
@@ -47,7 +54,6 @@ as $$
   set bloqueado = true
   from public.profiles p
   where ac.aluno_id = p.id
-    and p.cadastro_publico = true
     and p.status_pagamento = 'pendente'
     and ac.bloqueado = false
     and ac.liberado_em + interval '30 minutes' < now();

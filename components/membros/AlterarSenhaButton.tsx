@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyRound } from 'lucide-react';
+import SenhaAlteradaSucesso from '@/components/SenhaAlteradaSucesso';
+import BotaoOlhoSenha from '@/components/BotaoOlhoSenha';
 import Modal from '@/components/Modal';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -22,6 +24,18 @@ export default function AlterarSenhaButton({ className }: { className?: string }
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Olho da senha atual (só ela) e olho da NOVA senha (controla Nova senha E
+  // Confirmar nova senha juntas — um clique revela/oculta as duas).
+  const [mostrarAtual, setMostrarAtual] = useState(false);
+  const [mostrarNova, setMostrarNova] = useState(false);
+
+  // Pop-up de sucesso fecha sozinho depois de alguns segundos (além do
+  // botão "Ok").
+  useEffect(() => {
+    if (!sucesso) return;
+    const t = setTimeout(() => setOpen(false), 5000);
+    return () => clearTimeout(t);
+  }, [sucesso]);
 
   function handleOpen() {
     setSenhaAtual('');
@@ -29,6 +43,8 @@ export default function AlterarSenhaButton({ className }: { className?: string }
     setConfirmarSenha('');
     setErro(null);
     setSucesso(false);
+    setMostrarAtual(false);
+    setMostrarNova(false);
     setOpen(true);
   }
 
@@ -88,46 +104,57 @@ export default function AlterarSenhaButton({ className }: { className?: string }
         Alterar Senha
       </button>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Alterar senha" maxWidth="max-w-sm">
+      {/* Sem `title` no estado de sucesso: mesmo layout do AccessModal
+          ("Você deseja liberar esse curso?") — card centralizado com a
+          borda vermelha no topo (que o próprio Modal já desenha), ícone
+          num círculo, título, texto e botão. */}
+      <Modal open={open} onClose={() => setOpen(false)} title={sucesso ? undefined : 'Alterar senha'} maxWidth="max-w-sm">
         {sucesso ? (
-          <p className="text-sm text-primary">Senha alterada com sucesso.</p>
+          <SenhaAlteradaSucesso onOk={() => setOpen(false)} />
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="perfil-senha-atual" className="mb-1.5 block text-sm font-medium text-on-surface">
                 Senha atual
               </label>
-              <input
-                id="perfil-senha-atual"
-                type="password"
-                required
-                value={senhaAtual}
-                onChange={(e) => setSenhaAtual(e.target.value)}
-                className="input-field"
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <input
+                  id="perfil-senha-atual"
+                  type={mostrarAtual ? 'text' : 'password'}
+                  required
+                  value={senhaAtual}
+                  onChange={(e) => setSenhaAtual(e.target.value)}
+                  className="input-field pr-10"
+                  autoComplete="current-password"
+                />
+                <BotaoOlhoSenha visivel={mostrarAtual} onToggle={() => setMostrarAtual((v) => !v)} />
+              </div>
             </div>
             <div>
               <label htmlFor="perfil-nova-senha" className="mb-1.5 block text-sm font-medium text-on-surface">
                 Nova senha
               </label>
-              <input
-                id="perfil-nova-senha"
-                type="password"
-                required
-                value={novaSenha}
-                onChange={(e) => setNovaSenha(e.target.value)}
-                className="input-field"
-                autoComplete="new-password"
-              />
+              <div className="relative">
+                <input
+                  id="perfil-nova-senha"
+                  type={mostrarNova ? 'text' : 'password'}
+                  required
+                  value={novaSenha}
+                  onChange={(e) => setNovaSenha(e.target.value)}
+                  className="input-field pr-10"
+                  autoComplete="new-password"
+                />
+                <BotaoOlhoSenha visivel={mostrarNova} onToggle={() => setMostrarNova((v) => !v)} />
+              </div>
             </div>
             <div>
               <label htmlFor="perfil-confirmar-senha" className="mb-1.5 block text-sm font-medium text-on-surface">
                 Confirmar nova senha
               </label>
+              {/* Sem olho próprio: segue o estado do olho da "Nova senha". */}
               <input
                 id="perfil-confirmar-senha"
-                type="password"
+                type={mostrarNova ? 'text' : 'password'}
                 required
                 value={confirmarSenha}
                 onChange={(e) => setConfirmarSenha(e.target.value)}

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import MembrosChrome from '@/components/membros/MembrosChrome';
+import TrialExpiradoAviso from '@/components/membros/TrialExpiradoAviso';
 
 // Extraído de app/membros/layout.tsx (que virou um wrapper de 1 linha
 // disto, mais abaixo) pra poder ser reaproveitado também pelas rotas novas
@@ -19,7 +20,7 @@ export default async function MembrosLayoutShell({ children }: { children: React
   if (!user) redirect('/login');
 
   const [{ data: profile }, { data: config }, { data: categorias }, { data: cursosAtivos }] = (await Promise.all([
-    supabase.from('profiles').select('nome, email, avatar_url, tipo').eq('id', user.id).maybeSingle(),
+    supabase.from('profiles').select('nome, email, avatar_url, tipo, status_pagamento').eq('id', user.id).maybeSingle(),
     supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle(),
     // Categoria/instrutor pro painel de filtro do Header (busca global,
     // presente em toda página) — mesmas listas que useCursoFiltro deriva a
@@ -30,13 +31,30 @@ export default async function MembrosLayoutShell({ children }: { children: React
     supabase.from('categorias').select('id, nome').order('nome'),
     supabase.from('cursos').select('instrutor_nome').eq('status', 'active'),
   ])) as [
-    { data: { nome: string; email: string; avatar_url: string | null; tipo: string } | null },
+    { data: { nome: string; email: string; avatar_url: string | null; tipo: string; status_pagamento: string } | null },
     { data: { numero_whatsapp: string | null } | null },
     { data: { id: string; nome: string }[] | null },
     { data: { instrutor_nome: string | null }[] | null },
   ];
 
   if (!profile || profile.tipo !== 'aluno') redirect('/admin/dashboard');
+
+  // Aviso de trial expirado: aluno com pagamento pendente que tem curso
+  // bloqueado (o bloqueio em si é gravado pelo middleware a cada request —
+  // lib/membros/trial.ts — antes deste layout rodar). Vira um pop-up
+  // dispensável (TrialExpiradoAviso), nunca uma tela cheia.
+  let cursoTrialExpirado: { id: string; titulo: string; mensagem_whatsapp: string } | null = null;
+  if (profile.status_pagamento === 'pendente') {
+    const { data: acessoBloqueado } = (await supabase
+      .from('acessos_curso')
+      .select('curso:cursos(id, titulo, mensagem_whatsapp)')
+      .eq('aluno_id', user.id)
+      .eq('bloqueado', true)
+      .order('liberado_em', { ascending: true })
+      .limit(1)
+      .maybeSingle()) as { data: { curso: { id: string; titulo: string; mensagem_whatsapp: string } | null } | null };
+    cursoTrialExpirado = acessoBloqueado?.curso ?? null;
+  }
 
   // Agrupada por nome (case/espaço-insensível), igual a `categoriasAgrupadas`
   // em hooks/useCursoFiltro.ts — protege contra linhas duplicadas na tabela
@@ -91,6 +109,7 @@ export default async function MembrosLayoutShell({ children }: { children: React
       >
         {children}
       </MembrosChrome>
+      <TrialExpiradoAviso curso={cursoTrialExpirado} numeroWhatsapp={config?.numero_whatsapp ?? null} alunoId={user.id} />
     </div>
   );
 }

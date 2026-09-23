@@ -2,113 +2,122 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 
-export type StatusEmailLogin = 'ativo' | 'inativo' | 'nao_encontrado';
-
-/**
- * Usado só pelo link "Esqueceu a senha?" da tela de login, pra decidir entre
- * mostrar o modal "fale com o suporte" (aluno com pagamento ativo — troca de
- * senha é manual, por segurança) ou seguir o fluxo padrão de recuperação por
- * email. Roda sem sessão (a tela de login não tem usuário logado), por isso
- * usa o client admin (service role) só aqui dentro, no servidor — a chave
- * nunca chega no browser. Retorna só um status resumido, nunca dados do
- * perfil (nome, telefone etc.), pra essa checagem não virar uma forma de
- * vazar quem tem conta ativa na plataforma.
- *
- * "Ativo" aqui segue a mesma regra já usada no resto do sistema (ver
- * middleware.ts): status_pagamento = 'pago' e não bloqueado. Pendente ou
- * bloqueado cai no fluxo padrão de recuperação — não faz sentido mandar
- * quem ainda nem pagou pro suporte trocar senha manualmente.
- */
-export async function verificarStatusPorEmail(email: string): Promise<StatusEmailLogin> {
-  const emailLimpo = email.trim().toLowerCase();
-  if (!emailLimpo) return 'nao_encontrado';
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from('profiles')
-    .select('status_pagamento, bloqueado')
-    .ilike('email', emailLimpo)
-    .maybeSingle();
-
-  if (!profile) return 'nao_encontrado';
-  if (profile.bloqueado) return 'inativo';
-  return profile.status_pagamento === 'pago' ? 'ativo' : 'inativo';
-}
+export type ResultadoCadastroPublico = { ok: true; email: string; senha: string } | { ok: false; erro: string };
 
 /**
  * Cadastro público (aba "Cadastra-se" da tela de login, sem sessão) — usa o
- * client admin (service role) igual verificarStatusPorEmail acima, pelos
- * mesmos dois motivos: não tem sessão ainda (não dá pra usar o client
+ * client admin (service role) pelos dois
+ * motivos: não tem sessão ainda (não dá pra usar o client
  * comum, que respeita RLS como o usuário logado) e criar usuário com senha
  * + `email_confirm: true` só é possível com o client admin.
  *
- * "Cada pessoa pode fazer apenas um cadastro" (e-mail único): não
- * precisa de checagem própria — o Supabase Auth já garante isso sozinho
- * (email é UNIQUE em auth.users); `admin.auth.admin.createUser` retorna
- * erro se o e-mail já existir, só traduzido pra uma mensagem amigável
- * abaixo.
+ * Retorna um resultado tipado ({ ok, erro }) em vez de LANÇAR erro (era
+ * `throw new Error(...)`): num build de produção o Next.js mascara a
+ * mensagem de qualquer erro lançado por Server Action ("An error occurred
+ * in the Server Components render. The specific message is omitted..."), o
+ * que escondia do aluno o motivo real ("e-mail já cadastrado", "senha
+ * curta" etc.). Valores retornados NÃO são mascarados.
  *
- * `email_confirm: true` (decisão confirmada): login liberado na hora,
- * sem fluxo de confirmação por e-mail — mesmo padrão que
- * app/admin/alunos/actions.ts (criarAluno) já usa pro aluno criado pelo
- * admin.
- *
- * `cadastro_publico: true` (migration 012): diferencia esta conta de uma
- * criada pelo admin pra regra de bloqueio pós-trial de 30min certa — só o
- * curso escolhido é bloqueado se o trial expirar sem pagamento (não a
- * conta inteira), decisão confirmada com o usuário. handle_new_user()
- * (schema.sql) já cria a linha em `profiles` a partir de `user_metadata`
- * — falta só marcar esse campo, que não é lido por esse trigger.
+ * Rollback: depois que o usuário do Auth é criado, qualquer falha nos
+ * passos seguintes (marcar cadastro_publico, criar o acesso ao curso)
+ * apaga esse usuário — sem isso ficava uma conta "órfã" (existe no Auth,
+ * mas sem acesso a curso nenhum) e a nova tentativa do aluno caía em "este
+ * e-mail já está cadastrado" sem nunca ter conseguido se cadastrar.
  */
-export async function cadastrarAlunoPublico(input: { nome: string; email: string; senha: string; cursoId: string }) {
+export async function cadastrarAlunoPublico(input: {
+  nome: string;
+  email: string;
+  senha: string;
+  cursoId: string;
+}): Promise<ResultadoCadastroPublico> {
   const nome = input.nome.trim();
   const email = input.email.trim().toLowerCase();
   const senha = input.senha;
   const cursoId = input.cursoId;
 
-  if (!nome) throw new Error('Informe seu nome.');
-  if (!email) throw new Error('Informe seu e-mail.');
-  if (senha.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
-  if (!cursoId) throw new Error('Escolha um curso pra começar.');
+  if (!nome) return { ok: false, erro: 'Informe seu nome.' };
+  if (!email) return { ok: false, erro: 'Informe seu e-mail.' };
+  if (senha.length < 6) return { ok: false, erro: 'A senha precisa ter pelo menos 6 caracteres.' };
+  if (!cursoId) return { ok: false, erro: 'Escolha um curso pra começar.' };
 
-  const admin = createAdminClient();
+  try {
+    const admin = createAdminClient();
 
-  // Confirma que o curso existe e está ativo — evita um cadastro apontando
-  // pra um curso removido/inativo via manipulação do formulário (o campo é
-  // um <select>, mas o valor ainda chega como string solta na action).
-  const { data: curso } = await admin.from('cursos').select('id').eq('id', cursoId).eq('status', 'active').maybeSingle();
-  if (!curso) throw new Error('Curso inválido — atualize a página e tente de novo.');
+    // Confirma que o curso existe e está ativo — evita um cadastro apontando
+    // pra um curso removido/inativo via manipulação do formulário (o campo é
+    // um <select>, mas o valor ainda chega como string solta na action).
+    const { data: curso } = await admin.from('cursos').select('id').eq('id', cursoId).eq('status', 'active').maybeSingle();
+    if (!curso) return { ok: false, erro: 'Curso inválido — atualize a página e tente de novo.' };
 
-  const { data: created, error } = await admin.auth.admin.createUser({
-    email,
-    password: senha,
-    email_confirm: true,
-    user_metadata: { nome, tipo: 'aluno', status_pagamento: 'pendente' },
-  });
+    // "Cada pessoa pode fazer apenas um cadastro" (e-mail único): o Supabase
+    // Auth já garante isso (email é UNIQUE em auth.users) — createUser
+    // retorna erro se já existir, traduzido abaixo.
+    // `email_confirm: true`: login liberado na hora, sem confirmação por
+    // e-mail — mesmo padrão de criarAluno (app/admin/alunos/actions.ts).
+    const { data: created, error } = await admin.auth.admin.createUser({
+      email,
+      password: senha,
+      email_confirm: true,
+      // cadastro_publico também em user_metadata: guarda a origem da conta
+      // mesmo que a coluna profiles.cadastro_publico (migration 012) ainda
+      // não exista no banco — a migration faz backfill a partir daqui.
+      user_metadata: { nome, tipo: 'aluno', status_pagamento: 'pendente', cadastro_publico: true },
+    });
 
-  if (error) {
-    const msg = error.message.toLowerCase();
-    if (msg.includes('already') || msg.includes('registered') || msg.includes('existe')) {
-      throw new Error('Este e-mail já está cadastrado. Faça login normalmente.');
+    if (error) {
+      const msg = error.message.toLowerCase();
+      if (msg.includes('already') || msg.includes('registered') || msg.includes('existe') || msg.includes('duplicate')) {
+        return { ok: false, erro: 'Este e-mail já está cadastrado. Faça login normalmente.' };
+      }
+      if (msg.includes('password')) return { ok: false, erro: 'Senha inválida — use pelo menos 6 caracteres.' };
+      if (msg.includes('email') && msg.includes('invalid')) return { ok: false, erro: 'E-mail inválido.' };
+      console.error('[cadastro] createUser falhou:', error.message);
+      return { ok: false, erro: 'Não foi possível criar sua conta agora. Tente novamente em instantes.' };
     }
-    throw new Error(error.message);
+    if (!created.user) return { ok: false, erro: 'Não foi possível criar sua conta agora. Tente novamente em instantes.' };
+
+    const userId = created.user.id;
+    const desfazer = async () => {
+      const { error: erroRollback } = await admin.auth.admin.deleteUser(userId);
+      if (erroRollback) console.error('[cadastro] rollback (deleteUser) falhou:', erroRollback.message);
+    };
+
+    // `cadastro_publico: true` (migration 012) diferencia esta conta de uma
+    // criada pelo admin pra regra de bloqueio pós-trial certa (só o curso
+    // escolhido é bloqueado, não a conta inteira). handle_new_user()
+    // (schema.sql) já criou a linha em `profiles` a partir de
+    // `user_metadata` — falta só marcar esse campo. as any: types/
+    // database.types.ts (gerado) ainda não conhece a coluna.
+    const { error: erroProfile } = await (admin.from('profiles') as any).update({ cadastro_publico: true }).eq('id', userId);
+    if (erroProfile) {
+      // PGRST204 / 42703 = coluna inexistente: migration 012 ainda não foi
+      // aplicada no banco. NÃO bloqueia o cadastro (a origem já foi gravada
+      // em user_metadata acima e a migration faz o backfill); só avisa no
+      // log do servidor. Qualquer outro erro é real: desfaz a conta.
+      if (erroProfile.code === 'PGRST204' || erroProfile.code === '42703') {
+        console.warn('[cadastro] profiles.cadastro_publico não existe ainda (aplicar migration 012) — seguindo só com user_metadata.');
+      } else {
+        console.error('[cadastro] update profiles.cadastro_publico falhou:', erroProfile.code, erroProfile.message);
+        await desfazer();
+        return { ok: false, erro: 'Não foi possível concluir seu cadastro. Tente novamente em instantes.' };
+      }
+    }
+
+    // bloqueado: false, liberado_em: agora — mesmo shape do insert que
+    // criarAluno já faz; é o `liberado_em` daqui que a Regra 3 (migration
+    // 012) usa pra saber quando os 30min de trial DESTE curso vencem.
+    const { error: erroAcesso } = await admin
+      .from('acessos_curso')
+      .insert({ aluno_id: userId, curso_id: cursoId, bloqueado: false, liberado_em: new Date().toISOString() });
+    if (erroAcesso) {
+      console.error('[cadastro] insert acessos_curso falhou:', erroAcesso.message);
+      await desfazer();
+      return { ok: false, erro: 'Não foi possível liberar seu curso. Tente novamente em instantes.' };
+    }
+
+    return { ok: true, email, senha };
+  } catch (err) {
+    console.error('[cadastro] erro inesperado:', err);
+    return { ok: false, erro: 'Erro inesperado ao criar cadastro. Tente novamente em instantes.' };
   }
-  if (!created.user) throw new Error('Erro ao criar cadastro.');
-
-  // as any: types/database.types.ts (gerado) ainda não conhece
-  // `cadastro_publico` (migration 012) — mesmo cast usado em todo lugar
-  // que lida com coluna de migration pendente neste projeto (ver `slug`).
-  const { error: erroProfile } = await (admin.from('profiles') as any).update({ cadastro_publico: true }).eq('id', created.user.id);
-  if (erroProfile) throw new Error(erroProfile.message);
-
-  // bloqueado: false, liberado_em: agora — mesmo shape do insert que
-  // criarAluno (app/admin/alunos/actions.ts) já faz pro aluno criado pelo
-  // admin; é o `liberado_em` daqui que a Regra 3 nova (migration 012) usa
-  // pra saber quando os 30min de trial DESTE curso específico vencem.
-  const { error: erroAcesso } = await admin
-    .from('acessos_curso')
-    .insert({ aluno_id: created.user.id, curso_id: cursoId, bloqueado: false, liberado_em: new Date().toISOString() });
-  if (erroAcesso) throw new Error(erroAcesso.message);
-
-  return { email, senha };
 }

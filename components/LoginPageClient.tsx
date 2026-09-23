@@ -1,13 +1,15 @@
 'use client';
 
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, User, GraduationCap, ArrowLeft } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import { verificarStatusPorEmail, cadastrarAlunoPublico } from '@/app/login/actions';
-import TrocarSenhaModal from '@/components/TrocarSenhaModal';
+import { createClient, lerErroRetornoUrl } from '@/lib/supabase/client';
+import { cadastrarAlunoPublico } from '@/app/login/actions';
+import BotaoOlhoSenha from '@/components/BotaoOlhoSenha';
+import EsqueceuSenhaModal from '@/components/EsqueceuSenhaModal';
+import RedefinirSenhaModal from '@/components/RedefinirSenhaModal';
 import { preloadLoginIntro, playLoginIntro } from '@/lib/loginIntro';
 
 // TESTE VISUAL: qual fundo mostrar atrás do card de login — 'gradiente'
@@ -48,16 +50,110 @@ export default function LoginPageClient({
   const [erro, setErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Fluxo de "Esqueceu a senha?": verificarErro é só a mensagem de "preencha
-  // o email" (item 4 do pedido) — não usa `erro` acima pra não misturar com
-  // a mensagem de login inválido. verificando cobre a checagem de status
-  // (chamada ao servidor) até decidir entre abrir o modal ou disparar a
-  // recuperação padrão. recuperacaoMsg é a confirmação de que o email de
-  // redefinição foi enviado (fluxo padrão, quando o aluno não está ativo).
-  const [modalTrocarSenhaAberto, setModalTrocarSenhaAberto] = useState(false);
-  const [verificando, setVerificando] = useState(false);
-  const [verificarErro, setVerificarErro] = useState<string | null>(null);
-  const [recuperacaoMsg, setRecuperacaoMsg] = useState<string | null>(null);
+  // "Esqueceu a senha?" abre o EsqueceuSenhaModal (recuperação automática por
+  // e-mail via Supabase Auth) — o modal cuida de todo o resto (envio,
+  // confirmação, erros); aqui só o estado de aberto/fechado.
+  const [modalEsqueceuAberto, setModalEsqueceuAberto] = useState(false);
+
+  // Pop-up de redefinição de senha, aberto sozinho quando a pessoa chega em
+  // /login pelo link do e-mail (ver o efeito logo abaixo). 'pronto' = link
+  // válido (há sessão de recuperação); 'expirado' = link não funcionou —
+  // `motivo` (texto pra pessoa) e `detalheTecnico` (erro real do Supabase)
+  // explicam por quê.
+  const [redefinicao, setRedefinicao] = useState<'pronto' | 'expirado' | null>(null);
+  const [redefinicaoMotivo, setRedefinicaoMotivo] = useState<{ motivo: string; detalhe: string } | null>(null);
+
+  // Retorno do link de redefinição. Formatos tratados:
+  //  - ?code=...            fluxo PKCE (o que o Supabase manda quando o pedido
+  //                         saiu deste app — resetPasswordForEmail com
+  //                         code_challenge). O client do Supabase troca o
+  //                         código por sessão SOZINHO ao iniciar (usando o
+  //                         code_verifier guardado no navegador que fez o
+  //                         pedido); getSession() espera essa troca terminar.
+  //                         Se falhar, o erro real vem de lerErroRetornoUrl()
+  //                         (ver lib/supabase/client.ts).
+  //  - ?token_hash=...&type=recovery
+  //                         link do template de e-mail customizado
+  //                         ({{ .TokenHash }}) -> verifyOtp (troca explícita).
+  //                         Não depende do navegador do pedido e não é
+  //                         consumido por "pré-visualização" de link do
+  //                         provedor de e-mail (só um script dispara a troca).
+  //  - #access_token=...&refresh_token=...&type=recovery
+  //                         fluxo implícito (link do painel/admin): o client
+  //                         PKCE recusa esse formato sozinho -> setSession.
+  //  - ?error=... / #error=...&error_code=otp_expired
+  //                         o Supabase já recusou o link (expirado, ou já
+  //                         usado — inclusive por scanner de e-mail).
+  // Qualquer falha loga o erro EXATO no console e mostra o detalhe no pop-up.
+  // A URL é limpa no fim (token fora da barra de endereço; F5 não reabre).
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const query = new URLSearchParams(window.location.search);
+    const code = query.get('code');
+    const tokenHash = query.get('token_hash');
+    const accessToken = hash.get('access_token');
+    const refreshToken = hash.get('refresh_token');
+    const erroUrl = hash.get('error_code') || query.get('error_code') || hash.get('error') || query.get('error');
+    const descricaoUrl = hash.get('error_description') || query.get('error_description') || '';
+    const ehRecovery = !!code || !!tokenHash || hash.get('type') === 'recovery' || !!erroUrl;
+    if (!ehRecovery) return;
+
+    const MOTIVO_EXPIRADO =
+      'O link expirou ou já foi usado. Alguns provedores de e-mail abrem o link automaticamente para verificar a segurança, o que invalida o link antes de você clicar. Peça um novo e clique nele diretamente.';
+    const MOTIVO_OUTRO_NAVEGADOR =
+      'Este link só funciona no mesmo navegador e aparelho em que você pediu a redefinição (e o pedido mais recente). Peça um novo link por aqui e abra-o neste mesmo navegador.';
+
+    (async () => {
+      console.log('[redefinir-senha] retorno do link', JSON.stringify({ temCode: !!code, temTokenHash: !!tokenHash, temHashTokens: !!accessToken, erroUrl, descricaoUrl }));
+      let session: import('@supabase/supabase-js').Session | null = null;
+      let falha: { motivo: string; detalhe: string } | null = null;
+
+      try {
+        if (erroUrl) {
+          falha = { motivo: MOTIVO_EXPIRADO, detalhe: [erroUrl, descricaoUrl].filter(Boolean).join(': ') };
+        } else if (tokenHash) {
+          const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' });
+          if (error) falha = { motivo: MOTIVO_EXPIRADO, detalhe: `verifyOtp: ${error.code ?? error.name}: ${error.message}` };
+          else session = data.session;
+        } else {
+          // ?code= (PKCE) ou hash implícito: espera a inicialização do
+          // client (que já tentou a troca automática) e vê se há sessão.
+          const { data } = await supabase.auth.getSession();
+          session = data.session;
+          if (!session && accessToken && refreshToken) {
+            const { data: manual, error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+            session = manual.session;
+            if (error) falha = { motivo: MOTIVO_EXPIRADO, detalhe: `setSession: ${error.code ?? error.name}: ${error.message}` };
+          }
+          if (!session && !falha) {
+            const e = lerErroRetornoUrl();
+            const semVerifier = !!e && (e.code === 'pkce_code_verifier_not_found' || /code verifier/i.test(e.message));
+            falha = {
+              motivo: semVerifier || !e ? MOTIVO_OUTRO_NAVEGADOR : MOTIVO_EXPIRADO,
+              detalhe: e ? `troca do código: ${e.code ?? e.name}: ${e.message}` : 'troca do código: nenhuma sessão criada (code_verifier ausente neste navegador)',
+            };
+          }
+        }
+      } catch (err: any) {
+        falha = { motivo: MOTIVO_EXPIRADO, detalhe: `erro inesperado: ${err?.message ?? String(err)}` };
+      }
+
+      if (session) {
+        console.log('[redefinir-senha] sessão de recuperação criada');
+        // Já deixa o e-mail no campo de login: depois de salvar, é só
+        // digitar a senha nova.
+        if (session.user.email) setEmail(session.user.email);
+        setRedefinicaoMotivo(null);
+        setRedefinicao('pronto');
+      } else {
+        console.error('[redefinir-senha] link não funcionou:', falha?.detalhe);
+        setRedefinicaoMotivo(falha);
+        setRedefinicao('expirado');
+      }
+      window.history.replaceState(null, '', window.location.pathname);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Cadastro público (verso do card, flip 180°) — estado isolado do
   // formulário de login acima, só entra em jogo quando `flipped` é true.
@@ -70,14 +166,17 @@ export default function LoginPageClient({
   const [erroCad, setErroCad] = useState<string | null>(null);
   const [loadingCad, setLoadingCad] = useState(false);
 
-  // Altura dinâmica do card com flip (bug reportado: com as duas faces
-  // sobrepostas via CSS Grid — col-start-1 row-start-1 — a célula do grid
-  // sempre cresce pro MAIOR dos dois lados, então o lado de login (mais
-  // curto) ficava com espaço vazio embaixo quando visível. Troca de
-  // abordagem: as faces agora são `absolute inset-0` (saem do fluxo, não
-  // definem mais a altura do pai sozinhas) e a altura do "flipper" pai é
-  // medida via ref na face ativa e aplicada via state — sempre bate com o
-  // conteúdo real de quem está visível no momento, dos dois lados.
+  // Mostrar/ocultar senha — um estado por campo (login, senha do cadastro,
+  // confirmar do cadastro), independentes entre si: mostrar um não mexe nos
+  // outros. Padrão false = type="password" (oculta).
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [mostrarSenhaCad, setMostrarSenhaCad] = useState(false);
+  const [mostrarConfirmarCad, setMostrarConfirmarCad] = useState(false);
+
+  // Altura dinâmica do card com flip: as duas faces são `absolute inset-x-0
+  // top-0` (saem do fluxo, altura auto dirigida pelo conteúdo) e a altura do
+  // "flipper" pai é medida via ref na face ATIVA e aplicada via state — sempre
+  // bate com o conteúdo real de quem está visível no momento, dos dois lados.
   const loginFaceRef = useRef<HTMLDivElement>(null);
   const cadastroFaceRef = useRef<HTMLDivElement>(null);
   const [cardHeight, setCardHeight] = useState<number | undefined>(undefined);
@@ -133,44 +232,6 @@ export default function LoginPageClient({
     });
   }
 
-  async function handleEsqueceuSenha() {
-    setVerificarErro(null);
-    setRecuperacaoMsg(null);
-
-    const emailLimpo = email.trim();
-    if (!emailLimpo) {
-      setVerificarErro('Preencha o email antes de continuar.');
-      return;
-    }
-
-    setVerificando(true);
-    try {
-      // "Ativo" (status_pagamento = 'pago' e não bloqueado — mesma regra do
-      // middleware) abre o modal do suporte; qualquer outro caso (pendente,
-      // bloqueado ou email não encontrado) segue o fluxo padrão de
-      // recuperação por email do Supabase Auth.
-      const status = await verificarStatusPorEmail(emailLimpo);
-
-      if (status === 'ativo') {
-        setModalTrocarSenhaAberto(true);
-        return;
-      }
-
-      const { error } = await supabase.auth.resetPasswordForEmail(emailLimpo, {
-        redirectTo: `${window.location.origin}/redefinir-senha`,
-      });
-
-      if (error) {
-        setVerificarErro('Não foi possível enviar o email de recuperação. Tente novamente.');
-        return;
-      }
-
-      setRecuperacaoMsg('Se esse email estiver cadastrado, enviamos um link para redefinir a senha.');
-    } finally {
-      setVerificando(false);
-    }
-  }
-
   async function handleSubmitCadastro(e: React.FormEvent) {
     e.preventDefault();
     setErroCad(null);
@@ -196,12 +257,20 @@ export default function LoginPageClient({
       // curso escolhido — ver app/login/actions.ts) e devolve email/senha
       // só pra este login automático logo abaixo; nunca fica guardado em
       // lugar nenhum além da memória deste componente.
-      const { email: emailCriado, senha: senhaCriada } = await cadastrarAlunoPublico({
+      // A action devolve { ok, erro } em vez de lançar (erro lançado é
+      // mascarado em produção — ver comentário em app/login/actions.ts).
+      const resultado = await cadastrarAlunoPublico({
         nome: nomeCad,
         email: emailCad,
         senha: senhaCad,
         cursoId: cursoIdCad,
       });
+      if (!resultado.ok) {
+        setErroCad(resultado.erro);
+        setLoadingCad(false);
+        return;
+      }
+      const { email: emailCriado, senha: senhaCriada } = resultado;
 
       // Login imediato (pedido explícito: "já consegue logar
       // imediatamente") — reaproveita o MESMO signInWithPassword do
@@ -219,7 +288,8 @@ export default function LoginPageClient({
         router.refresh();
       });
     } catch (err: any) {
-      setErroCad(err.message ?? 'Erro ao criar cadastro.');
+      // Só chega aqui se a própria chamada à action falhar (rede etc.).
+      setErroCad('Não foi possível criar seu cadastro agora. Verifique sua conexão e tente novamente.');
       setLoadingCad(false);
     }
   }
@@ -440,28 +510,26 @@ export default function LoginPageClient({
                 </label>
                 <button
                   type="button"
-                  onClick={handleEsqueceuSenha}
-                  disabled={verificando}
-                  className="text-xs text-on-variant hover:text-primary disabled:cursor-wait disabled:opacity-70"
+                  onClick={() => setModalEsqueceuAberto(true)}
+                  className="text-xs text-on-variant hover:text-primary"
                 >
-                  {verificando ? 'Verificando...' : 'Esqueceu a senha?'}
+                  Esqueceu a senha?
                 </button>
               </div>
               <div className="relative">
                 <Lock size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-on-variant" />
                 <input
                   id="login-senha"
-                  type="password"
+                  type={mostrarSenha ? 'text' : 'password'}
                   required
                   placeholder="••••••••"
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
-                  className="input-field login-input-dark pl-10"
+                  className="input-field login-input-dark pl-10 pr-10"
                   autoComplete="current-password"
                 />
+                <BotaoOlhoSenha visivel={mostrarSenha} onToggle={() => setMostrarSenha((v) => !v)} />
               </div>
-              {verificarErro && <p className="mt-1.5 text-xs text-error">{verificarErro}</p>}
-              {recuperacaoMsg && <p className="mt-1.5 text-xs text-primary">{recuperacaoMsg}</p>}
             </div>
 
             {erro && <p className="text-sm text-error">{erro}</p>}
@@ -570,14 +638,15 @@ export default function LoginPageClient({
                       <Lock size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-on-variant" />
                       <input
                         id="cadastro-senha"
-                        type="password"
+                        type={mostrarSenhaCad ? 'text' : 'password'}
                         required
                         placeholder="••••••••"
                         value={senhaCad}
                         onChange={(e) => setSenhaCad(e.target.value)}
-                        className="input-field login-input-dark pl-10"
+                        className="input-field login-input-dark pl-10 pr-10"
                         autoComplete="new-password"
                       />
+                      <BotaoOlhoSenha visivel={mostrarSenhaCad} onToggle={() => setMostrarSenhaCad((v) => !v)} />
                     </div>
                   </div>
                   <div>
@@ -588,14 +657,15 @@ export default function LoginPageClient({
                       <Lock size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-on-variant" />
                       <input
                         id="cadastro-confirmar-senha"
-                        type="password"
+                        type={mostrarConfirmarCad ? 'text' : 'password'}
                         required
                         placeholder="••••••••"
                         value={confirmarSenhaCad}
                         onChange={(e) => setConfirmarSenhaCad(e.target.value)}
-                        className="input-field login-input-dark pl-10"
+                        className="input-field login-input-dark pl-10 pr-10"
                         autoComplete="new-password"
                       />
+                      <BotaoOlhoSenha visivel={mostrarConfirmarCad} onToggle={() => setMostrarConfirmarCad((v) => !v)} />
                     </div>
                   </div>
                 </div>
@@ -698,11 +768,17 @@ export default function LoginPageClient({
         </Link>
       </footer>
 
-      <TrocarSenhaModal
-        open={modalTrocarSenhaAberto}
-        onClose={() => setModalTrocarSenhaAberto(false)}
-        numeroWhatsapp={numeroWhatsapp}
+      <RedefinirSenhaModal
+        open={redefinicao !== null}
+        estado={redefinicao ?? 'pronto'}
+        motivo={redefinicaoMotivo}
+        onClose={() => setRedefinicao(null)}
+        onSolicitarNovoLink={() => {
+          setRedefinicao(null);
+          setModalEsqueceuAberto(true);
+        }}
       />
+      <EsqueceuSenhaModal open={modalEsqueceuAberto} onClose={() => setModalEsqueceuAberto(false)} emailInicial={email} />
     </div>
   );
 }

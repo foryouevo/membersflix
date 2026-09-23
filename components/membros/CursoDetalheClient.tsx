@@ -408,13 +408,19 @@ function ModuloCard({
   }
 
   // Módulo travado pelo trial de 30min (curso liberado, mas só o Módulo 1
-  // fica acessível até a confirmação do pagamento): sem clique, sem abrir o
-  // modal de "solicitar acesso" (que é pra quem não tem o curso liberado).
+  // fica acessível até a confirmação do pagamento): agora também abre o
+  // MESMO modal "Você deseja liberar esse curso?" (AccessModal) no clique —
+  // pedido explícito; antes era um <div> sem clique (só o tooltip title).
   if (bloqueadoPorTrial) {
     return (
-      <div title="Disponível após a confirmação do pagamento" className="block h-full w-full cursor-not-allowed">
+      <button
+        type="button"
+        onClick={onClickLocked}
+        title="Disponível após a confirmação do pagamento"
+        className="block h-full w-full text-left"
+      >
         {content}
-      </div>
+      </button>
     );
   }
 

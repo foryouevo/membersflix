@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -45,10 +45,11 @@ const TRANSICAO_MS = 300;
  *
  * A seleção fica "em rascunho" (estado local, iniciado a partir de
  * categoriaIdsAtivos/instrutorNomesAtivos toda vez que o painel abre) até o
- * aluno confirmar em "Aplicar" — só aí o pai de fato navega pra tela de
- * busca. Fechar sem aplicar (X, ESC, clique fora/overlay) descarta o
- * rascunho; a lógica de filtragem em si (URL -> BuscarPageClient) não muda
- * em nada, só quando ela dispara.
+ * aluno confirmar em "Aplicar" ou fechar o painel (X, ESC, clique fora/
+ * overlay — ver o efeito de fechamento abaixo, que aplica o rascunho
+ * automaticamente) — só aí o pai de fato navega pra tela de busca. A lógica
+ * de filtragem em si (URL -> BuscarPageClient) não muda em nada, só quando
+ * ela dispara.
  *
  * Categoria é agrupada por nome (ver categoriasAgrupadas, tanto aqui quanto
  * em app/membros/layout.tsx/useCursoFiltro.ts) — a tabela `categorias` tem
@@ -85,6 +86,39 @@ export default function FiltroModal({
       setInstrutorNomes(instrutorNomesAtivos);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Fechar de QUALQUER forma que não seja "Aplicar"/"Limpar" (X, overlay,
+  // clique fora, ESC, clicar de novo no ícone de filtro) aplica o rascunho
+  // atual automaticamente — antes ele era descartado e o aluno precisava
+  // clicar em "Aplicar" pra qualquer mudança valer. Fica aqui (observando a
+  // transição de `open` true -> false) em vez de em cada caminho de
+  // fechamento porque parte deles vive no pai (Header.tsx: clique fora/ESC/
+  // ícone chamam onFiltroModalAbertoChange(false) direto, sem passar por
+  // este componente) e o rascunho só existe aqui dentro. Refs (não as
+  // variáveis de estado direto) pra o efeito, que só reroda quando `open`
+  // muda, ler o rascunho/props mais recentes. "Aplicar"/"Limpar" já
+  // aplicam antes de fechar, então na hora desse efeito rascunho == ativo
+  // e nada é reaplicado (sem navegação duplicada).
+  const rascunhoRef = useRef({ categoriaIds, instrutorNomes });
+  rascunhoRef.current = { categoriaIds, instrutorNomes };
+  const ativosRef = useRef({ categoriaIdsAtivos, instrutorNomesAtivos });
+  ativosRef.current = { categoriaIdsAtivos, instrutorNomesAtivos };
+  const onApplyRef = useRef(onApply);
+  onApplyRef.current = onApply;
+  const abertoAnteriorRef = useRef(open);
+
+  useEffect(() => {
+    const estavaAberto = abertoAnteriorRef.current;
+    abertoAnteriorRef.current = open;
+    if (open || !estavaAberto) return;
+
+    const mesmoConjunto = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+    const { categoriaIds: cats, instrutorNomes: instrs } = rascunhoRef.current;
+    const { categoriaIdsAtivos: catsAtivas, instrutorNomesAtivos: instrsAtivos } = ativosRef.current;
+    if (!mesmoConjunto(cats, catsAtivas) || !mesmoConjunto(instrs, instrsAtivos)) {
+      onApplyRef.current(cats, instrs);
+    }
   }, [open]);
 
   // Dois estados pra dar tempo às duas transições (mobile — desktop nem
@@ -145,10 +179,8 @@ export default function FiltroModal({
   // BUG corrigido: antes só limpava o rascunho local (setCategoriaIds/
   // setInstrutorNomes daqui de cima) — a seleção "de verdade" (categoriaIds
   // Ativos/instrutorNomesAtivos, dono é o pai — Header.tsx) nunca era
-  // tocada. Fechar sem clicar em "Aplicar" descarta o rascunho por design
-  // (ver o useEffect de reset no topo do arquivo), então reabrir o modal
-  // voltava a carregar a categoria antiga a partir daquele estado real
-  // nunca limpo. Agora chama `onApply([], [])` — a MESMA função que
+  // tocada, então reabrir o modal voltava a carregar a categoria antiga a
+  // partir daquele estado real nunca limpo. Agora chama `onApply([], [])` — a MESMA função que
   // "Aplicar" já usa — reaproveitando a lógica existente em vez de duplicar
   // ou criar um estado paralelo: ela atualiza o estado real em Header.tsx,
   // navega pra /cursos/buscar sem filtro nenhum e fecha o modal (mesmo

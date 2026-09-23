@@ -73,6 +73,18 @@ export async function atualizarStatusPagamento(alunoId: string, status: 'pendent
   // lida com uma coluna de migration pendente neste projeto (ver `slug`).
   const { error } = await admin.from('profiles').update(patch as any).eq('id', alunoId);
   if (error) throw new Error(error.message);
+
+  // Trial é POR CURSO (acessos_curso.bloqueado, ver lib/membros/trial.ts),
+  // então mudar o status de pagamento também precisa mexer nos acessos:
+  // - 'pago': libera os cursos que o trial expirado bloqueou (sem isso o
+  //   aluno pagaria e o curso continuaria com cadeado);
+  // - 'pendente': reinicia a janela de 30min dos acessos (mesmo que o
+  //   liberado_em do profile acima) e desbloqueia — novo trial.
+  const { error: erroAcessos } = await admin
+    .from('acessos_curso')
+    .update(status === 'pago' ? { bloqueado: false } : { bloqueado: false, liberado_em: new Date().toISOString() })
+    .eq('aluno_id', alunoId);
+  if (erroAcessos) throw new Error(erroAcessos.message);
   revalidatePath('/admin/alunos');
 }
 

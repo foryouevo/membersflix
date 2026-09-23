@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { Mail, MessageCircle, Plus, Send, CheckCircle2 } from 'lucide-react';
 import { buildSupportWhatsappLink, cn } from '@/lib/utils';
 
-const EMAIL_SUPORTE = 'suporte@membersflix.com';
+const EMAIL_SUPORTE = 'suportemembersflix@gmail.com';
 
-// 10 perguntas fixas (pedido explícito — as 5 últimas adicionadas numa
-// tarefa posterior às 5 originais) — sem vir do banco: é conteúdo
+// 8 perguntas fixas (pedido explícito — as 5 originais + 3 adicionadas numa
+// tarefa posterior) — sem vir do banco: é conteúdo
 // institucional, igual ao "Explorar cursos" do hero da Home (CursoDestaque),
 // não um dado que o admin cadastra hoje.
 const FAQ_ITEMS: { pergunta: string; resposta: string }[] = [
@@ -46,19 +46,6 @@ const FAQ_ITEMS: { pergunta: string; resposta: string }[] = [
   {
     pergunta: 'Esqueci minha senha, como recupero o acesso?',
     resposta: "Na tela de login, clique em 'Esqueceu a senha?' e siga as instruções para redefinir sua senha pelo e-mail cadastrado.",
-  },
-  {
-    // PLACEHOLDER (pedido explícito) — confirmar com o dono da plataforma
-    // como funciona a emissão de nota fiscal/comprovante antes de publicar
-    // um texto definitivo.
-    pergunta: 'Recebo nota fiscal ou comprovante da compra?',
-    resposta: '[PLACEHOLDER - preciso confirmar com o dono da plataforma como funciona a emissão de nota fiscal/comprovante]',
-  },
-  {
-    // PLACEHOLDER (pedido explícito) — confirmar a regra de upgrade/troca
-    // de curso após a compra antes de publicar um texto definitivo.
-    pergunta: 'Posso trocar de curso ou fazer upgrade para um pacote maior depois?',
-    resposta: '[PLACEHOLDER - preciso confirmar a regra de upgrade/troca de curso após a compra]',
   },
 ];
 
