@@ -314,18 +314,22 @@ export default function LoginPageClient({
   }
 
   return (
-    // overflow-hidden (novo, item 1 do pedido): container raiz das 3
-    // camadas (imagem/overlay/card) — nenhuma delas deveria vazar pra fora
-    // dos limites da tela, então isso é só uma trava de segurança, sem
-    // efeito visual esperado no dia a dia.
-    // min-h-dvh (era min-h-screen/100vh) — item explícito: 100dvh acompanha
-    // a barra de endereço do navegador mobile aparecendo/sumindo durante o
-    // scroll, em vez de ficar "maior que a tela visível de verdade" como
-    // 100vh faz nesses navegadores (min-height, não height fixo: se o
-    // conteúdo ainda assim não couber num aparelho muito baixo, a página
-    // cresce e rola normalmente — nunca corta nada, só deixa de ser
-    // "sem scroll" nesse caso extremo).
-    <div className="relative flex min-h-dvh w-full flex-col overflow-hidden bg-background">
+    // h-dvh (era min-h-dvh) + overflow-hidden — item explícito desta
+    // tarefa: no mobile a altura agora é FIXA em 100dvh (não só um piso
+    // mínimo), então overflow-hidden aqui passa a ter efeito de verdade
+    // (antes, com min-height, a caixa sempre CRESCIA pra caber o conteúdo,
+    // então overflow-hidden nunca tinha nada pra cortar — o "scroll extra"
+    // reportado era a página inteira crescendo além da tela). Com altura
+    // fixa, se o conteúdo ainda assim for mais alto que 100dvh num
+    // aparelho muito baixo, ele agora é CORTADO em vez de empurrar um
+    // scroll — pedido explícito ("garantir que nada ultrapasse a tela"),
+    // mesmo sabendo que corta é pior que rolar SE acontecer; por isso os
+    // espaçamentos abaixo (logo/margens/rodapé) foram enxugados de novo,
+    // com folga real, não só o suficiente pro encaixe exato de antes.
+    // sm:h-auto + sm:min-h-screen: só no mobile a altura é travada — a
+    // partir de sm (640px) volta a ser min-height (cresce se precisar),
+    // igual ao comportamento de sempre em telas maiores.
+    <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-background sm:h-auto sm:min-h-screen">
       {/* TESTE VISUAL: fundo em degradê (glow radial vermelho no canto
           superior, mesma paleta do tema — background #0f0f0f / primary
           #e50914), a imagem estática original ou o banner de tela cheia —
@@ -439,12 +443,13 @@ export default function LoginPageClient({
           auto-ajusta à altura do conteúdo — ver comentário do flipper mais
           abaixo), então são o primeiro lugar a enxugar em telas baixas.
           sm: restaura os valores de sempre a partir de 640px. */}
-      <main className="relative z-20 flex flex-1 flex-col items-center justify-center px-4 py-4 sm:py-12">
+      <main className="relative z-20 flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-2 sm:py-12">
         {/* Logo + subtítulo centralizados, acima do card — logo e margens
-            menores no mobile (mesmo motivo do <main> acima). */}
-        <div className="mb-3 flex flex-col items-center text-center sm:mb-8">
-          <Image src="/logo.png" alt="MembersFlix" width={220} height={44} priority className="h-8 w-auto object-contain sm:h-10" />
-          <p className="mt-1.5 text-sm text-on-variant sm:mt-3">Acesse sua conta para continuar.</p>
+            AINDA menores no mobile (era h-8/mb-3 — pedido explícito desta
+            tarefa: folga real, não só o encaixe exato). */}
+        <div className="mb-1.5 flex flex-col items-center text-center sm:mb-8">
+          <Image src="/logo.png" alt="MembersFlix" width={220} height={44} priority className="h-6 w-auto object-contain sm:h-10" />
+          <p className="mt-1 text-xs text-on-variant sm:mt-3 sm:text-sm">Acesse sua conta para continuar.</p>
         </div>
 
         {/* Efeito de glow animado (conic-gradient + blur girando) removido:
@@ -772,9 +777,13 @@ export default function LoginPageClient({
           campo é mais lido/passado como prop (ver app/login/page.tsx),
           só a coluna/UI do admin continuam existindo, fora do escopo
           deste pedido. */}
-      {/* py-2.5 (era py-5 fixo) + sm:py-5 — mesmo motivo do <main>/logo
-          acima (caber sem scroll no mobile). */}
-      <footer className="relative z-10 flex flex-col items-center gap-1.5 px-6 py-2 text-center text-xs text-on-variant sm:flex-row sm:justify-center sm:gap-6 sm:py-5">
+      {/* py-1.5 (era py-2.5) + sm:py-5 — pedido explícito desta tarefa:
+          mais folga real entre o card e o rodapé no mobile, além do
+          encaixe justo de antes. shrink-0: nunca deixa o flexbox
+          comprimir o rodapé em favor do <main> quando a soma ainda
+          aperta — melhor cortar um pouco do espaço vazio do card
+          (justify-center dele) do que o texto do rodapé. */}
+      <footer className="relative z-10 flex shrink-0 flex-col items-center gap-1 px-6 py-1.5 text-center text-[0.7rem] text-on-variant sm:flex-row sm:justify-center sm:gap-6 sm:py-5 sm:text-xs">
         {/* "membersflix.com" (o texto configurado pelo admin) virando o
             próprio link — pedido explícito, apontando pra home (/). */}
         {desenvolvidoPor && (

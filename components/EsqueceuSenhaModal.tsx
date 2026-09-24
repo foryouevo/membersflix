@@ -51,11 +51,21 @@ export default function EsqueceuSenhaModal({
     setEnviando(true);
     const { error } = await supabase.auth.resetPasswordForEmail(emailLimpo, {
       // Volta pra /login (que abre o pop-up de redefinição sozinho — ver
-      // RedefinirSenhaModal) no MESMO domínio em que a pessoa está: em
-      // produção é https://membersflix.com/login, sem URL fixa no código
-      // (nada de localhost/domínio errado se o site mudar de endereço). Essa
-      // URL precisa estar na lista de Redirect URLs do Supabase Auth.
-      redirectTo: `${window.location.origin}/login`,
+      // RedefinirSenhaModal). CAUSA RAIZ de um bug relatado: isso usava
+      // `window.location.origin` (o domínio de onde a pessoa pediu o
+      // link) em vez de um domínio fixo — quem pedia a partir de
+      // https://www.membersflix.com (com "www") gerava redirectTo =
+      // https://www.membersflix.com/login, que NÃO está na lista de
+      // Redirect URLs do Supabase Auth (só a versão sem "www" está); o
+      // Supabase rejeita silenciosamente e cai no Site URL puro (SEM
+      // /login), daí o link levar pra landing institucional em vez da
+      // tela de login. NEXT_PUBLIC_SITE_URL (setada no Vercel, ver
+      // .env.local.example) fixa isso: sempre o MESMO domínio canônico,
+      // não importa por qual variante a pessoa chegou no site. Fallback
+      // pra `window.location.origin` só continua existindo pro
+      // localhost/preview, onde essa env var normalmente não está
+      // configurada.
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/login`,
     });
     setEnviando(false);
 
