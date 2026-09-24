@@ -444,12 +444,19 @@ export default function LoginPageClient({
           abaixo), então são o primeiro lugar a enxugar em telas baixas.
           sm: restaura os valores de sempre a partir de 640px. */}
       <main className="relative z-20 flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-2 sm:py-12">
-        {/* Logo + subtítulo centralizados, acima do card — logo e margens
-            AINDA menores no mobile (era h-8/mb-3 — pedido explícito desta
-            tarefa: folga real, não só o encaixe exato). */}
-        <div className="mb-1.5 flex flex-col items-center text-center sm:mb-8">
-          <Image src="/logo.png" alt="MembersFlix" width={220} height={44} priority className="h-6 w-auto object-contain sm:h-10" />
-          <p className="mt-1 text-xs text-on-variant sm:mt-3 sm:text-sm">Acesse sua conta para continuar.</p>
+        {/* Logo + subtítulo centralizados, acima do card. Valores mobile
+            EXATOS pedidos nesta tarefa (a folga vinda da correção do
+            scroll — ver comentário do container raiz, mais abaixo —
+            comporta esse tanto sem estourar de novo: medido antes de
+            aplicar, sobrava ~120-224px nas 4 combinações testadas). */}
+        <div className="mb-6 flex flex-col items-center text-center sm:mb-8">
+          {/* height: 2rem no mobile (h-8) — pedido explícito. */}
+          <Image src="/logo.png" alt="MembersFlix" width={220} height={44} priority className="h-8 w-auto object-contain sm:h-10" />
+          {/* margin-top: 0.85rem + font-size: 0.85rem no mobile — pedido
+              explícito, sem token padrão do Tailwind pra esses valores
+              (0.85rem não é múltiplo de 0.25rem/0.125rem da escala), daí
+              o arbitrary value em vez de mt-3.5/text-sm. */}
+          <p className="mt-[0.85rem] text-[0.85rem] text-on-variant sm:mt-3 sm:text-sm">Acesse sua conta para continuar.</p>
         </div>
 
         {/* Efeito de glow animado (conic-gradient + blur girando) removido:
