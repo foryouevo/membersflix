@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { Suspense } from 'react';
 import LoginPageClient from '@/components/LoginPageClient';
 
 type LoginConfig = {
@@ -92,13 +93,23 @@ export default async function LoginPage() {
   const [config, cursos] = await Promise.all([buscarLoginConfig(), buscarCursosParaCadastro()]);
 
   return (
-    <LoginPageClient
-      desenvolvidoPor={config.desenvolvido_por}
-      emailContato={config.email_contato}
-      termosUsoUrl={config.termos_uso_url}
-      numeroWhatsapp={config.numero_whatsapp}
-      loginBackgroundUrl={config.login_background_url}
-      cursos={cursos}
-    />
+    // Suspense (pedido pelo Next): LoginPageClient usa useSearchParams()
+    // (pra ler ?form=cadastro — o botão "Criar conta" da landing
+    // institucional, ver components/institucional/LandingHeader.tsx) —
+    // sem um boundary de Suspense em volta, o Next recusa o build ("should
+    // be wrapped in a suspense boundary"). Sem fallback visível: a rota já
+    // é 100% dinâmica (buscarLoginConfig/buscarCursosParaCadastro usam
+    // cookies), então isso nunca fica "pendurado" — só evita o bail-out de
+    // renderização estática que o Next tenta fazer por padrão.
+    <Suspense>
+      <LoginPageClient
+        desenvolvidoPor={config.desenvolvido_por}
+        emailContato={config.email_contato}
+        termosUsoUrl={config.termos_uso_url}
+        numeroWhatsapp={config.numero_whatsapp}
+        loginBackgroundUrl={config.login_background_url}
+        cursos={cursos}
+      />
+    </Suspense>
   );
 }

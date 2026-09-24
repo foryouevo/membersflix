@@ -449,31 +449,54 @@ export default function Header({
           >
             <Search size={20} />
           </button>
-          <input
-            ref={buscaInputRef}
-            type="text"
-            inputMode="search"
-            autoComplete="off"
-            value={busca}
-            onChange={(e) => handleBuscaChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                if (buscaDebounceRef.current) clearTimeout(buscaDebounceRef.current);
-                irParaBusca({});
-              }
-              if (e.key === 'Escape') {
-                if (buscaDebounceRef.current) clearTimeout(buscaDebounceRef.current);
-                setBusca('');
-                setBuscaAberta(false);
-              }
-            }}
-            placeholder="Buscar cursos..."
-            aria-label="Buscar cursos"
-            className={cn(
-              'overflow-hidden bg-transparent text-sm text-white outline-none placeholder:text-white/50 [transition:width_0.3s_ease,opacity_0.3s_ease,padding_0.3s_ease]',
-              buscaAberta ? 'w-48 px-3 opacity-100' : 'w-0 px-0 opacity-0'
+          <div className="relative">
+            <input
+              ref={buscaInputRef}
+              type="text"
+              inputMode="search"
+              autoComplete="off"
+              value={busca}
+              onChange={(e) => handleBuscaChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (buscaDebounceRef.current) clearTimeout(buscaDebounceRef.current);
+                  irParaBusca({});
+                }
+                if (e.key === 'Escape') {
+                  if (buscaDebounceRef.current) clearTimeout(buscaDebounceRef.current);
+                  setBusca('');
+                  setBuscaAberta(false);
+                }
+              }}
+              placeholder="Buscar cursos..."
+              aria-label="Buscar cursos"
+              className={cn(
+                'overflow-hidden bg-transparent text-sm text-white outline-none placeholder:text-white/50 [transition:width_0.3s_ease,opacity_0.3s_ease,padding_0.3s_ease]',
+                buscaAberta ? 'w-48 py-1 pl-3 pr-7 opacity-100' : 'w-0 px-0 opacity-0'
+              )}
+            />
+            {/* "X" pra limpar o campo — só desktop (pedido explícito): este
+                input só existe aqui, dentro do bloco `hidden md:flex` acima;
+                o input mobile (mais abaixo, barra de busca própria) usa o
+                "x" nativo do teclado do sistema e não ganha nada extra
+                aqui. Só aparece com texto digitado (busca.length > 0) —
+                sem isso ficaria um "X" solto num campo vazio. */}
+            {buscaAberta && busca.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (buscaDebounceRef.current) clearTimeout(buscaDebounceRef.current);
+                  setBusca('');
+                  irParaBusca({ busca: '' });
+                  buscaInputRef.current?.focus();
+                }}
+                aria-label="Limpar busca"
+                className="absolute right-1.5 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full text-white/60 hover:text-white"
+              >
+                <X size={14} />
+              </button>
             )}
-          />
+          </div>
         </div>
 
         <div ref={filtroWrapRef} className="relative shrink-0">

@@ -764,7 +764,17 @@ function CustomVideoPlayer({
           fullscreen ? 'pb-[calc(1.75rem_+_env(safe-area-inset-bottom))]' : 'pb-7'
         } ${controlsVisible || !playing ? 'opacity-100' : 'opacity-0'}`}
       >
-        {/* seek bar */}
+        {/* seek bar — onTouchStart/onTouchEnd (item explícito): um
+            <input type="range"> arrasta normalmente via touch em qualquer
+            navegador mobile (é comportamento nativo do controle, não
+            precisa de JS pra ISSO), mas o gesto de soltar o dedo não
+            dispara mouseup em mobile (só em desktop/mouse de verdade) — e
+            era só no onMouseUp que o vídeo de fato pulava pro novo tempo
+            (video.currentTime =). Sem o onTouchEnd espelhando a mesma
+            lógica, o thumb arrastava/soltava normalmente na tela, mas o
+            vídeo nunca avançava/voltava de verdade — exatamente o bug
+            relatado. touchAction: 'none' evita o navegador tentar rolar a
+            página verticalmente enquanto o dedo arrasta a barra. */}
         <input
           type="range"
           min={0}
@@ -772,6 +782,7 @@ function CustomVideoPlayer({
           step={0.0001}
           value={played}
           onMouseDown={() => setSeeking(true)}
+          onTouchStart={() => setSeeking(true)}
           onChange={(e) => setPlayed(Number(e.target.value))}
           onMouseUp={(e) => {
             setSeeking(false);
@@ -784,6 +795,15 @@ function CustomVideoPlayer({
             const video = pegarVideo();
             if (video && duration > 0) video.currentTime = fracao * duration;
           }}
+          onTouchEnd={(e) => {
+            setSeeking(false);
+            // Mesma lógica do onMouseUp acima — currentTarget (não target):
+            // em touchend o valor mais atual já está no próprio input.
+            const fracao = Number((e.currentTarget as HTMLInputElement).value);
+            const video = pegarVideo();
+            if (video && duration > 0) video.currentTime = fracao * duration;
+          }}
+          style={{ touchAction: 'none' }}
           className="mb-6 h-1 w-full cursor-pointer appearance-none rounded-full bg-border accent-primary"
         />
 

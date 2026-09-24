@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Lock, User, GraduationCap, ArrowLeft } from 'lucide-react';
 import { createClient, lerErroRetornoUrl } from '@/lib/supabase/client';
 import { cadastrarAlunoPublico } from '@/app/login/actions';
@@ -43,6 +43,7 @@ export default function LoginPageClient({
   cursos: { id: string; titulo: string }[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
@@ -206,6 +207,17 @@ export default function LoginPageClient({
     setFlipped(paraCadastro);
   }
 
+  // Abre direto no lado de cadastro quando a página é acessada com
+  // ?form=cadastro — usado pelo botão "Criar conta" da landing institucional
+  // (components/institucional/LandingPageClient.tsx: <Link
+  // href="/login?form=cadastro">). Reaproveita o MESMO handleFlip que o link
+  // "Cadastra-se" já usa, não um mecanismo à parte. Só roda uma vez, na
+  // montagem — trocar de aba depois não deve forçar o flip de novo.
+  useEffect(() => {
+    if (searchParams.get('form') === 'cadastro') handleFlip(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
@@ -226,8 +238,15 @@ export default function LoginPageClient({
     // O redirect só acontece depois da tela de intro terminar (vídeo
     // "ended", ou o timeout de segurança dela) — ver LoginIntroOverlay, que
     // agora vive fora daqui (no layout raiz) pra sobreviver à troca de rota.
+    //
+    // '/inicio' (era '/', que fazia essa mesma decisão — admin vs aluno —
+    // e redirecionava): '/' virou a landing institucional pública (pedido
+    // explícito, ver app/page.tsx), não pode mais ser o destino pós-login.
+    // '/inicio' resolve sozinho pra quem é admin: MembrosLayoutShell.tsx
+    // (usado por essa rota) já redireciona pra /admin/dashboard se
+    // profile.tipo !== 'aluno' — não precisa checar o tipo aqui.
     playLoginIntro(() => {
-      router.replace('/');
+      router.replace('/inicio');
       router.refresh();
     });
   }
@@ -284,7 +303,7 @@ export default function LoginPageClient({
       }
 
       playLoginIntro(() => {
-        router.replace('/');
+        router.replace('/inicio');
         router.refresh();
       });
     } catch (err: any) {
@@ -299,7 +318,14 @@ export default function LoginPageClient({
     // camadas (imagem/overlay/card) — nenhuma delas deveria vazar pra fora
     // dos limites da tela, então isso é só uma trava de segurança, sem
     // efeito visual esperado no dia a dia.
-    <div className="relative min-h-screen w-full overflow-hidden flex flex-col bg-background">
+    // min-h-dvh (era min-h-screen/100vh) — item explícito: 100dvh acompanha
+    // a barra de endereço do navegador mobile aparecendo/sumindo durante o
+    // scroll, em vez de ficar "maior que a tela visível de verdade" como
+    // 100vh faz nesses navegadores (min-height, não height fixo: se o
+    // conteúdo ainda assim não couber num aparelho muito baixo, a página
+    // cresce e rola normalmente — nunca corta nada, só deixa de ser
+    // "sem scroll" nesse caso extremo).
+    <div className="relative flex min-h-dvh w-full flex-col overflow-hidden bg-background">
       {/* TESTE VISUAL: fundo em degradê (glow radial vermelho no canto
           superior, mesma paleta do tema — background #0f0f0f / primary
           #e50914), a imagem estática original ou o banner de tela cheia —
@@ -407,11 +433,18 @@ export default function LoginPageClient({
           desempate de ordem no DOM (o <main> vem depois no JSX), mas de
           forma implícita; z-20 remove essa ambiguidade, deixando 0 < 10 <
           20 explícito em vez de depender de quem foi escrito primeiro. */}
-      <main className="relative z-20 flex flex-1 flex-col items-center justify-center px-4 py-12">
-        {/* Logo + subtítulo centralizados, acima do card */}
-        <div className="mb-8 flex flex-col items-center text-center">
-          <Image src="/logo.png" alt="MembersFlix" width={220} height={44} priority className="h-10 w-auto object-contain" />
-          <p className="mt-3 text-sm text-on-variant">Acesse sua conta para continuar.</p>
+      {/* py-6 (era py-12 fixo) + sm:py-12 — item explícito (caber sem
+          scroll no mobile): esse padding vertical + a margem/logo abaixo
+          são os únicos espaços "de sobra" fora do card em si (o card já se
+          auto-ajusta à altura do conteúdo — ver comentário do flipper mais
+          abaixo), então são o primeiro lugar a enxugar em telas baixas.
+          sm: restaura os valores de sempre a partir de 640px. */}
+      <main className="relative z-20 flex flex-1 flex-col items-center justify-center px-4 py-4 sm:py-12">
+        {/* Logo + subtítulo centralizados, acima do card — logo e margens
+            menores no mobile (mesmo motivo do <main> acima). */}
+        <div className="mb-3 flex flex-col items-center text-center sm:mb-8">
+          <Image src="/logo.png" alt="MembersFlix" width={220} height={44} priority className="h-8 w-auto object-contain sm:h-10" />
+          <p className="mt-1.5 text-sm text-on-variant sm:mt-3">Acesse sua conta para continuar.</p>
         </div>
 
         {/* Efeito de glow animado (conic-gradient + blur girando) removido:
@@ -481,11 +514,11 @@ export default function LoginPageClient({
               // absolute inset-x-0 top-0, SEM bottom (ver comentário do
               // flipper, acima) — a altura fica auto/dirigida pelo
               // conteúdo, é isso que é medido e aplicado ao pai via state.
-              className={`absolute inset-x-0 top-0 w-full rounded-xl bg-card p-8 [backface-visibility:hidden] ${flipped ? 'pointer-events-none' : ''}`}
+              className={`absolute inset-x-0 top-0 w-full rounded-xl bg-card p-6 sm:p-8 [backface-visibility:hidden] ${flipped ? 'pointer-events-none' : ''}`}
             >
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
             <div>
-              <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-on-surface">
+              <label htmlFor="login-email" className="mb-1.5 block text-[0.8rem] font-medium text-on-surface sm:text-sm">
                 Email
               </label>
               <div className="relative">
@@ -497,7 +530,7 @@ export default function LoginPageClient({
                   placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="input-field login-input-dark pl-10"
+                  className="input-field login-input-dark pl-10 text-[0.775rem] sm:text-sm"
                   autoComplete="email"
                 />
               </div>
@@ -525,7 +558,7 @@ export default function LoginPageClient({
                   placeholder="••••••••"
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
-                  className="input-field login-input-dark pl-10 pr-10"
+                  className="input-field login-input-dark pl-10 pr-10 text-[0.775rem] sm:text-sm"
                   autoComplete="current-password"
                 />
                 <BotaoOlhoSenha visivel={mostrarSenha} onToggle={() => setMostrarSenha((v) => !v)} />
@@ -549,13 +582,13 @@ export default function LoginPageClient({
                   className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${lembrar ? 'translate-x-4' : 'translate-x-0'}`}
                 />
               </button>
-              <span className="text-sm text-on-variant">Lembrar-me</span>
+              <span className="text-[0.8rem] text-on-variant sm:text-sm">Lembrar-me</span>
             </label>
 
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary flex w-full items-center justify-center gap-2 py-3 text-base shadow-[0_0_18px_2px_rgba(229,9,20,0.35)]"
+              className="btn-primary flex w-full items-center justify-center gap-2 py-3 text-[0.9rem] shadow-[0_0_18px_2px_rgba(229,9,20,0.35)] sm:text-base"
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
@@ -566,7 +599,7 @@ export default function LoginPageClient({
                 secundário desta tela). break-words + w-full (bugfix: em
                 telas estreitas o texto estava estourando a borda direita
                 do card em vez de quebrar linha dentro do padding). */}
-            <p className="w-full break-words pt-1 text-center text-sm text-on-variant">
+            <p className="w-full break-words pt-1 text-center text-[0.8rem] text-on-variant sm:text-sm">
               Você não tem conta?{' '}
               <button type="button" onClick={() => handleFlip(true)} className="font-medium text-white hover:text-primary">
                 Cadastra-se
@@ -583,12 +616,12 @@ export default function LoginPageClient({
               aria-hidden={!flipped}
               // absolute inset-x-0 top-0, SEM bottom (mesmo motivo da face
               // de login, acima).
-              className={`absolute inset-x-0 top-0 w-full rounded-xl bg-card p-8 [backface-visibility:hidden] ${!flipped ? 'pointer-events-none' : ''}`}
+              className={`absolute inset-x-0 top-0 w-full rounded-xl bg-card p-6 sm:p-8 [backface-visibility:hidden] ${!flipped ? 'pointer-events-none' : ''}`}
               style={{ transform: 'rotateY(180deg)' }}
             >
-              <form onSubmit={handleSubmitCadastro} className="space-y-3">
+              <form onSubmit={handleSubmitCadastro} className="space-y-2 sm:space-y-3">
                 <div>
-                  <label htmlFor="cadastro-nome" className="mb-1.5 block text-sm font-medium text-on-surface">
+                  <label htmlFor="cadastro-nome" className="mb-1.5 block text-[0.8rem] font-medium text-on-surface sm:text-sm">
                     Nome
                   </label>
                   <div className="relative">
@@ -599,14 +632,14 @@ export default function LoginPageClient({
                       placeholder="Seu nome"
                       value={nomeCad}
                       onChange={(e) => setNomeCad(e.target.value)}
-                      className="input-field login-input-dark pl-10"
+                      className="input-field login-input-dark pl-10 text-[0.775rem] sm:text-sm"
                       autoComplete="name"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="cadastro-email" className="mb-1.5 block text-sm font-medium text-on-surface">
+                  <label htmlFor="cadastro-email" className="mb-1.5 block text-[0.8rem] font-medium text-on-surface sm:text-sm">
                     E-mail
                   </label>
                   <div className="relative">
@@ -618,7 +651,7 @@ export default function LoginPageClient({
                       placeholder="seu@email.com"
                       value={emailCad}
                       onChange={(e) => setEmailCad(e.target.value)}
-                      className="input-field login-input-dark pl-10"
+                      className="input-field login-input-dark pl-10 text-[0.775rem] sm:text-sm"
                       autoComplete="email"
                     />
                   </div>
@@ -631,7 +664,7 @@ export default function LoginPageClient({
                     altura aqui = flip mais discreto). */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label htmlFor="cadastro-senha" className="mb-1.5 block text-sm font-medium text-on-surface">
+                    <label htmlFor="cadastro-senha" className="mb-1.5 block text-[0.8rem] font-medium text-on-surface sm:text-sm">
                       Senha
                     </label>
                     <div className="relative">
@@ -643,14 +676,14 @@ export default function LoginPageClient({
                         placeholder="••••••••"
                         value={senhaCad}
                         onChange={(e) => setSenhaCad(e.target.value)}
-                        className="input-field login-input-dark pl-10 pr-10"
+                        className="input-field login-input-dark pl-10 pr-10 text-[0.775rem] sm:text-sm"
                         autoComplete="new-password"
                       />
                       <BotaoOlhoSenha visivel={mostrarSenhaCad} onToggle={() => setMostrarSenhaCad((v) => !v)} />
                     </div>
                   </div>
                   <div>
-                    <label htmlFor="cadastro-confirmar-senha" className="mb-1.5 block text-sm font-medium text-on-surface">
+                    <label htmlFor="cadastro-confirmar-senha" className="mb-1.5 block text-[0.8rem] font-medium text-on-surface sm:text-sm">
                       Confirmar
                     </label>
                     <div className="relative">
@@ -662,7 +695,7 @@ export default function LoginPageClient({
                         placeholder="••••••••"
                         value={confirmarSenhaCad}
                         onChange={(e) => setConfirmarSenhaCad(e.target.value)}
-                        className="input-field login-input-dark pl-10 pr-10"
+                        className="input-field login-input-dark pl-10 pr-10 text-[0.775rem] sm:text-sm"
                         autoComplete="new-password"
                       />
                       <BotaoOlhoSenha visivel={mostrarConfirmarCad} onToggle={() => setMostrarConfirmarCad((v) => !v)} />
@@ -671,7 +704,7 @@ export default function LoginPageClient({
                 </div>
 
                 <div>
-                  <label htmlFor="cadastro-curso" className="mb-1.5 block text-sm font-medium text-on-surface">
+                  <label htmlFor="cadastro-curso" className="mb-1.5 block text-[0.8rem] font-medium text-on-surface sm:text-sm">
                     Curso de interesse
                   </label>
                   <div className="relative">
@@ -681,7 +714,7 @@ export default function LoginPageClient({
                       required
                       value={cursoIdCad}
                       onChange={(e) => setCursoIdCad(e.target.value)}
-                      className="input-field login-input-dark pl-10"
+                      className="input-field login-input-dark pl-10 text-[0.775rem] sm:text-sm"
                     >
                       <option value="" disabled>
                         Selecione um curso
@@ -703,7 +736,7 @@ export default function LoginPageClient({
                 <button
                   type="submit"
                   disabled={loadingCad || cursos.length === 0}
-                  className="btn-primary flex w-full items-center justify-center gap-2 py-3 text-base shadow-[0_0_18px_2px_rgba(229,9,20,0.35)]"
+                  className="btn-primary flex w-full items-center justify-center gap-2 py-3 text-[0.9rem] shadow-[0_0_18px_2px_rgba(229,9,20,0.35)] sm:text-base"
                 >
                   {loadingCad ? 'Criando conta...' : 'Criar minha conta'}
                 </button>
@@ -715,7 +748,7 @@ export default function LoginPageClient({
                     dentro dele sozinho; sem max-w-full + flex-wrap, ele
                     podia estourar a borda direita do card em telas
                     estreitas em vez de quebrar). */}
-                <p className="w-full pt-1 text-center text-sm text-on-variant">
+                <p className="w-full pt-1 text-center text-[0.8rem] text-on-variant sm:text-sm">
                   <button
                     type="button"
                     onClick={() => handleFlip(false)}
@@ -739,7 +772,9 @@ export default function LoginPageClient({
           campo é mais lido/passado como prop (ver app/login/page.tsx),
           só a coluna/UI do admin continuam existindo, fora do escopo
           deste pedido. */}
-      <footer className="relative z-10 flex flex-col items-center gap-2 px-6 py-5 text-center text-xs text-on-variant sm:flex-row sm:justify-center sm:gap-6">
+      {/* py-2.5 (era py-5 fixo) + sm:py-5 — mesmo motivo do <main>/logo
+          acima (caber sem scroll no mobile). */}
+      <footer className="relative z-10 flex flex-col items-center gap-1.5 px-6 py-2 text-center text-xs text-on-variant sm:flex-row sm:justify-center sm:gap-6 sm:py-5">
         {/* "membersflix.com" (o texto configurado pelo admin) virando o
             próprio link — pedido explícito, apontando pra home (/). */}
         {desenvolvidoPor && (

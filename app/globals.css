@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /* Fonte do texto digitado em QUALQUER input/textarea/select do projeto
+     (pedido explícito — "de forma global/consistente, não só em alguns").
+     .input-field (globals.css, mais abaixo) já usava text-sm (0.875rem)
+     nos campos que a usam, mas nem todo <input> do projeto usa essa classe
+     (ex: telas de admin) — esses caíam no tamanho padrão do navegador
+     (maior). @layer base: especificidade baixa de propósito, uma classe
+     Tailwind explícita (ex: text-base) num input específico continua
+     vencendo essa regra normalmente. */
+  input,
+  textarea,
+  select {
+    font-size: 0.875rem;
+  }
+}
+
 .transition-colors {
   align-items: center;
 }

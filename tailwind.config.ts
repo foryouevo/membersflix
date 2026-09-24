@@ -1,6 +1,14 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
+  // 'class' (era o padrão 'media', baseado só em prefers-color-scheme) —
+  // necessário pro next-themes controlar o tema via classe no <html>
+  // (ThemeProvider attribute="class", ver app/layout.tsx). Só afeta quem
+  // realmente usa o prefixo `dark:` — hoje só a landing institucional
+  // (components/institucional/LandingPageClient.tsx); o resto do app
+  // (login, área de membros, admin) é tema escuro fixo via cores próprias
+  // (bg-background, bg-card etc.), nunca usou `dark:`, e continua igual.
+  darkMode: 'class',
   content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
