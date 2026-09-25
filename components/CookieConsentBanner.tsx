@@ -91,7 +91,10 @@ export default function CookieConsentBanner() {
         <p className="text-sm leading-relaxed text-on-variant">
           Usamos cookies essenciais para o funcionamento da plataforma e, com a sua permissão, cookies para melhorar sua experiência e
           analisar o uso do site.{' '}
-          <Link href="/politicas" className="font-medium text-primary underline underline-offset-2 hover:text-primary-hover">
+          <Link
+            href="/politicas#politica-de-cookies"
+            className="font-medium text-primary underline underline-offset-2 hover:text-primary-hover"
+          >
             Políticas de Privacidade
           </Link>
           .

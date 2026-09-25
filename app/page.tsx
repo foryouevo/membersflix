@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import LandingPageClient from '@/components/institucional/LandingPageClient';
 
 // "/" é a landing institucional pública, pra QUALQUER visitante — pedido
@@ -29,6 +30,26 @@ export default async function RootPage() {
     destinoLogado = profile?.tipo === 'admin' ? '/admin/dashboard' : '/inicio';
   }
 
+  // BUG encontrado testando esta tarefa: tanto `configuracoes` quanto
+  // `categorias` têm RLS "leitura só para autenticado" (ver
+  // supabase/schema.sql — config_select/categorias_select, using
+  // auth.role() = 'authenticated'). Isso nunca foi problema antes porque
+  // toda leitura dessas tabelas sempre veio de dentro da área de membros
+  // (usuário já logado) — mas "/" agora é pública, pra visitante
+  // DESLOGADO também (ver comentário do componente, acima), e o client
+  // comum (`supabase`, acima) respeita RLS como o usuário atual, então
+  // pra quem não tem sessão as duas queries voltavam vazias/bloqueadas em
+  // silêncio: o número de WhatsApp do botão de suporte flutuante nunca
+  // carregava, e a coluna "Cursos" do rodapé sempre mostrava "Nenhuma
+  // categoria cadastrada ainda." mesmo com 13 categorias reais no banco.
+  // Corrigido usando o client ADMIN (service role, ignora RLS) só pra
+  // essas duas leituras — mesmo padrão já usado em outros pontos do
+  // projeto pra dado público exibido a visitante sem sessão (ex.:
+  // lib/membros/curso-detalhe.ts, branch "sem acesso"). Nenhum dado
+  // sensível: nome de categoria e número de WhatsApp de suporte já são
+  // públicos em outros lugares do site (ex.: /suporte).
+  const admin = createAdminClient();
+
   // numero_whatsapp pro botão/pop-up de suporte flutuante
   // (LandingFloatingActions.tsx) — MESMA config (`configuracoes.numero_
   // whatsapp`) usada em todo o resto da plataforma (ver /suporte). Isolado
@@ -37,7 +58,7 @@ export default async function RootPage() {
   // causa disso — só o botão de WhatsApp fica desabilitado.
   let numeroWhatsapp: string | null = null;
   try {
-    const { data, error } = (await supabase.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle()) as {
+    const { data, error } = (await admin.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle()) as {
       data: { numero_whatsapp: string | null } | null;
       error: any;
     };
@@ -47,5 +68,19 @@ export default async function RootPage() {
     console.error('[landing] Erro inesperado ao buscar numero_whatsapp:', err);
   }
 
-  return <LandingPageClient destinoLogado={destinoLogado} numeroWhatsapp={numeroWhatsapp} />;
+  // Categorias REAIS (mesma tabela que alimenta o filtro de curso da área
+  // de membros — ver hooks/useCursoFiltro.ts) — pra coluna "Cursos" do
+  // footer (LandingFooter.tsx). Nunca inventadas aqui: se a query falhar,
+  // cai numa lista vazia (o footer já trata isso, mostrando uma mensagem
+  // em vez de quebrar) em vez de propagar erro pra fora.
+  let categorias: { id: string; nome: string }[] = [];
+  try {
+    const { data, error } = await admin.from('categorias').select('id, nome').order('nome');
+    if (error) console.error('[landing] Falha ao buscar categorias:', error.message);
+    else categorias = data ?? [];
+  } catch (err) {
+    console.error('[landing] Erro inesperado ao buscar categorias:', err);
+  }
+
+  return <LandingPageClient destinoLogado={destinoLogado} numeroWhatsapp={numeroWhatsapp} categorias={categorias} />;
 }

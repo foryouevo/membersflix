@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { Menu, X, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Container from '@/components/institucional/Container';
 
-// 7 itens do menu (era 6 — ganhou "Cursos", pedido desta tarefa) — id =
+// 7 itens do menu, NESTA ordem (pedido explícito desta tarefa: "Clientes"
+// e "Planos" trocaram de lugar — Planos agora vem ANTES de Clientes). id =
 // seção correspondente (ver SECOES/LABELS_SECAO em LandingPageClient.tsx,
 // que tem 9 seções ao todo; "palavras" e "numeros" não têm item de menu
 // próprio, de propósito). Array único, usado tanto pro menu desktop quanto
@@ -17,18 +19,29 @@ const ITENS_MENU = [
   { id: 'plataforma', label: 'Plataforma' },
   { id: 'cursos', label: 'Cursos' },
   { id: 'diferenciais', label: 'Diferenciais' },
-  { id: 'clientes', label: 'Clientes' },
   { id: 'planos', label: 'Planos' },
+  { id: 'clientes', label: 'Clientes' },
   { id: 'ajuda', label: 'Ajuda' },
 ] as const;
 
 /**
- * Header fixo da landing institucional (/ — pedido explícito: pra QUALQUER
- * visitante, logado ou não, sem redirect automático nenhum, ver
+ * Header fixo/flutuante da landing institucional (/ — pedido explícito: pra
+ * QUALQUER visitante, logado ou não, sem redirect automático nenhum, ver
  * app/page.tsx). Diferente do Header.tsx da área de membros (login
  * obrigatório, outra paleta, outro propósito) — este é público, com
  * scroll/menu de página única e alternância de tema, então não faz sentido
  * reaproveitar aquele componente; existe um próprio aqui.
+ *
+ * Visual "pill" flutuante (pedido explícito, referência: Cakto) — SEMPRE
+ * com o mesmo tamanho/padding em qualquer estado de scroll (pedido
+ * explícito: "não deve encolher, só o background aparece/intensifica"),
+ * bordas arredondadas (rounded-full), com uma margem em relação ao topo/
+ * bordas da tela. É por isso que o header, diferente do resto da landing
+ * (que acompanha o toggle light/dark), tem cor PRÓPRIA e fixa (sempre
+ * escuro, texto sempre claro) — decisão de design tomada aqui: um pill
+ * flutuante translúcido só funciona visualmente sobre QUALQUER conteúdo
+ * (claro ou escuro) por baixo dele se ele mesmo não mudar de cor com o
+ * tema da página.
  *
  * `secaoAtiva` (scroll spy) é controlado pelo PAI (LandingPageClient — um
  * IntersectionObserver observando as 9 seções) e só passado pra cá pra
@@ -36,8 +49,8 @@ const ITENS_MENU = [
  * evitando dois observers concorrentes.
  *
  * `destinoLogado`: null pra visitante deslogado (mostra "Entrar"/"Criar
- * conta grátis", como sempre); '/inicio' ou '/admin/dashboard' quando já existe
- * sessão — aí os dois botões viram um só, "Ir para a plataforma".
+ * conta grátis", como sempre); '/inicio' ou '/admin/dashboard' quando já
+ * existe sessão — aí os botões viram um único "Ir para a plataforma".
  */
 export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiva: string | null; destinoLogado: string | null }) {
   const [menuAberto, setMenuAberto] = useState(false);
@@ -49,36 +62,52 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
   const [montado, setMontado] = useState(false);
   useEffect(() => setMontado(true), []);
 
-  // Header "encolhe" ao rolar (pedido explícito): passivo (não bloqueia o
-  // scroll) e já inicializa lendo window.scrollY (não só 0) — sem isso, dar
-  // F5 com a página já rolada deixaria o header grande por um instante até
-  // o primeiro evento de scroll disparar. 8px de folga (>8, não >0): evita
-  // ficar alternando classe a cada pixel por causa de bounce/rubber-band
-  // scroll (iOS) no topo da página.
-  const [encolhido, setEncolhido] = useState(false);
+  // Fundo do pill aparece/intensifica ao rolar (pedido explícito — item 4:
+  // transparente no topo, com fundo a partir do primeiro scroll). Só
+  // controla o BACKGROUND agora — tamanho/padding do pill nunca mudam (item
+  // 5, última exigência: "não deve encolher... só o background deve
+  // aparecer/intensificar"). 8px de folga (>8, não >0): evita alternar
+  // classe a cada pixel por causa de bounce/rubber-band scroll (iOS) no
+  // topo da página. Já inicializa lendo window.scrollY (não só 0) — sem
+  // isso, dar F5 com a página já rolada deixaria o header transparente por
+  // um instante até o primeiro evento de scroll disparar.
+  const [comFundo, setComFundo] = useState(false);
   useEffect(() => {
     function medir() {
-      setEncolhido(window.scrollY > 8);
+      setComFundo(window.scrollY > 8);
     }
     medir();
     window.addEventListener('scroll', medir, { passive: true });
     return () => window.removeEventListener('scroll', medir);
   }, []);
 
-  // Fecha o painel mobile ao clicar num link (senão ficaria aberto por
-  // cima da seção pra qual acabou de navegar) — mesmo handler pra todos os
-  // links, só chama scrollParaSecao e fecha.
+  // Trava o scroll do body enquanto o menu mobile (agora tela cheia, item 9)
+  // está aberto — sem isso, dava pra rolar o conteúdo POR TRÁS do overlay.
+  useEffect(() => {
+    if (!menuAberto) return;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [menuAberto]);
+
+  // Fecha o menu mobile ao clicar num link (senão ficaria aberto por cima
+  // da seção pra qual acabou de navegar) — mesmo handler pra todos os
+  // links, só chama scrollIntoView e fecha.
   function irParaSecao(id: string) {
     setMenuAberto(false);
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  const BotaoTema = () => (
+  const BotaoTema = ({ className }: { className?: string }) => (
     <button
       type="button"
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/10"
+      className={cn(
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-white/10 hover:text-white',
+        className
+      )}
     >
       {/* Só renderiza o ícone real depois de montar (ver comentário acima)
           — antes disso, um placeholder do mesmo tamanho evita "pulo" de
@@ -87,54 +116,165 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
     </button>
   );
 
-  return (
-    // border-b some quando não encolhido (topo, sobre o hero) — só aparece
-    // junto do fundo blur ao rolar, pra não desenhar uma linha reta em cima
-    // do conteúdo do hero antes de haver qualquer scroll.
-    <header
-      className={cn(
-        'fixed inset-x-0 top-0 z-50 border-b bg-white/80 backdrop-blur-md transition-[border-color] duration-300 dark:bg-black/70',
-        encolhido ? 'border-gray-200 dark:border-white/10' : 'border-transparent'
-      )}
+  // Botão de conta compacto (mobile, ao lado do hambúrguer — item 8):
+  // "Criar conta" se deslogado, "Entrar" (ou "Ir p/ plataforma", já
+  // logado) se não. Só texto/link mais estreito que os botões grandes de
+  // dentro do menu tela cheia — cabe ao lado do ícone de menu na barra.
+  const BotaoContaCompacto = () => (
+    <Link
+      href={destinoLogado ?? '/login?form=cadastro'}
+      className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-hover"
     >
-      {/* h-16 -> h-12 ao rolar (pedido explícito — "menu recolhe ao rolar
-          a página", padding vertical mais fino) — transition-all cobre a
-          altura, então some a necessidade de animar padding-y à parte. */}
+      {destinoLogado ? 'Plataforma' : 'Criar conta'}
+    </Link>
+  );
+
+  return (
+    <>
+      {/* <header> semântico (era uma <div> solta) envolvendo o wrapper
+          fixo — corrige regressão de acessibilidade: sem essa tag, leitores
+          de tela/navegação por landmark perdiam a referência de "cabeçalho
+          da página". Wrapper interno só pra centralizar o pill com uma
+          margem do topo/bordas da tela (pedido explícito — "flutuante, não
+          colado no topo da viewport"). pointer-events-none aqui +
+          pointer-events-auto no pill: a faixa vazia ao redor do pill
+          (esquerda/direita, acima dele) não deveria capturar clique nenhum. */}
+      <header className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-3 sm:px-4 sm:pt-4">
+        <div
+          className={cn(
+            'pointer-events-auto w-full max-w-6xl rounded-full border transition-colors duration-300',
+            comFundo ? 'border-white/10 bg-black/60 shadow-lg shadow-black/20 backdrop-blur-md' : 'border-transparent bg-transparent'
+          )}
+        >
+          {/* h-16 fixo em QUALQUER estado de scroll (pedido explícito, item
+              5 — "não deve encolher"). Container: mesmo max-width/padding
+              lateral usado no resto da landing (item 2). */}
+          <Container className="flex h-16 items-center justify-between">
+            {/* ESQUERDA — logo. Sem chip escuro por trás (era necessário
+                quando o header acompanhava o tema light/dark da página —
+                agora ele é sempre escuro, então a logo — que tem a parte
+                "MEMBERS" em branco — já fica legível sozinha, sempre. */}
+            <a
+              href="#inicio"
+              onClick={(e) => {
+                e.preventDefault();
+                irParaSecao('inicio');
+              }}
+              className="shrink-0"
+            >
+              <Image src="/logo.png" alt="MembersFlix" width={160} height={32} priority className="h-6 w-auto object-contain" />
+            </a>
+
+            {/* CENTRO — menu (desktop only, md:flex) */}
+            <nav className="hidden items-center gap-8 md:flex">
+              {ITENS_MENU.map((item) => (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    irParaSecao(item.id);
+                  }}
+                  className={cn(
+                    'text-sm font-medium transition-colors',
+                    secaoAtiva === item.id ? 'text-primary' : 'text-gray-300 hover:text-white'
+                  )}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+
+            {/* DIREITA — tema + Entrar/Criar conta grátis (desktop) / conta
+                compacta + tema + hambúrguer (mobile) */}
+            <div className="flex items-center gap-2">
+              <div className="hidden items-center gap-2 md:flex">
+                <BotaoTema />
+                {destinoLogado ? (
+                  <Link href={destinoLogado} className="btn-primary">
+                    Ir para a plataforma
+                  </Link>
+                ) : (
+                  <>
+                    {/* Mesmo CSS do botão "Já tenho conta" do hero (pedido
+                        explícito, item 3): fundo transparente, borda
+                        visível, texto branco — antes era só texto/link
+                        sem borda nenhuma. rounded-full (não `rounded`):
+                        combina com o resto do pill. */}
+                    <Link
+                      href="/login"
+                      className="rounded-full border border-white/30 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                    >
+                      Entrar
+                    </Link>
+                    {/* ?form=cadastro — LoginPageClient lê essa query na
+                        montagem e chama o MESMO handleFlip que o link
+                        "Cadastra-se" já usa, abrindo direto no lado de
+                        cadastro do card com flip. */}
+                    <Link href="/login?form=cadastro" className="btn-primary">
+                      Criar conta grátis
+                    </Link>
+                  </>
+                )}
+              </div>
+
+              {/* Mobile: botão de conta compacto + tema, do LADO do
+                  hambúrguer (pedido explícito, item 8 — antes só existiam
+                  dentro do painel/menu). */}
+              <div className="flex items-center gap-1.5 md:hidden">
+                <BotaoContaCompacto />
+                <BotaoTema />
+                <button
+                  type="button"
+                  onClick={() => setMenuAberto(true)}
+                  aria-label="Abrir menu"
+                  aria-expanded={menuAberto}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-gray-300 hover:bg-white/10 hover:text-white"
+                >
+                  <Menu size={22} />
+                </button>
+              </div>
+            </div>
+          </Container>
+        </div>
+      </header>
+
+      {/* Menu mobile em TELA CHEIA (pedido explícito, item 9 — era um
+          painel dropdown pequeno abaixo do header). 100dvh (não só
+          inset-0/h-full): mesma técnica já usada na tela de login pra
+          acompanhar a barra de endereço do navegador mobile
+          aparecendo/sumindo (ver components/LoginPageClient.tsx).
+          Overlay cobrindo tudo, sempre montado no DOM (visibility/opacity
+          controlam abrir/fechar, não display:none/unmount) — evita
+          reconstruir a lista a cada abertura e permite uma transição de
+          fade em vez de aparecer/sumir seco. */}
       <div
         className={cn(
-          'mx-auto flex max-w-6xl items-center justify-between px-4 transition-all duration-300 sm:px-6 lg:px-8',
-          encolhido ? 'h-12' : 'h-16'
+          'fixed inset-0 z-[60] flex h-dvh flex-col bg-black transition-opacity duration-200 md:hidden',
+          menuAberto ? 'opacity-100' : 'pointer-events-none opacity-0'
         )}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
       >
-        {/* ESQUERDA — logo */}
-        {/* bg-gray-900 dark:bg-transparent: o arquivo /logo.png (mesmo de
-            sempre) tem a parte "MEMBERS" em branco — sempre visível sobre o
-            fundo escuro do resto do app, mas invisível num header claro
-            (esta é a primeira tela do projeto com tema light). Um chip
-            escuro por trás só no tema light resolve sem precisar de um
-            arquivo de logo novo. */}
-        <a
-          href="#inicio"
-          onClick={(e) => {
-            e.preventDefault();
-            irParaSecao('inicio');
-          }}
-          className="shrink-0 rounded-md bg-gray-900 px-2.5 py-1.5 dark:bg-transparent dark:px-0 dark:py-0"
-        >
-          {/* h-6 -> h-5 ao rolar: reduz levemente junto do header (pedido
-              explícito — "pode diminuir levemente o tamanho da logo"). */}
-          <Image
-            src="/logo.png"
-            alt="MembersFlix"
-            width={160}
-            height={32}
-            priority
-            className={cn('w-auto object-contain transition-all duration-300', encolhido ? 'h-5' : 'h-6')}
-          />
-        </a>
+        <div className="flex h-16 shrink-0 items-center justify-between px-4">
+          <Image src="/logo.png" alt="MembersFlix" width={160} height={32} className="h-6 w-auto object-contain" />
+          <button
+            type="button"
+            onClick={() => setMenuAberto(false)}
+            aria-label="Fechar menu"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-gray-300 hover:bg-white/10 hover:text-white"
+          >
+            <X size={22} />
+          </button>
+        </div>
 
-        {/* CENTRO — menu (desktop only, md:flex) */}
-        <nav className="hidden items-center gap-8 md:flex">
+        {/* Itens do menu — cada um em seu próprio "card" arredondado
+            (referência visual: Kirvano), na mesma ordem corrigida do item
+            1. overflow-y-auto: se a lista de 7 itens + os 2 botões finais
+            não couberem numa tela muito baixa, rola só esta área (nunca
+            trava o botão de fechar/logo do topo). */}
+        <nav className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-4">
           {ITENS_MENU.map((item) => (
             <a
               key={item.id}
@@ -144,11 +284,8 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
                 irParaSecao(item.id);
               }}
               className={cn(
-                'font-medium transition-all duration-300',
-                encolhido ? 'text-[0.8rem]' : 'text-sm',
-                secaoAtiva === item.id
-                  ? 'text-primary'
-                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white'
+                'rounded-xl px-4 py-3.5 text-base font-medium transition-colors',
+                secaoAtiva === item.id ? 'bg-primary/15 text-primary' : 'bg-white/5 text-white hover:bg-white/10'
               )}
             >
               {item.label}
@@ -156,103 +293,34 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
           ))}
         </nav>
 
-        {/* DIREITA — tema + Entrar/Criar conta (desktop) / hambúrguer (mobile) */}
-        <div className="flex items-center gap-2">
-          <div className="hidden items-center gap-2 md:flex">
-            <BotaoTema />
-            {destinoLogado ? (
-              <Link href={destinoLogado} className="btn-primary">
-                Ir para a plataforma
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="rounded px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:text-primary dark:text-gray-200"
-                >
-                  Entrar
-                </Link>
-                {/* ?form=cadastro — LoginPageClient lê essa query na
-                    montagem e chama o MESMO handleFlip que o link
-                    "Cadastra-se" já usa, abrindo direto no lado de
-                    cadastro do card com flip. */}
-                <Link href="/login?form=cadastro" className="btn-primary">Criar conta grátis</Link>
-              </>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setMenuAberto((v) => !v)}
-            aria-label={menuAberto ? 'Fechar menu' : 'Abrir menu'}
-            aria-expanded={menuAberto}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-white/10 md:hidden"
-          >
-            {menuAberto ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Painel mobile — grid-template-rows 0fr->1fr (mesma técnica já usada
-          no FAQ de /suporte e na busca mobile do Header da área de membros:
-          só CSS, sem medir altura em pixels via JS). */}
-      <div
-        className={cn(
-          'grid overflow-hidden border-t border-gray-200 bg-white transition-[grid-template-rows] duration-300 ease-out dark:border-white/10 dark:bg-black md:hidden',
-          menuAberto ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-        )}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <nav className="flex flex-col gap-1 px-4 py-3">
-            {ITENS_MENU.map((item) => (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  irParaSecao(item.id);
-                }}
-                className={cn(
-                  'rounded px-3 py-2.5 text-sm font-medium transition-colors',
-                  secaoAtiva === item.id
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-white/10'
-                )}
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
-          <div className="flex items-center gap-3 border-t border-gray-200 px-4 py-3 dark:border-white/10">
-            <BotaoTema />
-            {destinoLogado ? (
+        {/* Rodapé do menu tela cheia — Criar conta grátis / Entrar
+            empilhados, largura total (pedido explícito, item 9). Logado:
+            um botão só, "Ir para a plataforma". */}
+        <div className="shrink-0 space-y-2.5 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-2">
+          {destinoLogado ? (
+            <Link href={destinoLogado} onClick={() => setMenuAberto(false)} className="btn-primary block w-full py-3 text-center text-base">
+              Ir para a plataforma
+            </Link>
+          ) : (
+            <>
               <Link
-                href={destinoLogado}
+                href="/login?form=cadastro"
                 onClick={() => setMenuAberto(false)}
-                className="btn-primary flex-1 text-center"
+                className="btn-primary block w-full py-3 text-center text-base"
               >
-                Ir para a plataforma
+                Criar conta grátis
               </Link>
-            ) : (
-              <>
-                {/* Sem reaproveitar .btn-secondary aqui (globals.css):
-                    aquela classe assume fundo escuro (border-white/20 +
-                    text-white) — certa no resto do app, que é sempre dark,
-                    mas invisível sobre um fundo claro no tema light desta
-                    landing. Estilo próprio, ciente dos dois temas. */}
-                <Link
-                  href="/login"
-                  onClick={() => setMenuAberto(false)}
-                  className="flex-1 rounded border border-gray-300 px-4 py-2 text-center text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:border-white/20 dark:text-gray-200 dark:hover:bg-white/10"
-                >
-                  Entrar
-                </Link>
-                <Link href="/login?form=cadastro" onClick={() => setMenuAberto(false)} className="btn-primary flex-1 text-center">Criar conta grátis</Link>
-              </>
-            )}
-          </div>
+              <Link
+                href="/login"
+                onClick={() => setMenuAberto(false)}
+                className="block w-full rounded-full border border-white/30 py-3 text-center text-base font-semibold text-white transition-colors hover:bg-white/10"
+              >
+                Entrar
+              </Link>
+            </>
+          )}
         </div>
       </div>
-    </header>
+    </>
   );
 }
