@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, MessageCircle, X } from 'lucide-react';
 import { buildSupportWhatsappLink, cn } from '@/lib/utils';
 
@@ -14,25 +14,34 @@ import { buildSupportWhatsappLink, cn } from '@/lib/utils';
 const RAIO = 24;
 const CIRCUNFERENCIA = 2 * Math.PI * RAIO;
 
+// easeInOutCubic — usado pela animação de scroll própria (ver rolarAoTopo,
+// abaixo): acelera no início e desacelera no fim, sem o "arranque seco" de
+// um scroll linear.
+function easeInOutCubic(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 /**
  * Botões fixos no canto inferior direito (z-40 — abaixo do header, z-50,
  * que ainda deve vencer se algum dia se sobrepuserem):
  *
  * - "Voltar ao topo": só aparece depois de rolar ~300px (fade), tem um
  *   anel de progresso (SVG stroke-dasharray) mostrando quanto da página já
- *   foi rolado, e leva de volta ao topo com scroll suave ao clicar. MESMO
- *   tamanho do botão de suporte agora (item 6).
+ *   foi rolado, e leva de volta ao topo com uma animação própria (ver
+ *   rolarAoTopo, abaixo) — SÓ depende da posição de scroll, nunca do
+ *   estado do pop-up (bug relatado nesta tarefa: uma instrução de uma
+ *   tarefa anterior escondia este botão enquanto o pop-up estava aberto;
+ *   essa regra saiu — os dois ficam sempre empilhados, voltar ao topo em
+ *   cima).
  * - "Suporte": sempre visível, vermelho (mais em destaque), abre/fecha o
  *   pop-up de ajuda.
  *
- * Pop-up ABAIXO do botão de voltar ao topo, ACIMA do de suporte (pedido
- * explícito, item 7 — antes ficava por cima de tudo, sobrepondo o botão de
- * voltar ao topo): os três (botão topo, pop-up condicional, botão suporte)
- * são itens NORMAIS de um mesmo flex-col (não mais `absolute`) — como o
- * container é ancorado por `bottom` (não por `top`), ele cresce PRA CIMA
- * quando o pop-up aparece; o botão de suporte (último item) nunca muda de
- * lugar na tela, e o pop-up nasce exatamente entre os dois botões, sem
- * sobrepor nenhum dos dois.
+ * Os dois botões formam um grupo PRÓPRIO (gap-3, ~12px fixo entre eles); o
+ * pop-up fica fora do fluxo (position: absolute, `bottom-full` do grupo —
+ * ancorado acima dos DOIS botões, `right-0` pra alinhar a borda direita,
+ * `mb-3` de folga) e nunca empurra/cobre nenhum dos dois, aberto ou
+ * fechado. Fechado, fica invisible+pointer-events-none (não reserva
+ * espaço nem intercepta clique).
  *
  * `numeroWhatsapp` vem do servidor (app/page.tsx busca em
  * `configuracoes`, MESMA coluna usada em todo o resto da plataforma —
@@ -42,6 +51,11 @@ export default function LandingFloatingActions({ numeroWhatsapp }: { numeroWhats
   const [progresso, setProgresso] = useState(0); // 0-100
   const [mostrarTopo, setMostrarTopo] = useState(false);
   const [popupAberto, setPopupAberto] = useState(false);
+  // Guarda o id do requestAnimationFrame em curso — permite cancelar a
+  // animação de "voltar ao topo" (ver rolarAoTopo) se o usuário interagir
+  // com a página no meio do caminho (scroll/toque/teclado, pedido
+  // explícito desta tarefa).
+  const animacaoRef = useRef<number | null>(null);
 
   // BUG encontrado numa tarefa anterior: o aviso de cookies
   // (CookieConsentBanner.tsx, sitewide, canto inferior direito, z-[9999] —
@@ -95,50 +109,151 @@ export default function LandingFloatingActions({ numeroWhatsapp }: { numeroWhats
     ? buildSupportWhatsappLink(numeroWhatsapp, 'Olá, vim pelo site e preciso de ajuda.')
     : null;
 
-  return (
-    // items-end: alinha os botões circulares (56px) e o pop-up (bem mais
-    // largo) pela borda DIREITA — botões e card ficam "grudados" no mesmo
-    // canto, em vez de centralizados um sobre o outro.
-    <div
-      className={cn(
-        'fixed right-6 z-40 flex flex-col items-end gap-3 transition-all duration-300',
-        avisoCookiesVisivel ? 'bottom-72' : 'bottom-6'
-      )}
-    >
-      {/* Botão "voltar ao topo" — fade in/out (pedido explícito) via
-          opacity + pointer-events (nunca sai do DOM: manter montado evita
-          ficar remontando o SVG a cada 300px cruzado). h-14 w-14: MESMO
-          tamanho do botão de suporte (item 6). */}
-      <button
-        type="button"
-        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        aria-label="Voltar ao topo"
-        className={cn(
-          'relative flex h-14 w-14 items-center justify-center rounded-full bg-white text-gray-700 shadow-lg ring-1 ring-gray-200 transition-opacity duration-300 dark:bg-[#141414] dark:text-white dark:ring-white/10',
-          mostrarTopo ? 'opacity-100' : 'pointer-events-none opacity-0'
-        )}
-      >
-        <svg viewBox="0 0 56 56" className="absolute inset-0 -rotate-90">
-          <circle cx="28" cy="28" r={RAIO} fill="none" strokeWidth="3" className="stroke-gray-200 dark:stroke-white/10" />
-          <circle
-            cx="28"
-            cy="28"
-            r={RAIO}
-            fill="none"
-            strokeWidth="3"
-            strokeLinecap="round"
-            className="stroke-primary transition-[stroke-dashoffset] duration-150 ease-out"
-            strokeDasharray={CIRCUNFERENCIA}
-            strokeDashoffset={CIRCUNFERENCIA - (progresso / 100) * CIRCUNFERENCIA}
-          />
-        </svg>
-        <ArrowUp size={22} />
-      </button>
+  // Cancela a animação em andamento (ver rolarAoTopo) — chamado tanto por
+  // ela mesma ao terminar quanto pelos listeners de interação abaixo.
+  function cancelarAnimacao() {
+    if (animacaoRef.current !== null) {
+      cancelAnimationFrame(animacaoRef.current);
+      animacaoRef.current = null;
+    }
+  }
 
-      {/* Pop-up de suporte — item de fluxo normal (não mais `absolute`,
-          ver comentário do componente acima), entre os dois botões. */}
-      {popupAberto && (
-        <div className="w-72 rounded-xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-[#141414] sm:w-80">
+  // Animação de scroll PRÓPRIA (pedido explícito desta tarefa) — não
+  // depende de `window.scrollTo({ behavior: 'smooth' })`: além do
+  // navegador poder ignorar/atenuar esse comportamento (ex.: usuário com
+  // scroll-behavior customizado, alguma extensão, ou simplesmente uma
+  // implementação "instantânea" em navegadores mais antigos), assim fica
+  // garantido o mesmo easing/duração em qualquer lugar. 900-1200ms com
+  // easeInOutCubic: acelera saindo, desacelera chegando no topo — não é
+  // scroll linear.
+  //
+  // `prefers-reduced-motion`: pula direto pro topo sem animação (pedido
+  // explícito). Cancela se o usuário interagir durante o movimento (roda o
+  // mouse, toca a tela ou usa o teclado) — sinal de que ele queria assumir
+  // o controle do scroll de novo, não brigar com uma animação em curso.
+  function rolarAoTopo() {
+    cancelarAnimacao();
+
+    const reduzMovimento = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const origem = window.scrollY;
+    if (reduzMovimento || origem === 0) {
+      window.scrollTo(0, 0);
+      return;
+    }
+
+    const duracao = 1000;
+    const inicio = performance.now();
+
+    // wheel/touchmove/keydown (setas, Page Up/Down, Home/End, Espaço) —
+    // qualquer sinal de que o usuário está tentando rolar por conta
+    // própria cancela o rAF em curso E remove os três listeners (só disparam
+    // uma vez por animação — sem isso ficariam presos ouvindo pra sempre
+    // depois de uma interrupção).
+    function cancelarPorInteracao() {
+      cancelarAnimacao();
+      limparListeners();
+    }
+    function limparListeners() {
+      window.removeEventListener('wheel', cancelarPorInteracao);
+      window.removeEventListener('touchmove', cancelarPorInteracao);
+      window.removeEventListener('keydown', cancelarPorInteracao);
+    }
+    window.addEventListener('wheel', cancelarPorInteracao, { passive: true });
+    window.addEventListener('touchmove', cancelarPorInteracao, { passive: true });
+    window.addEventListener('keydown', cancelarPorInteracao);
+
+    function passo(agora: number) {
+      const decorrido = agora - inicio;
+      const t = Math.min(1, decorrido / duracao);
+      window.scrollTo(0, Math.round(origem * (1 - easeInOutCubic(t))));
+
+      if (t < 1) {
+        animacaoRef.current = requestAnimationFrame(passo);
+      } else {
+        animacaoRef.current = null;
+        limparListeners();
+      }
+    }
+
+    animacaoRef.current = requestAnimationFrame(passo);
+  }
+
+  // Limpa qualquer rAF pendente se o componente desmontar no meio da
+  // animação (nunca deveria acontecer nesta página de seção única, mas é
+  // o padrão correto pra um efeito com requestAnimationFrame).
+  useEffect(() => cancelarAnimacao, []);
+
+  return (
+    <div
+      className={cn('fixed right-6 z-40 transition-all duration-300', avisoCookiesVisivel ? 'bottom-72' : 'bottom-6')}
+    >
+      {/* Grupo dos dois botões — `relative` só pra ancorar o pop-up
+          (absolute, ver abaixo) a ele; items-end alinha os dois botões
+          circulares pela borda direita (idênticos, não faz diferença hoje,
+          mas mantém o padrão caso um dia um deles mude de largura). gap-3
+          (~12px, pedido explícito) — FIXO, nunca muda com o pop-up
+          abrindo/fechando, já que o pop-up não é mais item deste flex. */}
+      <div className="relative flex flex-col items-end gap-3">
+        {/* Botão "voltar ao topo" — fade in/out via opacity (nunca sai do
+            DOM: manter montado evita remontar o SVG a cada 300px
+            cruzado). SÓ depende de `mostrarTopo` (posição de scroll) —
+            pedido explícito desta tarefa: NÃO some mais quando o pop-up
+            está aberto (era `mostrarTopo && !popupAberto`); o pop-up nasce
+            ACIMA dos dois botões (bottom-full do grupo), então não precisa
+            escondê-lo pra não cobrir. */}
+        <button
+          type="button"
+          onClick={rolarAoTopo}
+          aria-label="Voltar ao topo"
+          className={cn(
+            'relative flex h-14 w-14 items-center justify-center rounded-full bg-white text-gray-700 shadow-lg ring-1 ring-gray-200 transition-opacity duration-300 dark:bg-[#141414] dark:text-white dark:ring-white/10',
+            mostrarTopo ? 'opacity-100' : 'pointer-events-none opacity-0'
+          )}
+        >
+          <svg viewBox="0 0 56 56" className="absolute inset-0 -rotate-90">
+            <circle cx="28" cy="28" r={RAIO} fill="none" strokeWidth="3" className="stroke-gray-200 dark:stroke-white/10" />
+            <circle
+              cx="28"
+              cy="28"
+              r={RAIO}
+              fill="none"
+              strokeWidth="3"
+              strokeLinecap="round"
+              className="stroke-primary transition-[stroke-dashoffset] duration-150 ease-out"
+              strokeDasharray={CIRCUNFERENCIA}
+              strokeDashoffset={CIRCUNFERENCIA - (progresso / 100) * CIRCUNFERENCIA}
+            />
+          </svg>
+          <ArrowUp size={22} />
+        </button>
+
+        {/* Botão "suporte" — sempre visível, em destaque (vermelho da
+            marca). */}
+        <button
+          type="button"
+          onClick={() => setPopupAberto((v) => !v)}
+          aria-label={popupAberto ? 'Fechar suporte' : 'Falar com o suporte'}
+          aria-expanded={popupAberto}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/30 transition-transform hover:scale-105"
+        >
+          {popupAberto ? <X size={24} /> : <MessageCircle size={24} />}
+        </button>
+
+        {/* Pop-up de suporte — `absolute`, ancorado ACIMA do grupo inteiro
+            (bottom-full do wrapper `relative` acima + mb-3 de respiro,
+            right-0 pra alinhar a borda direita com os botões): fora do
+            fluxo normal, então nunca empurra/afasta os dois botões, abra
+            ou feche. SEMPRE montado (não desmonta ao fechar) — abrir/
+            fechar é só opacity + scale + translate-y por classe (pedido
+            explícito, ~300ms ease-out). Fechado: invisible (não só
+            pointer-events-none) tira do fluxo de tab/leitor de tela e
+            garante que não reserva espaço nenhum, sem desmontar. */}
+        <div
+          className={cn(
+            'absolute bottom-full right-0 mb-3 w-72 origin-bottom-right rounded-xl border border-gray-200 bg-white p-4 shadow-2xl transition-[opacity,transform] duration-300 ease-out dark:border-white/10 dark:bg-[#141414] sm:w-80',
+            popupAberto ? 'translate-y-0 scale-100 opacity-100' : 'pointer-events-none invisible translate-y-2 scale-95 opacity-0'
+          )}
+        >
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-base font-bold text-gray-900 dark:text-white">Precisa de ajuda?</h3>
             <button
@@ -170,9 +285,9 @@ export default function LandingFloatingActions({ numeroWhatsapp }: { numeroWhats
 
           <div className="my-4 h-px bg-gray-200 dark:bg-white/10" />
 
-          {/* #ajuda (era link pra /suporte — pedido explícito desta
-              tarefa): rola até a seção "Perguntas Frequentes" na PRÓPRIA
-              landing em vez de navegar pra outra página. */}
+          {/* #ajuda (era link pra /suporte — pedido explícito de uma
+              tarefa anterior): rola até a seção "Perguntas Frequentes" na
+              PRÓPRIA landing em vez de navegar pra outra página. */}
           <button
             type="button"
             onClick={() => {
@@ -187,20 +302,7 @@ export default function LandingFloatingActions({ numeroWhatsapp }: { numeroWhats
             </p>
           </button>
         </div>
-      )}
-
-      {/* Botão "suporte" — sempre visível, em destaque (vermelho da
-          marca). h-14 w-14: mesmo tamanho do botão de voltar ao topo
-          (item 6, já era esse tamanho, não mudou). */}
-      <button
-        type="button"
-        onClick={() => setPopupAberto((v) => !v)}
-        aria-label={popupAberto ? 'Fechar suporte' : 'Falar com o suporte'}
-        aria-expanded={popupAberto}
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/30 transition-transform hover:scale-105"
-      >
-        {popupAberto ? <X size={24} /> : <MessageCircle size={24} />}
-      </button>
+      </div>
     </div>
   );
 }

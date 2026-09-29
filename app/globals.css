@@ -173,11 +173,15 @@ body {
 }
 
 @layer components {
+  /* rounded-full (era `rounded`, 0.5rem): padronização pedida explicitamente
+     — todo botão do site (menu, cadastro, login, suporte, admin etc.) usa
+     um dos dois componentes abaixo, então a mudança de raio aqui já cobre a
+     esmagadora maioria sem precisar tocar em cada tela. */
   .btn-primary {
-    @apply rounded bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60;
+    @apply rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60;
   }
   .btn-secondary {
-    @apply rounded border border-white/20 bg-transparent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10;
+    @apply rounded-full border border-white/20 bg-transparent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/10;
   }
   .input-field {
     @apply w-full rounded border border-border bg-card px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-variant/60 focus:border-primary focus:outline-none;

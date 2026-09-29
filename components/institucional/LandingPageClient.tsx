@@ -90,10 +90,12 @@ export default function LandingPageClient({
   destinoLogado,
   numeroWhatsapp,
   categorias,
+  emailContato,
 }: {
   destinoLogado: string | null;
   numeroWhatsapp: string | null;
   categorias: { id: string; nome: string }[];
+  emailContato: string | null;
 }) {
   const [secaoAtiva, setSecaoAtiva] = useState<string | null>('inicio');
   const secoesRef = useRef<Record<string, HTMLElement | null>>({});
@@ -157,7 +159,7 @@ export default function LandingPageClient({
                       </Link>
                       <Link
                         href="/login"
-                        className="rounded border border-gray-300 px-6 py-3 text-base font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:border-white/20 dark:text-gray-200 dark:hover:bg-white/10"
+                        className="rounded-full border border-gray-300 px-6 py-3 text-base font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:border-white/20 dark:text-gray-200 dark:hover:bg-white/10"
                       >
                         Já tenho conta
                       </Link>
@@ -170,7 +172,7 @@ export default function LandingPageClient({
         ))}
       </main>
 
-      <LandingFooter logado={!!destinoLogado} categorias={categorias} numeroWhatsapp={numeroWhatsapp} />
+      <LandingFooter logado={!!destinoLogado} categorias={categorias} numeroWhatsapp={numeroWhatsapp} emailContato={emailContato} />
       <LandingFloatingActions numeroWhatsapp={numeroWhatsapp} />
     </div>
   );

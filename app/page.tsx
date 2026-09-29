@@ -50,22 +50,32 @@ export default async function RootPage() {
   // públicos em outros lugares do site (ex.: /suporte).
   const admin = createAdminClient();
 
-  // numero_whatsapp pro botão/pop-up de suporte flutuante
-  // (LandingFloatingActions.tsx) — MESMA config (`configuracoes.numero_
-  // whatsapp`) usada em todo o resto da plataforma (ver /suporte). Isolado
-  // num try/catch próprio, igual ao padrão já usado em app/login/page.tsx:
-  // se a query falhar por qualquer motivo, a landing não pode quebrar por
-  // causa disso — só o botão de WhatsApp fica desabilitado.
+  // numero_whatsapp (botão/pop-up de suporte flutuante,
+  // LandingFloatingActions.tsx) + email_contato (bloco "Contato" do novo
+  // layout do footer, LandingFooter.tsx) — mesmas colunas de `configuracoes`
+  // já usadas em todo o resto da plataforma (ver /suporte e o rodapé da
+  // tela de login, app/login/page.tsx), buscadas juntas numa query só.
+  // Isolado num try/catch próprio, igual ao padrão já usado em
+  // app/login/page.tsx: se a query falhar por qualquer motivo, a landing
+  // não pode quebrar por causa disso — só os dois ficam desabilitados.
   let numeroWhatsapp: string | null = null;
+  let emailContato: string | null = null;
   try {
-    const { data, error } = (await admin.from('configuracoes').select('numero_whatsapp').eq('id', 1).maybeSingle()) as {
-      data: { numero_whatsapp: string | null } | null;
+    const { data, error } = (await admin
+      .from('configuracoes')
+      .select('numero_whatsapp, email_contato')
+      .eq('id', 1)
+      .maybeSingle()) as {
+      data: { numero_whatsapp: string | null; email_contato: string | null } | null;
       error: any;
     };
-    if (error) console.error('[landing] Falha ao buscar numero_whatsapp:', error.message);
-    else numeroWhatsapp = data?.numero_whatsapp ?? null;
+    if (error) console.error('[landing] Falha ao buscar configuracoes:', error.message);
+    else {
+      numeroWhatsapp = data?.numero_whatsapp ?? null;
+      emailContato = data?.email_contato ?? null;
+    }
   } catch (err) {
-    console.error('[landing] Erro inesperado ao buscar numero_whatsapp:', err);
+    console.error('[landing] Erro inesperado ao buscar configuracoes:', err);
   }
 
   // Categorias REAIS (mesma tabela que alimenta o filtro de curso da área
@@ -82,5 +92,12 @@ export default async function RootPage() {
     console.error('[landing] Erro inesperado ao buscar categorias:', err);
   }
 
-  return <LandingPageClient destinoLogado={destinoLogado} numeroWhatsapp={numeroWhatsapp} categorias={categorias} />;
+  return (
+    <LandingPageClient
+      destinoLogado={destinoLogado}
+      numeroWhatsapp={numeroWhatsapp}
+      categorias={categorias}
+      emailContato={emailContato}
+    />
+  );
 }

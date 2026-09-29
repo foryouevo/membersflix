@@ -7,6 +7,7 @@ import { useTheme } from 'next-themes';
 import { Menu, X, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Container from '@/components/institucional/Container';
+import BrandLogo from '@/components/institucional/BrandLogo';
 
 // 7 itens do menu, NESTA ordem (pedido explícito desta tarefa: "Clientes"
 // e "Planos" trocaram de lugar — Planos agora vem ANTES de Clientes). id =
@@ -18,11 +19,16 @@ const ITENS_MENU = [
   { id: 'inicio', label: 'Início' },
   { id: 'plataforma', label: 'Plataforma' },
   { id: 'cursos', label: 'Cursos' },
-  { id: 'diferenciais', label: 'Diferenciais' },
   { id: 'planos', label: 'Planos' },
   { id: 'clientes', label: 'Clientes' },
   { id: 'ajuda', label: 'Ajuda' },
 ] as const;
+
+// "Diferenciais" saiu SÓ daqui (pedido explícito desta tarefa — o pill
+// reduzido, após o scroll, não tinha espaço pra logo + 7 itens + botões
+// sem colar/quebrar linha): a seção e o item continuam existindo no resto
+// da página e no footer (LandingPageClient.tsx/LandingFooter.tsx), só não
+// tem mais atalho próprio no menu do topo.
 
 /**
  * Header fixo/flutuante da landing institucional (/ — pedido explícito: pra
@@ -32,16 +38,20 @@ const ITENS_MENU = [
  * scroll/menu de página única e alternância de tema, então não faz sentido
  * reaproveitar aquele componente; existe um próprio aqui.
  *
- * Visual "pill" flutuante (pedido explícito, referência: Cakto) — SEMPRE
- * com o mesmo tamanho/padding em qualquer estado de scroll (pedido
- * explícito: "não deve encolher, só o background aparece/intensifica"),
- * bordas arredondadas (rounded-full), com uma margem em relação ao topo/
- * bordas da tela. É por isso que o header, diferente do resto da landing
- * (que acompanha o toggle light/dark), tem cor PRÓPRIA e fixa (sempre
- * escuro, texto sempre claro) — decisão de design tomada aqui: um pill
- * flutuante translúcido só funciona visualmente sobre QUALQUER conteúdo
- * (claro ou escuro) por baixo dele se ele mesmo não mudar de cor com o
- * tema da página.
+ * Header fluido (pedido explícito desta tarefa — substituiu o pill que
+ * antes tinha SEMPRE o mesmo tamanho): no topo (scroll = 0) ocupa a largura
+ * total da tela, sem fundo/borda, colado no topo. Ao rolar (comFundo, ver
+ * useEffect abaixo), encolhe pra um pill centralizado (max-w menor,
+ * cantos arredondados, margem do topo) com fundo (blur + cor sólida
+ * translúcida) — largura, padding do wrapper externo e tamanho da logo
+ * transitam juntos (duration-300/500 ease-in-out) nas duas direções.
+ *
+ * Agora SEGUE o tema claro/escuro da página (era sempre escuro/texto
+ * sempre claro, decisão revertida nesta tarefa por deixar o menu ilegível
+ * no tema claro — texto claro sobre o fundo branco da landing): cores via
+ * `dark:` (mesma estratégia de LandingPageClient.tsx), incluindo o fundo do
+ * pill ao rolar. A logo continua um problema à parte por ser uma imagem
+ * (não pinta com classe de texto) — ver BrandLogo.tsx.
  *
  * `secaoAtiva` (scroll spy) é controlado pelo PAI (LandingPageClient — um
  * IntersectionObserver observando as 9 seções) e só passado pra cá pra
@@ -105,7 +115,7 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
       className={cn(
-        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-300 transition-colors hover:bg-white/10 hover:text-white',
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-black/5 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white',
         className
       )}
     >
@@ -139,21 +149,29 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
           colado no topo da viewport"). pointer-events-none aqui +
           pointer-events-auto no pill: a faixa vazia ao redor do pill
           (esquerda/direita, acima dele) não deveria capturar clique nenhum. */}
-      <header className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-3 sm:px-4 sm:pt-4">
+      <header
+        className={cn(
+          'pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center transition-[padding] duration-300 ease-in-out',
+          comFundo ? 'px-3 pt-3 sm:px-4 sm:pt-4' : 'px-0 pt-0'
+        )}
+      >
         <div
           className={cn(
-            'pointer-events-auto w-full max-w-6xl rounded-full border transition-colors duration-300',
-            comFundo ? 'border-white/10 bg-black/60 shadow-lg shadow-black/20 backdrop-blur-md' : 'border-transparent bg-transparent'
+            'pointer-events-auto w-full border transition-all duration-300 ease-in-out',
+            // max-w-6xl (era max-w-5xl): igual ao max-w do próprio Container
+            // logo abaixo — com um max-w MENOR aqui por fora, o Container já
+            // ficava espremido pra caber dentro de um espaço mais estreito
+            // do que o dele próprio, essa era a causa raiz dos itens
+            // colados/do botão quebrando linha no estado reduzido.
+            comFundo
+              ? 'max-w-6xl rounded-full border-black/5 bg-white/80 shadow-lg shadow-black/5 backdrop-blur-md dark:border-white/10 dark:bg-black/60 dark:shadow-black/20'
+              : 'max-w-full rounded-none border-transparent bg-transparent'
           )}
         >
-          {/* h-16 fixo em QUALQUER estado de scroll (pedido explícito, item
-              5 — "não deve encolher"). Container: mesmo max-width/padding
-              lateral usado no resto da landing (item 2). */}
           <Container className="flex h-16 items-center justify-between">
-            {/* ESQUERDA — logo. Sem chip escuro por trás (era necessário
-                quando o header acompanhava o tema light/dark da página —
-                agora ele é sempre escuro, então a logo — que tem a parte
-                "MEMBERS" em branco — já fica legível sozinha, sempre. */}
+            {/* ESQUERDA — logo (BrandLogo.tsx: chip escuro atrás só no
+                tema claro, ver o componente). Cresce um pouco ao rolar
+                (pedido explícito, item 2). */}
             <a
               href="#inicio"
               onClick={(e) => {
@@ -162,11 +180,17 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
               }}
               className="shrink-0"
             >
-              <Image src="/logo.png" alt="MembersFlix" width={160} height={32} priority className="h-6 w-auto object-contain" />
+              <BrandLogo imgClassName={cn('w-auto object-contain transition-all duration-300 ease-in-out', comFundo ? 'h-7' : 'h-6')} />
             </a>
 
-            {/* CENTRO — menu (desktop only, md:flex) */}
-            <nav className="hidden items-center gap-8 md:flex">
+            {/* CENTRO — menu (desktop only, md:flex). shrink-0 nos itens +
+                whitespace-nowrap: nenhum item quebra linha por conta
+                própria; ml-8/mr-6 (pedido explícito, item 2): respiro
+                MÍNIMO garantido entre a logo e "Início", e entre "Ajuda" e
+                o botão de tema — margem, diferente de gap num
+                justify-between, não encolhe a zero quando o pill fica
+                mais estreito (estado reduzido). */}
+            <nav className="ml-8 mr-6 hidden min-w-0 items-center gap-6 md:flex lg:gap-8">
               {ITENS_MENU.map((item) => (
                 <a
                   key={item.id}
@@ -176,8 +200,10 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
                     irParaSecao(item.id);
                   }}
                   className={cn(
-                    'text-sm font-medium transition-colors',
-                    secaoAtiva === item.id ? 'text-primary' : 'text-gray-300 hover:text-white'
+                    'shrink-0 whitespace-nowrap text-sm font-medium transition-colors',
+                    secaoAtiva === item.id
+                      ? 'text-primary'
+                      : 'text-gray-700 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white'
                   )}
                 >
                   {item.label}
@@ -187,31 +213,33 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
 
             {/* DIREITA — tema + Entrar/Criar conta grátis (desktop) / conta
                 compacta + tema + hambúrguer (mobile) */}
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <div className="hidden items-center gap-2 md:flex">
                 <BotaoTema />
                 {destinoLogado ? (
-                  <Link href={destinoLogado} className="btn-primary">
+                  <Link href={destinoLogado} className="btn-primary shrink-0 whitespace-nowrap">
                     Ir para a plataforma
                   </Link>
                 ) : (
                   <>
                     {/* Mesmo CSS do botão "Já tenho conta" do hero (pedido
                         explícito, item 3): fundo transparente, borda
-                        visível, texto branco — antes era só texto/link
-                        sem borda nenhuma. rounded-full (não `rounded`):
-                        combina com o resto do pill. */}
+                        visível — texto/borda adaptam ao tema (item 4), não
+                        mais sempre claros. shrink-0 + whitespace-nowrap
+                        (pedido explícito, item 2 desta tarefa): nunca mais
+                        quebra em várias linhas dentro do pill reduzido. */}
                     <Link
                       href="/login"
-                      className="rounded-full border border-white/30 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                      className="shrink-0 whitespace-nowrap rounded-full border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 transition-colors hover:bg-black/5 dark:border-white/30 dark:text-white dark:hover:bg-white/10"
                     >
                       Entrar
                     </Link>
                     {/* ?form=cadastro — LoginPageClient lê essa query na
                         montagem e chama o MESMO handleFlip que o link
                         "Cadastra-se" já usa, abrindo direto no lado de
-                        cadastro do card com flip. */}
-                    <Link href="/login?form=cadastro" className="btn-primary">
+                        cadastro do card com flip. shrink-0 + whitespace-
+                        nowrap: mesmo motivo do "Entrar" acima. */}
+                    <Link href="/login?form=cadastro" className="btn-primary shrink-0 whitespace-nowrap">
                       Criar conta grátis
                     </Link>
                   </>
@@ -229,7 +257,7 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
                   onClick={() => setMenuAberto(true)}
                   aria-label="Abrir menu"
                   aria-expanded={menuAberto}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-gray-300 hover:bg-white/10 hover:text-white"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600 hover:bg-black/5 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white"
                 >
                   <Menu size={22} />
                 </button>
