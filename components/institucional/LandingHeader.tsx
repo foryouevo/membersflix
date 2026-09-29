@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { Menu, X, Sun, Moon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, scrollSuaveParaSecao } from '@/lib/utils';
 import Container from '@/components/institucional/Container';
 import BrandLogo from '@/components/institucional/BrandLogo';
 
@@ -103,10 +103,13 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
 
   // Fecha o menu mobile ao clicar num link (senão ficaria aberto por cima
   // da seção pra qual acabou de navegar) — mesmo handler pra todos os
-  // links, só chama scrollIntoView e fecha.
+  // links. O scroll em si (scrollSuaveParaSecao) foi extraído pra
+  // lib/utils.ts nesta tarefa, pra ser reaproveitado também pelo botão
+  // "Saiba mais" da seção de números (ver SectionHeader.tsx) sem duplicar
+  // a lógica.
   function irParaSecao(id: string) {
     setMenuAberto(false);
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollSuaveParaSecao(id);
   }
 
   const BotaoTema = ({ className }: { className?: string }) => (
@@ -155,32 +158,83 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
           comFundo ? 'px-3 pt-3 sm:px-4 sm:pt-4' : 'px-0 pt-0'
         )}
       >
+        {/* max-w-6xl SÓ quando reduzido (era incondicional — regressão
+            pega nesta tarefa: no topo da página, em telas bem largas
+            (>1152px), o header devia ocupar a largura TOTAL da viewport,
+            sem faixas vazias nas bordas — "no topo ocupa a largura total
+            da tela" já documentado no topo do componente; max-w-6xl
+            incondicional quebrava isso silenciosamente em telas grandes
+            no estado normal, sem efeito visível em telas menores que
+            1152px, por isso passou despercebido até agora). */}
         <div
           className={cn(
             'pointer-events-auto w-full border transition-all duration-300 ease-in-out',
-            // max-w-6xl (era max-w-5xl): igual ao max-w do próprio Container
-            // logo abaixo — com um max-w MENOR aqui por fora, o Container já
-            // ficava espremido pra caber dentro de um espaço mais estreito
-            // do que o dele próprio, essa era a causa raiz dos itens
-            // colados/do botão quebrando linha no estado reduzido.
             comFundo
               ? 'max-w-6xl rounded-full border-black/5 bg-white/80 shadow-lg shadow-black/5 backdrop-blur-md dark:border-white/10 dark:bg-black/60 dark:shadow-black/20'
               : 'max-w-full rounded-none border-transparent bg-transparent'
           )}
         >
           <Container className="flex h-16 items-center justify-between">
-            {/* ESQUERDA — logo (BrandLogo.tsx: chip escuro atrás só no
-                tema claro, ver o componente). Cresce um pouco ao rolar
-                (pedido explícito, item 2). */}
+            {/* ESQUERDA — logo completa (desktop sempre; mobile só no
+                estado NORMAL) crossfading com favicon+"Início" (mobile só
+                no estado REDUZIDO — pedido explícito desta tarefa,
+                substitui o pill separado da versão anterior). grid +
+                col-start-1/row-start-1 nos dois <span> (mesma técnica já
+                usada no flip do card de login — ver
+                components/LoginPageClient.tsx): ocupam a MESMA célula,
+                um por cima do outro, e trocam de lugar com fade de
+                opacidade em vez de um "pulo" via display/hidden. */}
             <a
               href="#inicio"
               onClick={(e) => {
                 e.preventDefault();
                 irParaSecao('inicio');
               }}
-              className="shrink-0"
+              className="relative grid shrink-0"
             >
-              <BrandLogo imgClassName={cn('w-auto object-contain transition-all duration-300 ease-in-out', comFundo ? 'h-7' : 'h-6')} />
+              {/* Logo completa "MEMBERSFLIX" (BrandLogo.tsx: chip escuro
+                  atrás só no tema claro, ver o componente). Sempre visível
+                  no desktop (md:opacity-100/md:max-w-none vencem `comFundo`
+                  a partir de md); no mobile, só no estado normal.
+                  overflow-hidden + max-w (era só opacity — causa raiz de
+                  um bug relatado nesta tarefa): no mobile reduzido, com
+                  tema claro, o chip de BrandLogo (bg-[#141414] px-3 py-1.5,
+                  só existe no tema claro) deixava este <span> ~24px mais
+                  largo que no escuro; mesmo com opacity-0, ele continuava
+                  ocupando espaço na célula do grid (que sempre acompanha o
+                  filho MAIS largo), empurrando o botão/tema/hambúrguer
+                  (shrink-0, do outro lado) pra fora da borda direita do
+                  pill — só no claro, porque só ali o chip existe. Encolher
+                  o max-width JUNTO com a opacidade (em vez de só a
+                  opacidade) faz a variante INATIVA nunca contribuir
+                  largura nenhuma pro grid, em qualquer tema. */}
+              <span
+                className={cn(
+                  'col-start-1 row-start-1 overflow-hidden transition-all duration-300 ease-in-out',
+                  comFundo
+                    ? 'pointer-events-none max-w-0 opacity-0 md:pointer-events-auto md:max-w-[220px] md:opacity-100'
+                    : 'pointer-events-auto max-w-[220px] opacity-100'
+                )}
+              >
+                <BrandLogo imgClassName={cn('w-auto object-contain transition-all duration-300 ease-in-out', comFundo ? 'h-7' : 'h-6')} />
+              </span>
+              {/* Favicon (logohome.png — MESMO arquivo já usado no
+                  projeto, não um ícone novo) + "Início" — só mobile
+                  (md:hidden incondicional: no desktop esta variante nunca
+                  aparece, só a logo completa acima) e só no estado
+                  reduzido. whitespace-nowrap + shrink-0 no texto: nunca
+                  quebra linha (pedido explícito). Mesmo tratamento de
+                  max-w acima (ver comentário): colapsa a 0 no estado
+                  normal, pra nunca contribuir largura à toa. */}
+              <span
+                className={cn(
+                  'col-start-1 row-start-1 flex items-center gap-2 overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out md:hidden',
+                  comFundo ? 'pointer-events-auto max-w-[160px] opacity-100' : 'pointer-events-none max-w-0 opacity-0'
+                )}
+              >
+                <Image src="/imagens/logohome.png" alt="MembersFlix" width={48} height={48} className="h-6 w-auto shrink-0 object-contain" />
+                <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">Início</span>
+              </span>
             </a>
 
             {/* CENTRO — menu (desktop only, md:flex). shrink-0 nos itens +
@@ -312,7 +366,7 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
                 irParaSecao(item.id);
               }}
               className={cn(
-                'rounded-xl px-4 py-3.5 text-base font-medium transition-colors',
+                'rounded-xl px-4 py-3.5 text-sm font-medium transition-colors',
                 secaoAtiva === item.id ? 'bg-primary/15 text-primary' : 'bg-white/5 text-white hover:bg-white/10'
               )}
             >
@@ -326,7 +380,7 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
             um botão só, "Ir para a plataforma". */}
         <div className="shrink-0 space-y-2.5 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-2">
           {destinoLogado ? (
-            <Link href={destinoLogado} onClick={() => setMenuAberto(false)} className="btn-primary block w-full py-3 text-center text-base">
+            <Link href={destinoLogado} onClick={() => setMenuAberto(false)} className="btn-primary block w-full py-3 text-center text-sm">
               Ir para a plataforma
             </Link>
           ) : (
@@ -334,14 +388,14 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
               <Link
                 href="/login?form=cadastro"
                 onClick={() => setMenuAberto(false)}
-                className="btn-primary block w-full py-3 text-center text-base"
+                className="btn-primary block w-full py-3 text-center text-sm"
               >
                 Criar conta grátis
               </Link>
               <Link
                 href="/login"
                 onClick={() => setMenuAberto(false)}
-                className="block w-full rounded-full border border-white/30 py-3 text-center text-base font-semibold text-white transition-colors hover:bg-white/10"
+                className="block w-full rounded-full border border-white/30 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-white/10"
               >
                 Entrar
               </Link>

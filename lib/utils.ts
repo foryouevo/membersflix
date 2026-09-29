@@ -121,6 +121,20 @@ export function getCapaModulo(url: string | null | undefined): string {
   }
 }
 
+/**
+ * Rola suavemente até uma seção-âncora da landing institucional, pelo
+ * `id` (ex.: "plataforma"). MESMO mecanismo já usado pelos links do menu
+ * (LandingHeader.tsx) — extraído aqui pra ser reaproveitado também por
+ * botões de CTA que apontam pra seções da própria página (ex.: "Saiba
+ * mais" da seção de números, ver SectionHeader.tsx), sem duplicar a
+ * lógica em cada lugar novo que precisar disso. Depende de cada seção-
+ * alvo já ter `scroll-mt-24` (compensa a altura do header fixo) — não é
+ * responsabilidade desta função, é CSS de quem renderiza a seção.
+ */
+export function scrollSuaveParaSecao(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 export function initials(name: string) {
   return name
     .split(' ')

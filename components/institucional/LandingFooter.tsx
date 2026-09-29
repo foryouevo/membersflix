@@ -41,9 +41,24 @@ const LINKS_LEGAIS = [
 ] as const;
 
 // Classe repetida em TODO link do footer — cor de destaque vermelha (mesma
-// dos botões) no hover, com transition-colors explícito de 200ms (era o
-// padrão implícito do Tailwind, 150ms).
-const LINK_HOVER = 'transition-colors duration-200 hover:text-primary';
+// dos botões, `primary` no tema, ver tailwind.config.ts) no hover, com
+// transition-colors explícito de 200ms (era o padrão implícito do
+// Tailwind, 150ms).
+//
+// dark:hover:text-primary (causa raiz de um bug relatado — texto não
+// ficava vermelho no hover, só a setinha): em qualquer link que TAMBÉM
+// tem `dark:text-gray-400` (cor base no tema escuro), esse `dark:text-*`
+// e o `hover:text-primary` compilam pro MESMO nível de especificidade
+// CSS (Tailwind gera `dark:` como `:is(.dark *)`, que "pesa" o mesmo que
+// uma classe — empata com o pseudo-`:hover`). Nesse empate, quem vence é
+// quem aparece DEPOIS no CSS gerado — no build deste projeto, é o
+// `dark:text-gray-400`, então no tema escuro (o padrão do site) o hover
+// nunca vencia; só a setinha (que usa `text-primary` fixo, sem depender
+// de hover) ficava vermelha. `dark:hover:text-primary` é um seletor
+// PRÓPRIO, mais específico que os dois somados (junta a classe `dark:`
+// com o pseudo-`:hover` na mesma regra), então sempre vence — sem
+// precisar de `!important`.
+const LINK_HOVER = 'transition-colors duration-200 hover:text-primary dark:hover:text-primary';
 
 // Título pequeno em caixa alta/cinza de cada coluna/seção (estilo
 // "NAVEGAÇÃO"/"CURSOS"/"CONTATO"/"REDES SOCIAIS") — extraído do componente
@@ -87,15 +102,14 @@ function LinkComSeta({ href, children, onClick }: { href: string; children: Reac
  * escuro atrás só no tema claro, já que é uma imagem raster com texto
  * branco, não pinta com classe de texto).
  *
- * Layout (pedido explícito desta tarefa): SÓ DUAS colunas de navegação à
- * esquerda (Navegação/Cursos — a coluna "Legal", de uma tarefa anterior,
- * saiu daqui) + bloco de marca (logo, descrição, contato, redes sociais) à
- * direita, mais largo agora que só sobram 2 colunas à esquerda. Os links
- * legais voltaram pra linha final, agora no canto DIREITO (ao lado do
- * copyright, que fica à esquerda) — empilham abaixo do copyright no
- * mobile. Grid empilha em 1 coluna no mobile, na MESMA ordem do DOM
- * (navegação primeiro, bloco de marca por último), sem precisar de nenhuma
- * classe `order-*` extra.
+ * Layout (grid 3 colunas, pedido explícito desta tarefa): marca (1.5fr) ->
+ * Navegação (1fr) -> Cursos (2fr), NESTA ordem no DOM — a mesma ordem que
+ * aparece empilhada no mobile/tablet, sem precisar de nenhuma classe
+ * `order-*`. Bloco de marca ocupa a linha de cima inteira no intermediário
+ * (md, antes de virar 3 colunas em lg); abaixo dele, Navegação/Cursos em 2
+ * colunas. Os links legais ficam na linha final, no canto DIREITO (ao lado
+ * do copyright, que fica à esquerda) — empilham abaixo do copyright no
+ * mobile.
  *
  * `logado`/`categorias`: pra montar os links da coluna "Cursos" — clicar
  * numa categoria leva pra `/cursos/buscar?categoria=<slug>` (MESMA rota/
@@ -156,12 +170,112 @@ export default function LandingFooter({
     // precisa (nem deveria) ser arredondado.
     <footer className="rounded-t-[2rem] border-t border-black/5 bg-gray-50 py-12 text-gray-600 dark:border-white/10 dark:bg-black dark:text-gray-400">
       <Container>
-        {/* SÓ 2 colunas de navegação agora (era 3 — Legal saiu, ver
-            comentário do componente); Cursos ganhou mais espaço (2fr, era
-            1fr) com a largura que sobrou. */}
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_2fr_1.3fr]">
+        {/* Ordem/proporção pedida explicitamente nesta tarefa: marca
+            (1.5fr) -> Navegação (1fr) -> Cursos (2fr), NESTA ordem no DOM
+            (era Navegação -> Cursos -> marca) — a ordem do DOM já resolve
+            sozinha tanto a ordem das colunas no desktop (lg:, grid segue a
+            ordem dos filhos) quanto a ordem empilhada no mobile ("bloco da
+            marca, Navegação, Cursos", pedido explícito), sem precisar de
+            nenhuma classe `order-*`.
+
+            Breakpoints:
+            - abaixo de md: 1 coluna só (tudo empilhado, ordem do DOM).
+            - md até lg: marca ocupa a linha de cima inteira (md:col-span-2,
+              sobrescrito de volta a 1 coluna a partir de lg), Navegação e
+              Cursos ficam lado a lado (2 colunas) abaixo dela.
+            - lg em diante: as 3 colunas lado a lado, 1.5fr/1fr/2fr.
+            items-start: evita que a coluna mais curta (Navegação) estique
+            até a altura da mais alta (Cursos/marca) por causa do grid. */}
+        <div className="grid grid-cols-1 items-start gap-x-12 gap-y-10 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_2fr]">
+          {/* Bloco de marca — logo + descrição + contato + redes sociais,
+              PRIMEIRA coluna no desktop (1.5fr) e PRIMEIRO bloco no
+              mobile/tablet (era o último dos três — pedido explícito desta
+              tarefa mudou a ordem). Ordem interna (mantida): logo ->
+              descrição -> (respiro maior) -> "Contato" (e-mail, depois
+              telefone) -> (respiro) -> "Redes Sociais" -> ícones.
+              md:col-span-2 lg:col-span-1: ocupa a linha inteira no
+              intermediário (md/tablet), volta a ser 1 coluna normal a
+              partir de lg (ver comentário acima). */}
+          <div className="md:col-span-2 lg:col-span-1">
+            <BrandLogo imgClassName="h-7" />
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+              A plataforma de área de membros para você acessar cursos gravados, evoluir no seu ritmo e aprender com quem já chegou lá.
+            </p>
+
+            {/* mt-8 (era mt-4/-mt-2 sem respiro nenhum — bug relatado: o
+                título "Contato" ficava colado na descrição de cima). */}
+            <TituloColuna className="mb-3 mt-8">Contato</TituloColuna>
+            {/* Contato (e-mail/telefone): hover de DUAS cores diferentes no
+                mesmo item (ícone -> vermelho, texto -> branco) — por isso
+                não dá pra usar LINK_HOVER aqui (ele pinta tudo de vermelho
+                só, pensado pros links de coluna). Padrão group (pedido
+                explícito): o <a> vira `group`, ícone e texto (agora um
+                <span> próprio, não mais só texto solto) reagem com
+                `group-hover:*` cada um pra sua cor — o hover vale pro
+                item INTEIRO (ícone + texto), não só a área exata do
+                cursor, porque `group` está no <a> que envolve os dois. */}
+            <div className="space-y-2">
+              {emailContato ? (
+                <a href={`mailto:${emailContato}`} className="group flex items-center gap-2 text-sm">
+                  <Mail size={15} className="shrink-0 text-gray-500 transition-colors duration-200 group-hover:text-primary dark:text-gray-400" />
+                  <span className="text-gray-600 transition-colors duration-200 group-hover:text-white dark:text-gray-400">{emailContato}</span>
+                </a>
+              ) : (
+                <p className="flex items-center gap-2 text-sm text-gray-500">
+                  <Mail size={15} className="shrink-0" />
+                  E-mail de contato não configurado.
+                </p>
+              )}
+              {/* Telefone/WhatsApp — MESMO número já configurado em
+                  `configuracoes.numero_whatsapp` (reaproveitado, não um
+                  novo inventado aqui — ver comentário do componente),
+                  logo abaixo do e-mail (pedido explícito). */}
+              {numeroWhatsapp ? (
+                <a href={whatsappLink!} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-2 text-sm">
+                  <Phone size={15} className="shrink-0 text-gray-500 transition-colors duration-200 group-hover:text-primary dark:text-gray-400" />
+                  <span className="text-gray-600 transition-colors duration-200 group-hover:text-white dark:text-gray-400">{numeroWhatsapp}</span>
+                </a>
+              ) : (
+                <p className="flex items-center gap-2 text-sm text-gray-500">
+                  <Phone size={15} className="shrink-0" />
+                  Telefone de contato não configurado.
+                </p>
+              )}
+            </div>
+
+            <TituloColuna className="mb-3 mt-6">Redes Sociais</TituloColuna>
+            {/* Redes sociais: mesmo padrão group — bg do botão vira
+                vermelho e o ícone vira branco no hover. `dark:hover:bg-primary`
+                explícito no PRÓPRIO <a> (não só `hover:bg-primary`): esse
+                background compete com `dark:bg-white/5` no MESMO elemento
+                (mesma causa raiz do bug corrigido antes nos links de
+                coluna — dark: e hover: empatam em especificidade CSS
+                quando estão os dois direto no elemento; dark:hover:
+                junta as duas condições numa regra só, mais específica,
+                sem precisar de !important). O ícone já resolve sozinho
+                via group-hover (seletor com descendente = mais específico
+                que um dark: sozinho), mas currentColor no SVG (lucide já
+                usa isso por padrão) garante que a cor do ícone sempre
+                seja controlada por CSS, nunca por um stroke/fill fixo. */}
+            <div className="flex items-center gap-3">
+              {redesSociais.map(({ nome, Icone, href }) => (
+                <a
+                  key={nome}
+                  href={href}
+                  target={href.startsWith('http') ? '_blank' : undefined}
+                  rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                  aria-label={nome}
+                  className="group flex h-9 w-9 items-center justify-center rounded-full bg-black/5 transition-all duration-200 hover:scale-110 hover:bg-primary dark:bg-white/5 dark:hover:bg-primary"
+                >
+                  <Icone size={16} className="text-gray-600 transition-colors duration-200 group-hover:text-white dark:text-gray-400" />
+                </a>
+              ))}
+            </div>
+          </div>
+
           {/* Coluna "Navegação" — âncoras pra dentro da própria página,
-              mesma navegação por scroll suave do header. */}
+              mesma navegação por scroll suave do header. SEGUNDA coluna
+              no desktop (1fr) agora (era a primeira). */}
           <div>
             <TituloColuna className="mb-4">Navegação</TituloColuna>
             <ul className="space-y-2.5">
@@ -183,8 +297,9 @@ export default function LandingFooter({
 
           {/* Coluna "Cursos" — categorias REAIS (mesma tabela do filtro da
               área de membros, ver comentário do componente acima),
-              divididas em 2 sub-colunas. gap-x-8 (era gap-x-4 — bug
-              relatado nesta tarefa: nomes de categoria mais longos, que
+              divididas em 2 sub-colunas. TERCEIRA coluna no desktop (2fr)
+              agora (era a segunda). gap-x-8 (era gap-x-4 — bug relatado
+              numa tarefa anterior: nomes de categoria mais longos, que
               quebram em 2 linhas, ficavam colados/sobrepostos na
               sub-coluna vizinha com só 1rem de respiro entre elas). */}
           <div>
@@ -204,66 +319,6 @@ export default function LandingFooter({
                 ))}
               </div>
             )}
-          </div>
-
-          {/* Bloco de marca — logo + descrição + contato + redes sociais,
-              do lado direito no desktop, por último no mobile. Ordem
-              pedida explicitamente nesta tarefa: logo -> descrição ->
-              (respiro maior) -> "Contato" (e-mail, depois telefone) ->
-              (respiro) -> "Redes Sociais" -> ícones. */}
-          <div>
-            <BrandLogo imgClassName="h-7" />
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-              A plataforma de área de membros para você acessar cursos gravados, evoluir no seu ritmo e aprender com quem já chegou lá.
-            </p>
-
-            {/* mt-8 (era mt-4/-mt-2 sem respiro nenhum — bug relatado: o
-                título "Contato" ficava colado na descrição de cima). */}
-            <TituloColuna className="mb-3 mt-8">Contato</TituloColuna>
-            <div className="space-y-2">
-              {emailContato ? (
-                <a href={`mailto:${emailContato}`} className={cn('flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400', LINK_HOVER)}>
-                  <Mail size={15} className="shrink-0" />
-                  {emailContato}
-                </a>
-              ) : (
-                <p className="flex items-center gap-2 text-sm text-gray-500">
-                  <Mail size={15} className="shrink-0" />
-                  E-mail de contato não configurado.
-                </p>
-              )}
-              {/* Telefone/WhatsApp — MESMO número já configurado em
-                  `configuracoes.numero_whatsapp` (reaproveitado, não um
-                  novo inventado aqui — ver comentário do componente),
-                  logo abaixo do e-mail (pedido explícito). */}
-              {numeroWhatsapp ? (
-                <a href={whatsappLink!} target="_blank" rel="noopener noreferrer" className={cn('flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400', LINK_HOVER)}>
-                  <Phone size={15} className="shrink-0" />
-                  {numeroWhatsapp}
-                </a>
-              ) : (
-                <p className="flex items-center gap-2 text-sm text-gray-500">
-                  <Phone size={15} className="shrink-0" />
-                  Telefone de contato não configurado.
-                </p>
-              )}
-            </div>
-
-            <TituloColuna className="mb-3 mt-6">Redes Sociais</TituloColuna>
-            <div className="flex items-center gap-3">
-              {redesSociais.map(({ nome, Icone, href }) => (
-                <a
-                  key={nome}
-                  href={href}
-                  target={href.startsWith('http') ? '_blank' : undefined}
-                  rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
-                  aria-label={nome}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-black/5 text-gray-600 transition-all duration-200 hover:scale-110 hover:bg-primary hover:text-white dark:bg-white/5 dark:text-gray-400"
-                >
-                  <Icone size={16} />
-                </a>
-              ))}
-            </div>
           </div>
         </div>
 

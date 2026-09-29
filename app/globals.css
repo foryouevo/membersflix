@@ -2,6 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Marquee infinito da faixa de destaques da landing institucional
+   (DestaquesMarquee.tsx) — desloca a faixa (que contém a lista de frases
+   DUAS vezes seguidas, lado a lado) exatamente pela metade da própria
+   largura; como as duas cópias são idênticas, ao chegar em -50% a 2ª
+   cópia está exatamente onde a 1ª começou, e o loop reinicia (0%) sem
+   nenhum "pulo" visível. Definido aqui (CSS puro, fora do
+   tailwind.config) porque a classe `animate-[marquee_25s_linear_infinite]`
+   só referencia o NOME do keyframe — o Tailwind não precisa "conhecer" o
+   keyframe em si pra isso funcionar, só que ele exista em algum lugar do
+   CSS final. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Rotação lenta e sutil dos anéis do cartão "Vitalício" da seção
+   Plataforma (PlataformaSection.tsx) — MESMO motivo do `marquee` acima:
+   `animate-[girar-lento_18s_linear_infinite]` só referencia o NOME do
+   keyframe, não usa o `animate-spin` embutido do Tailwind (que só é
+   emitido quando essa classe literal aparece em algum lugar do projeto —
+   não é o caso aqui, e depender disso seria frágil). Desligada via
+   `prefers-reduced-motion` (a classe some, não a keyframe). */
+@keyframes girar-lento {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+:root {
+  /* Altura real do header FLUTUANTE da landing institucional no estado
+     INICIAL (topo da página, antes de rolar) — LandingHeader.tsx: o
+     wrapper <header> fica sem padding nesse estado (comFundo=false,
+     `px-0 pt-0`) e o pill interno é só o Container com `h-16` (64px), sem
+     borda/sombra visível ainda. Variável em vez de um valor mágico solto
+     no meio do JSX de quem precisa compensar essa altura (hoje só
+     HeroSection.tsx, pra empurrar o hero pra começar visível ABAIXO do
+     menu, sem ficar atrás dele). Se a altura do header mudar (h-16 virar
+     outro valor em LandingHeader.tsx), só este número muda. */
+  --header-h: 64px;
+
+  /* Fundo escuro único do site inteiro (pedido explícito desta tarefa:
+     "centralize a cor em uma variável CSS... faça o token do Tailwind
+     apontar pra essa variável"). Era #141414 (html/body, embaixo) e
+     #0f0f0f (token `background` do tailwind.config.ts, usado por
+     `bg-background` na área de membros/admin) — dois valores quase
+     idênticos mas ligeiramente diferentes, cada um hardcoded no seu
+     lugar. Unificados nesta variável: html/body (abaixo) e o token
+     `background` do Tailwind (tailwind.config.ts) agora apontam pra ela,
+     e a landing institucional (LandingPageClient.tsx, era
+     dark:bg-[#0a0a0a] — MAIS um terceiro valor solto) passou a usar a
+     classe `dark:bg-background` correspondente — mesma cor em
+     QUALQUER lugar do app que precise do fundo escuro "base" agora. Só
+     o tema escuro usa isto (pedido explícito) — o claro continua com as
+     cores de sempre (bg-white etc., sem depender desta variável). */
+  --background: #0e0e0e;
+
+  /* "Sangria" (bleed) do card da seção Plataforma (PlataformaSection.tsx,
+     pedido explícito desta tarefa) — o card é um pouco MAIOR que o
+     container padrão das seções (Container.tsx: max-w-6xl = 1152px,
+     hardcoded abaixo porque é exatamente o valor que esse max-w-6xl
+     resolve — se ele mudar lá, precisa mudar aqui também), até 72px de
+     cada lado, mas NUNCA mais do que o espaço que realmente sobra entre a
+     borda do container e a borda da janela (com 16px de folga de
+     segurança, pra nunca estourar/gerar scroll horizontal). Fórmula pura
+     em CSS (min/max/calc) — funciona em QUALQUER largura de tela
+     continuamente, sem precisar de breakpoints discretos: abaixo de
+     1152px o espaço disponível já é 0 (ou negativo, por isso o max com
+     0px), então a sangria já sai zerada sozinha nesse caso — exatamente o
+     "abaixo de lg, a folga é 0" pedido, sem precisar de uma regra `lg:`
+     separada pra isso.
+     100vw (não 100%) de propósito: precisa ser relativo à JANELA inteira,
+     não a um elemento pai — é o único jeito de calcular "quanto sobra
+     fora do container" em CSS puro, sem JS. Pode superestimar um pouco a
+     largura real disponível em navegadores com barra de rolagem visível
+     (100vw inclui a barra), mas os 16px de segurança já cobrem essa
+     variação normal (~15-17px na maioria dos navegadores desktop). */
+  --card-bleed-max: 72px;
+  --card-bleed-espaco: max(0px, (100vw - 1152px) / 2 - 16px);
+  --card-bleed: min(var(--card-bleed-max), var(--card-bleed-espaco));
+}
+
 @layer base {
   /* Fonte do texto digitado em QUALQUER input/textarea/select do projeto
      (pedido explícito — "de forma global/consistente, não só em alguns").
@@ -27,12 +112,13 @@
 }
 
 html {
-  /* Mesma cor do último stop do gradiente do body — evita um "flash"
-     sólido diferente (o #0f0f0f antigo) aparecendo por uma fração de
-     segundo antes do CSS do body carregar, ou no overscroll/bounce do
-     iOS Safari (que expõe o fundo do <html>, não do <body>, além dos
-     limites da página). */
-  background-color: #141414;
+  /* var(--background) (era #141414 fixo — pedido explícito desta tarefa,
+     ver o comentário da variável em :root, acima). Mesma cor do último
+     stop do gradiente do body — evita um "flash" sólido diferente
+     aparecendo por uma fração de segundo antes do CSS do body carregar,
+     ou no overscroll/bounce do iOS Safari (que expõe o fundo do <html>,
+     não do <body>, além dos limites da página). */
+  background-color: var(--background);
   color: #e5e2e1;
 }
 
@@ -50,7 +136,8 @@ body {
      VitrinePageClient.tsx, CursoDetalheClient.tsx, PlayerPageClient.tsx,
      app/membros/layout.tsx, app/layout.tsx). Vermelho nasce no
      topo-centro (50% 0%) e clareia/puxa pra um acinzentado-avermelhado
-     até fechar em #141414 sólido — mesma cor final do <html> acima, sem
+     até fechar em var(--background) sólido (era #141414 fixo, pedido
+     explícito desta tarefa) — mesma cor final do <html> acima, sem
      costura entre os dois.
      background-attachment: fixed é o que faz esse gradiente ficar "preso"
      à janela (não ao conteúdo) — sem isso, cada página com altura
@@ -60,8 +147,8 @@ body {
      alturas diferentes da tela). Fixed garante uma única "pintura",
      sempre alinhada ao viewport, atrás de tudo, independente de quanto a
      página rola ou quão alta ela é. */
-  background-color: #141414;
-  background-image: radial-gradient(100% 60% at 50% 0%, #5c2020 0%, #3a1a1a 30%, #241717 55%, #141414 100%);
+  background-color: var(--background);
+  background-image: radial-gradient(100% 60% at 50% 0%, #5c2020 0%, #3a1a1a 30%, #241717 55%, var(--background) 100%);
   background-repeat: no-repeat;
   background-attachment: fixed;
   min-height: 100vh;

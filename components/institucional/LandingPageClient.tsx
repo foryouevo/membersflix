@@ -1,37 +1,38 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import LandingHeader from '@/components/institucional/LandingHeader';
 import LandingFooter from '@/components/institucional/LandingFooter';
 import LandingFloatingActions from '@/components/institucional/LandingFloatingActions';
 import Container from '@/components/institucional/Container';
+import HeroSection from '@/components/institucional/HeroSection';
+import DestaquesMarquee from '@/components/institucional/DestaquesMarquee';
+import NumerosSection from '@/components/institucional/NumerosSection';
+import SectionHeader from '@/components/institucional/SectionHeader';
+import PlataformaSection from '@/components/institucional/PlataformaSection';
 
-// 9 seções, NA ORDEM em que aparecem na página. "palavras" e "numeros" não
-// têm item de menu próprio (ver ITENS_MENU em LandingHeader.tsx — 7 itens,
-// um pra cada UMA das outras 7 seções) — só entram no scroll spy porque
-// fazem parte do fluxo normal de scroll, mas ninguém precisa "pular" direto
-// pra elas pelo menu.
-const SECOES = [
-  'inicio',
-  'palavras',
-  'numeros',
-  'plataforma',
-  'cursos',
-  'diferenciais',
-  'planos',
-  'clientes',
-  'ajuda',
-] as const;
+// 9 seções, NA ORDEM em que aparecem na página. "imagemPlataforma" (que
+// existia como seção PRÓPRIA numa tarefa anterior) saiu daqui nesta tarefa
+// — o mockup da plataforma com efeito de scroll (ImagemPlataformaSection)
+// agora vive DENTRO do card do hero (ver HeroSection.tsx), não é mais uma
+// seção de página separada. "palavras"/"numeros" continuam sem item de
+// menu próprio (ver ITENS_MENU em LandingHeader.tsx), só participam do
+// scroll spy.
+const SECOES = ['inicio', 'palavras', 'numeros', 'plataforma', 'cursos', 'diferenciais', 'planos', 'clientes', 'ajuda'] as const;
 
-// Título grande mostrado dentro de cada placeholder (pedido explícito —
-// "só um título grande centralizado indicando o nome da seção"). Texto
-// literal de cada um veio direto do pedido, não inventado aqui.
+// Título grande mostrado dentro de cada placeholder (pedido explícito de
+// uma tarefa anterior — "só um título grande centralizado indicando o nome
+// da seção"). "inicio" NUNCA usa este título — tem componente PRÓPRIO
+// (HeroSection, ver o map mais abaixo) — a entrada aqui ficou só por
+// completude do tipo Record (não afeta a tela).
+// "palavras", "numeros" e "plataforma" NUNCA usam este título — têm
+// componente PRÓPRIO (DestaquesMarquee/NumerosSection/PlataformaSection,
+// ver o map mais abaixo), mesmo tratamento de "inicio".
 const TITULO_SECAO: Record<(typeof SECOES)[number], string> = {
   inicio: 'Início',
-  palavras: 'Seção de palavras (swiper)',
-  numeros: 'Números em destaque',
-  plataforma: 'Sobre a Plataforma',
+  palavras: '',
+  numeros: '',
+  plataforma: '',
   cursos: 'Cursos Disponíveis',
   diferenciais: 'Diferenciais',
   planos: 'Planos',
@@ -124,52 +125,156 @@ export default function LandingPageClient({
   }, []);
 
   return (
-    <div className="bg-white text-gray-900 dark:bg-[#0a0a0a] dark:text-white">
+    // dark:bg-background (era dark:bg-[#0a0a0a] — pedido explícito desta
+    // tarefa: fundo escuro unificado pro site inteiro, ver a variável
+    // --background em app/globals.css). Cobre TODAS as seções da página
+    // (hero, #palavras, números, plataforma, cursos, diferenciais,
+    // planos, clientes, ajuda) porque nenhuma delas define um fundo
+    // próprio por cima deste wrapper — sempre herdaram daqui.
+    <div className="bg-white text-gray-900 dark:bg-background dark:text-white">
       <LandingHeader secaoAtiva={secaoAtiva} destinoLogado={destinoLogado} />
 
       <main>
-        {SECOES.map((id) => (
-          <section
-            key={id}
-            id={id}
-            ref={(el) => {
-              secoesRef.current[id] = el;
-            }}
-            className="flex min-h-screen scroll-mt-24 flex-col items-center justify-center border-b border-gray-200 text-center dark:border-white/10"
-          >
-            <Container className="flex flex-col items-center">
-              {/* Placeholder (pedido explícito) — só o nome da seção, pra
-                  validar a navegação/scroll-spy visualmente. Substituir
-                  pelo conteúdo de verdade de cada seção é tarefa futura. */}
-              <span className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">Placeholder</span>
-              <h2 className="text-3xl font-bold sm:text-5xl">{TITULO_SECAO[id]}</h2>
-              {id === 'inicio' && (
-                <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
-                  {/* Mesma troca do header (ver LandingHeader.tsx): logado
-                      vira 1 botão só pra plataforma; deslogado mantém os
-                      dois de sempre (criar conta / já tenho conta). */}
-                  {destinoLogado ? (
-                    <Link href={destinoLogado} className="btn-primary px-6 py-3 text-base">
-                      Ir para a plataforma
-                    </Link>
-                  ) : (
-                    <>
-                      <Link href="/login?form=cadastro" className="btn-primary px-6 py-3 text-base">
-                        Criar minha conta grátis
-                      </Link>
-                      <Link
-                        href="/login"
-                        className="rounded-full border border-gray-300 px-6 py-3 text-base font-semibold text-gray-700 transition-colors hover:bg-gray-100 dark:border-white/20 dark:text-gray-200 dark:hover:bg-white/10"
-                      >
-                        Já tenho conta
-                      </Link>
-                    </>
-                  )}
-                </div>
-              )}
-            </Container>
-          </section>
-        ))}
+        {SECOES.map((id) => {
+          // "inicio" tem componente PRÓPRIO (HeroSection.tsx, que já inclui
+          // o mockup da plataforma com efeito de scroll — ver comentário de
+          // SECOES acima) — nada de min-h-screen/border-b/texto
+          // "Placeholder" nele; as outras 8 seções continuam com o MESMO
+          // placeholder genérico de sempre (fora do escopo desta tarefa).
+          if (id === 'inicio') {
+            // Sem min-h-screen/justify-center (era isso — causa raiz de um
+            // bug relatado numa tarefa anterior: empurrava o hero pra
+            // ocupar a tela INTEIRA com o conteúdo centralizado no meio,
+            // deixando a imagem da plataforma inteira ABAIXO da primeira
+            // tela, mesmo em 1920x1080). Fluxo normal agora — a altura do
+            // hero é só a soma do próprio conteúdo (HeroSection já cuida
+            // do padding-top que compensa o menu fixo).
+            return (
+              <section
+                key={id}
+                id={id}
+                ref={(el) => {
+                  secoesRef.current[id] = el;
+                }}
+                className="scroll-mt-24 text-center"
+              >
+                <HeroSection destinoLogado={destinoLogado} categorias={categorias} />
+              </section>
+            );
+          }
+          // "palavras" tem componente PRÓPRIO (DestaquesMarquee.tsx —
+          // pedido explícito de uma tarefa anterior: virou uma faixa
+          // fina, sem min-h-screen/padding grande/placeholder, colada
+          // logo abaixo do hero). Mesma margem lateral fluida do wrapper
+          // do hero (px-3/sm:px-4/lg:px-6 — "acompanhe a largura fluida
+          // do hero"). pt-0 incondicional (era pt-3 sm:pt-4 — pedido
+          // explícito desta tarefa: "deixe o padding-top em 0, em TODAS
+          // as larguras" — a faixa agora fica colada direto embaixo do
+          // card do hero, sem nenhum respiro extra vindo daqui; se
+          // sobrar algum espaço visível, ele vem do PRÓPRIO hero, não
+          // deste padding). Sem border-b (a faixa já tem seu próprio
+          // fade nas laterais via mask-image, ver DestaquesMarquee.tsx —
+          // uma borda aqui ficaria redundante/estranha).
+          if (id === 'palavras') {
+            return (
+              <section
+                key={id}
+                id={id}
+                ref={(el) => {
+                  secoesRef.current[id] = el;
+                }}
+                aria-label="Destaques da plataforma"
+                className="scroll-mt-24 px-3 pt-0 sm:px-4 lg:px-6"
+              >
+                <DestaquesMarquee />
+              </section>
+            );
+          }
+          // "numeros" tem componente PRÓPRIO (NumerosSection.tsx — pedido
+          // explícito desta tarefa) — nada de min-h-screen/border-b/
+          // placeholder nele; o resto das seções continua com o MESMO
+          // placeholder genérico de sempre (fora do escopo desta tarefa).
+          if (id === 'numeros') {
+            return (
+              <section
+                key={id}
+                id={id}
+                ref={(el) => {
+                  secoesRef.current[id] = el;
+                }}
+                className="scroll-mt-24"
+              >
+                <NumerosSection categorias={categorias} destinoLogado={destinoLogado} />
+              </section>
+            );
+          }
+          // "plataforma" tem componente PRÓPRIO (PlataformaSection.tsx —
+          // pedido explícito desta tarefa: efeito de coluna fixa/sticky
+          // com a pilha de cartões visuais) — nada de min-h-screen/
+          // border-b/placeholder nele. scroll-mt-24 continua aqui (mesma
+          // folga de sempre pro menu fixo não cobrir o topo da seção) —
+          // é o MESMO id ("plataforma") que o link do menu
+          // (LandingHeader.tsx, ITENS_MENU) e o botão "Saiba mais" da
+          // seção de números (NumerosSection.tsx) já usam.
+          if (id === 'plataforma') {
+            return (
+              <section
+                key={id}
+                id={id}
+                ref={(el) => {
+                  secoesRef.current[id] = el;
+                }}
+                // overflow-x-clip (pedido explícito desta tarefa) — rede
+                // de segurança contra a margem NEGATIVA da "sangria" do
+                // card (PlataformaSection.tsx, ver --card-bleed em
+                // app/globals.css): essa margem já é matematicamente
+                // limitada pra nunca ultrapassar a tela, mas isso aqui
+                // garante que nenhum arredondamento de sub-pixel force um
+                // scroll horizontal. Só o eixo X (overflow-x, não
+                // overflow/overflow-y) — overflow-y continua "visible" por
+                // padrão, senão quebraria o position:sticky da coluna
+                // esquerda lá dentro.
+                className="scroll-mt-24 overflow-x-clip"
+              >
+                <PlataformaSection destinoLogado={destinoLogado} />
+              </section>
+            );
+          }
+          return (
+            <section
+              key={id}
+              id={id}
+              ref={(el) => {
+                secoesRef.current[id] = el;
+              }}
+              className="flex min-h-screen scroll-mt-24 flex-col items-center justify-center border-b border-gray-200 text-center dark:border-white/10"
+            >
+              <Container className="flex flex-col items-center">
+                {/* Placeholder (pedido explícito de uma tarefa anterior) —
+                    só o nome da seção, pra validar a navegação/scroll-spy
+                    visualmente. Substituir pelo conteúdo de verdade de cada
+                    seção é tarefa futura.
+                    Pedido explícito desta tarefa: essas seções ainda-
+                    placeholder passam a usar o MESMO SectionHeader
+                    compartilhado (mesmo padrão visual do resto do site),
+                    mas SEM inventar texto/destaque/CTA nenhum — eyebrow
+                    continua literalmente "Placeholder" (sem trecho em
+                    destaque) e o título continua o mesmo de sempre
+                    (TITULO_SECAO, sem nenhuma palavra marcada de
+                    vermelho). showActions={false}: sem botões de CTA
+                    aqui — não faz sentido oferecer "Criar conta" embaixo
+                    de um título tipo "Perguntas Frequentes" sem contexto
+                    nenhum ainda.
+                    TODO: quando esta seção ganhar conteúdo de verdade,
+                    definir (a) a palavra do título que vira destaque
+                    vermelho e (b) o texto de apoio (prop `description`) —
+                    nenhum dos dois existe ainda porque não há informação
+                    real da plataforma pra essa seção neste momento. */}
+                <SectionHeader eyebrow="Placeholder" title={TITULO_SECAO[id]} align="center" showActions={false} />
+              </Container>
+            </section>
+          );
+        })}
       </main>
 
       <LandingFooter logado={!!destinoLogado} categorias={categorias} numeroWhatsapp={numeroWhatsapp} emailContato={emailContato} />

@@ -23,7 +23,14 @@ const config: Config = {
           high: '#2a2a2a',
           highest: '#353534',
         },
-        background: '#0f0f0f',
+        // var(--background) (era #0f0f0f fixo — pedido explícito desta
+        // tarefa: "centralize a cor em uma variável CSS... faça o token
+        // do Tailwind apontar pra essa variável", ver app/globals.css
+        // `:root`). Mesmo valor (#0e0e0e) agora usado por html/body
+        // (globals.css) E pela landing institucional (`dark:bg-background`,
+        // LandingPageClient.tsx) — uma fonte única pro fundo escuro do
+        // site inteiro, em vez de 3 hex quase-iguais espalhados.
+        background: 'var(--background)',
         card: '#1c1c1c',
         border: '#333333',
         on: {
@@ -74,6 +81,15 @@ const config: Config = {
       },
       boxShadow: {
         overlay: '0px 8px 24px rgba(0,0,0,0.15)',
+      },
+      // Cursor "|" piscando do efeito de digitação do hero (HeroSection.tsx)
+      // — animation-iteration-count infinite, step-end (não fade suave):
+      // um cursor de terminal pisca ligado/desligado, não esmaece.
+      keyframes: {
+        blink: { '0%, 49%': { opacity: '1' }, '50%, 100%': { opacity: '0' } },
+      },
+      animation: {
+        blink: 'blink 1s step-end infinite',
       },
     },
   },
