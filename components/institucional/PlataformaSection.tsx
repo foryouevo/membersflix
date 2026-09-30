@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Code, Brain, Megaphone, Video, Languages, Plane, TrendingUp, ShoppingCart, Infinity as InfinityIcon, type LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, scrollSuaveParaSecao } from '@/lib/utils';
 import Container from '@/components/institucional/Container';
-import { comDestaque } from '@/components/institucional/SectionHeader';
-import CtaButtons from '@/components/institucional/CtaButtons';
+import SectionHeader from '@/components/institucional/SectionHeader';
+import { BOTAO_PRIMARIO_TAMANHO } from '@/components/institucional/CtaButtons';
 
 // Tópicos — pedido explícito: "array constante... com comentário dizendo
 // que o texto e o visual de cada item podem ser editados aqui". A ordem
@@ -21,10 +22,17 @@ const TOPICOS = [
   { titulo: 'Estude de onde estiver', descricao: 'Assista no seu ritmo, no computador ou no celular.' },
 ] as const;
 
-// Linha de disparo (pedido explícito): a 45% da altura da viewport — o
-// cartão que estiver cruzando essa linha horizontal é o ATIVO.
-const LINHA_GATILHO_PROPORCAO = 0.45;
 const BREAKPOINT_LG = 1024;
+
+// Margem entre a base do header fixo e o topo do card no MOMENTO da
+// ativação (pedido explícito desta tarefa — era uma "linha de disparo" a
+// 45% da altura da viewport, sem relação nenhuma com o header). Constante
+// nomeada (não um número solto no meio da fórmula) porque o MESMO valor
+// entra tanto no `top` do sticky (JSX, mais abaixo) quanto no cálculo da
+// linha de disparo em JS (useEffect de medição, dentro do componente) — os
+// dois PRECISAM usar exatamente o mesmo número, ou a coluna trava num
+// instante e a troca/progresso do tópico 1 dispara em outro.
+const MARGEM_ATIVACAO_PX = 12;
 
 /* ------------------------------------------------------------------ *
  * Moldura compartilhada dos 4 cartões visuais — borda fina, cantos
@@ -175,14 +183,74 @@ const VISUAIS: ((props: { reduzido: boolean }) => React.ReactElement)[] = [
 ];
 
 /**
+ * Botão único "Ver cursos": âncora pra #cursos (MESMO id que o item
+ * "Cursos" do menu, LandingHeader.tsx, já usa), rolando suave via
+ * `scrollSuaveParaSecao` (lib/utils.ts — MESMO mecanismo do menu, não um
+ * novo).
+ *
+ * Usa BOTAO_PRIMARIO_TAMANHO (CtaButtons.tsx) — pedido explícito de uma
+ * tarefa posterior: "mesmo formato e tamanho de TODOS os botões do site"
+ * (mesma altura/padding/font-size/font-weight/radius do "Saiba mais" da
+ * seção de números e do "Criar minha conta grátis"), depois de uma tarefa
+ * anterior ter corrigido só o STRETCH usando `.btn-primary` puro — o que
+ * resolveu a largura, mas raspou o botão de volta pro tamanho MENOR de
+ * `.btn-primary` sozinho (sem o `md:py-3 md:text-base` que os outros
+ * botões primários têm a partir de md). BOTAO_PRIMARIO_TAMANHO é
+ * exatamente BOTAO_PRIMARIO_CLASSES SEM as classes de largura/max-width —
+ * dá o tamanho certo sem reintroduzir o stretch.
+ *
+ * `self-start` continua aqui (ainda precisa): o pai deste botão (a coluna
+ * "sticky flex flex-col", mais abaixo) tem `align-items: stretch` por
+ * padrão (nenhum `items-start`/`items-center` nele) — QUALQUER filho
+ * direto dele com largura `auto` (BOTAO_PRIMARIO_TAMANHO não define
+ * `width` nenhum) estica pra ocupar 100% da coluna sem isso. `w-fit`:
+ * redundância explícita (mesmo resultado do `inline-flex` sozinho, já
+ * presente em BOTAO_PRIMARIO_TAMANHO).
+ *
+ * Renderizado em DUAS posições (ver o componente principal, abaixo): fim da
+ * coluna esquerda no desktop, logo abaixo do texto de apoio no mobile/
+ * tablet — nunca as duas ao mesmo tempo, porque cada posição vive dentro de
+ * um bloco `hidden lg:grid`/`lg:hidden` mutuamente exclusivo (um deles
+ * sempre tem `display: none`), não uma questão de esconder visualmente só.
+ * Alinhado à esquerda nas duas (o pai mobile não é flex, então não há
+ * stretch pra neutralizar lá — `self-start` não atrapalha nesse caso,
+ * simplesmente não faz nada).
+ */
+function BotaoVerCursos({ className }: { className?: string }) {
+  return (
+    <Link
+      href="#cursos"
+      onClick={(e) => {
+        e.preventDefault();
+        scrollSuaveParaSecao('cursos');
+      }}
+      className={cn(BOTAO_PRIMARIO_TAMANHO, 'w-fit shrink-0 self-start whitespace-nowrap', className)}
+    >
+      Ver cursos
+    </Link>
+  );
+}
+
+/**
  * Seção "Plataforma" (id="plataforma") — efeito de "coluna fixa" (scroll
- * com sticky): a coluna esquerda (cabeçalho + acordeão de tópicos +
- * botões) fica parada (position: sticky) enquanto a coluna direita (pilha
- * de 4 cartões visuais) rola por trás dela; o tópico correspondente ao
- * cartão mais próximo da "linha de disparo" (45% da altura da tela) abre
- * sozinho, com uma barra de progresso preenchendo conforme aquele cartão
- * passa pela linha. Estrutura/mecânica inspirada numa referência visual —
- * cores, fonte, ícones e textos são só os do projeto.
+ * com sticky): a coluna esquerda (cabeçalho + acordeão de tópicos + botão)
+ * fica parada (position: sticky) enquanto a coluna direita (pilha de 4
+ * cartões visuais) rola por trás dela; o tópico correspondente ao cartão
+ * mais próximo da "linha de disparo" abre sozinho, com uma barra de
+ * progresso preenchendo conforme aquele cartão passa pela linha. Estrutura/
+ * mecânica inspirada numa referência visual — cores, fonte, ícones e textos
+ * são só os do projeto.
+ *
+ * Linha de disparo (pedido explícito desta tarefa — ERA fixa a 45% da
+ * altura da viewport, sem relação com o header; agora é ancorada no
+ * header): fica exatamente na altura em que a coluna esquerda gruda
+ * (sticky) — headerH + MARGEM_ATIVACAO_PX + o padding-top REAL do card (ver
+ * o useEffect de medição, dentro do componente). Como o padding-top do card empurra
+ * IGUALMENTE a coluna esquerda e a pilha de cartões da direita pra baixo
+ * (mesma linha de grade, `items-start`), o cartão 1 nasce exatamente nessa
+ * linha no instante da ativação — não precisa de nenhum ajuste extra pra
+ * "cartão 1 ativo, progresso 0" logo ali: é uma consequência direta da
+ * geometria (mesmo padding-top em cima dos dois lados da grade).
  *
  * position: sticky quebra se QUALQUER ancestral da coluna esquerda tiver
  * overflow não-visível — por isso o card externo (com cantos
@@ -192,28 +260,59 @@ const VISUAIS: ((props: { reduzido: boolean }) => React.ReactElement)[] = [
  * coluna esquerda define overflow nenhum.
  *
  * Sem framer-motion (não está no package.json) e sem IntersectionObserver
- * pro índice ativo (a "linha de disparo" fixa em 45% da viewport, não a
- * entrada/saída de cada cartão em si, precisa da posição EXATA de cada
- * cartão a cada frame — mais direto medir via getBoundingClientRect num
- * loop de rAF do que orquestrar vários observers): 1 listener de scroll
- * passivo + requestAnimationFrame, lendo `getBoundingClientRect` uma vez
+ * pro índice ativo (a linha de disparo, não a entrada/saída de cada cartão
+ * em si, precisa da posição EXATA de cada cartão a cada frame — mais
+ * direto medir via getBoundingClientRect num loop de rAF do que orquestrar
+ * vários observers): 1 listener de scroll passivo + requestAnimationFrame,
+ * lendo `getBoundingClientRect` uma vez
  * por frame. O ÍNDICE ativo vira estado React (só muda quando realmente
  * troca de tópico — poucas vezes por scroll); o PROGRESSO da barra é
  * escrito direto no DOM via ref (nunca vira estado — evitaria um
  * re-render a cada frame só pra mudar um `width`).
  */
-export default function PlataformaSection({ destinoLogado }: { destinoLogado: string | null }) {
+// `destinoLogado` saiu dos props desta tarefa: a seção usava CtaButtons
+// (que precisa dele pra decidir "Criar conta"/"Ir para a plataforma") —
+// substituído por BotaoVerCursos (pedido explícito, item 5), uma âncora
+// fixa pra #cursos que não depende de login nenhum.
+export default function PlataformaSection() {
   const [indiceAtivo, setIndiceAtivo] = useState(0);
   const [reduzido, setReduzido] = useState(false);
   const [montado, setMontado] = useState(false);
 
+  const cardRef = useRef<HTMLDivElement | null>(null); // card com a "sangria" — usado só pra MEDIR o padding-top real dele
   const cartoesRef = useRef<(HTMLDivElement | null)[]>([]);
   const barraRef = useRef<HTMLDivElement | null>(null);
   const indiceAtivoRef = useRef(0); // espelho do state, pra ler dentro do loop de rAF sem closure velha
+  const linhaGatilhoRef = useRef(0); // altura (em px, contados da viewport) calculada por calcularLinhaGatilho — lido a cada frame do rAF, sem custo de reler o DOM
 
   useEffect(() => {
     setMontado(true);
     setReduzido(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }, []);
+
+  // Mede a altura real do header (--header-h, app/globals.css) e o
+  // padding-top REAL do card (o mesmo elemento que tem as classes
+  // `py-5 sm:py-6 ... lg:py-16 xl:py-[72px]`, mais abaixo) via
+  // getComputedStyle — nenhum dos dois é um número mágico duplicado aqui:
+  // o header já tem sua variável própria, e o padding-top do card é o
+  // valor de verdade RENDERIZADO (acompanha sozinho se aquelas classes
+  // mudarem um dia, sem precisar espelhar breakpoint por breakpoint em
+  // JS). Escreve o resultado tanto na ref (lida pelo loop de rAF, abaixo)
+  // quanto na property CSS custom `--plataforma-pad-top` do próprio card
+  // (lida pelo `top` do sticky, no JSX — MESMO valor usado nos dois
+  // lugares, CSS e JS, garantindo que a coluna trava exatamente onde a
+  // linha de disparo diz que ela deveria travar).
+  useEffect(() => {
+    function medir() {
+      if (!cardRef.current) return;
+      const headerH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 64;
+      const padTop = parseFloat(getComputedStyle(cardRef.current).paddingTop) || 0;
+      cardRef.current.style.setProperty('--plataforma-pad-top', `${padTop}px`);
+      linhaGatilhoRef.current = headerH + MARGEM_ATIVACAO_PX + padTop;
+    }
+    medir();
+    window.addEventListener('resize', medir, { passive: true });
+    return () => window.removeEventListener('resize', medir);
   }, []);
 
   useEffect(() => {
@@ -225,43 +324,43 @@ export default function PlataformaSection({ destinoLogado }: { destinoLogado: st
       ticking = false;
       if (window.innerWidth < BREAKPOINT_LG) return; // sem tracking no mobile/tablet (sem sticky lá)
 
-      const linhaGatilho = window.innerHeight * LINHA_GATILHO_PROPORCAO;
-      let novoIndice: number | null = null;
+      const linhaGatilho = linhaGatilhoRef.current;
+      const rects = cartoesRef.current.map((el) => el?.getBoundingClientRect() ?? null);
+      const primeiro = rects[0];
+
+      let novoIndice = 0;
       let progresso = 0;
 
-      for (let i = 0; i < cartoesRef.current.length; i++) {
-        const el = cartoesRef.current[i];
-        if (!el) continue;
-        const rect = el.getBoundingClientRect();
-        if (rect.top <= linhaGatilho && rect.bottom >= linhaGatilho) {
-          novoIndice = i;
-          progresso = rect.height > 0 ? (linhaGatilho - rect.top) / rect.height : 0;
-          break;
+      if (primeiro && primeiro.top > linhaGatilho) {
+        // Antes da ativação (card ainda abaixo do menu): tópico 1, progresso 0.
+        novoIndice = 0;
+        progresso = 0;
+      } else {
+        // Acha o ÚLTIMO cartão cujo topo já cruzou a linha — esse é o
+        // ativo (pedido explícito: "cada cartão seguinte fica ativo
+        // quando o topo dele alcançar a linha").
+        for (let i = 0; i < rects.length; i++) {
+          if (rects[i] && rects[i]!.top <= linhaGatilho) novoIndice = i;
+        }
+        const atual = rects[novoIndice];
+        const proximo = rects[novoIndice + 1];
+        if (atual) {
+          // Distância = altura do cartão atual + o espaçamento até o
+          // PRÓXIMO (gap-6 da pilha) — pedido explícito: o progresso vai
+          // de 0 a 1 enquanto o cartão percorre a própria altura MAIS
+          // esse respiro, não só a própria altura. Último cartão (sem
+          // próximo): usa a própria altura como distância.
+          const distancia = proximo ? proximo.top - atual.top : atual.height;
+          progresso = distancia > 0 ? (linhaGatilho - atual.top) / distancia : 1;
         }
       }
 
-      // Antes do 1º cartão chegar na linha: fica no tópico 0, progresso 0.
-      // Depois do último cartão passar da linha: fica no último, 100%.
-      if (novoIndice === null) {
-        const primeiro = cartoesRef.current[0]?.getBoundingClientRect();
-        const ultimo = cartoesRef.current[cartoesRef.current.length - 1]?.getBoundingClientRect();
-        if (primeiro && primeiro.top > linhaGatilho) {
-          novoIndice = 0;
-          progresso = 0;
-        } else if (ultimo && ultimo.bottom < linhaGatilho) {
-          novoIndice = cartoesRef.current.length - 1;
-          progresso = 1;
-        }
+      progresso = Math.min(1, Math.max(0, progresso));
+      if (novoIndice !== indiceAtivoRef.current) {
+        indiceAtivoRef.current = novoIndice;
+        setIndiceAtivo(novoIndice);
       }
-
-      if (novoIndice !== null) {
-        progresso = Math.min(1, Math.max(0, progresso));
-        if (novoIndice !== indiceAtivoRef.current) {
-          indiceAtivoRef.current = novoIndice;
-          setIndiceAtivo(novoIndice);
-        }
-        if (barraRef.current) barraRef.current.style.width = `${progresso * 100}%`;
-      }
+      if (barraRef.current) barraRef.current.style.width = `${progresso * 100}%`;
     }
 
     function aoRolar() {
@@ -287,11 +386,18 @@ export default function PlataformaSection({ destinoLogado }: { destinoLogado: st
     if (reduzido && barraRef.current) barraRef.current.style.width = '100%';
   }, [reduzido, indiceAtivo]);
 
-  // Clique num tópico — rola suave até o cartão correspondente,
-  // centralizado na viewport (pedido explícito). `behavior: 'auto'` no
-  // reduced-motion (sem scroll animado).
+  // Clique num tópico — rola suave até o cartão correspondente ALINHADO À
+  // LINHA DE DISPARO (pedido explícito desta tarefa — era `scrollIntoView`
+  // centralizado na viewport, que podia deixar o cartão atrás do menu):
+  // desloca o scroll pela diferença entre o topo atual do cartão e a
+  // mesma linha usada pelo tracking automático, então o cartão pousa
+  // exatamente onde o menu fixo nunca cobre e o tópico já nasce ativo.
+  // `behavior: 'auto'` no reduced-motion (sem scroll animado).
   function irParaCartao(indice: number) {
-    cartoesRef.current[indice]?.scrollIntoView({ behavior: reduzido ? 'auto' : 'smooth', block: 'center' });
+    const el = cartoesRef.current[indice];
+    if (!el) return;
+    const destino = window.scrollY + el.getBoundingClientRect().top - linhaGatilhoRef.current;
+    window.scrollTo({ top: destino, behavior: reduzido ? 'auto' : 'smooth' });
   }
 
   return (
@@ -317,6 +423,7 @@ export default function PlataformaSection({ destinoLogado }: { destinoLogado: st
           overflow-clip (NÃO overflow-hidden — quebraria o sticky da
           coluna esquerda, ver comentário do componente, acima). */}
       <div
+        ref={cardRef}
         className="relative overflow-clip rounded-2xl border border-black/10 bg-gray-50 py-5 dark:border-white/10 dark:bg-surface sm:py-6 [--padding-minimo:20px] sm:[--padding-minimo:24px] md:[--padding-minimo:32px] lg:rounded-3xl lg:py-16 lg:[--padding-minimo:0px] xl:py-[72px]"
         style={{
           marginInline: 'calc(var(--card-bleed) * -1)',
@@ -324,41 +431,51 @@ export default function PlataformaSection({ destinoLogado }: { destinoLogado: st
         }}
       >
         {/* ---------- DESKTOP (lg+): sticky + acordeão ---------- */}
-        <div className="hidden lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start lg:gap-x-12 xl:gap-x-16">
-            {/* COLUNA ESQUERDA — sticky. top = altura do header + 32px
-                (pedido explícito), usando a MESMA variável do projeto
-                (--header-h, ver app/globals.css). */}
-            <div className="sticky flex flex-col" style={{ top: 'calc(var(--header-h) + 32px)' }}>
-              <span className="text-sm text-gray-500 dark:text-gray-400">{comDestaque('Conheça a [[plataforma]]', 'font-semibold text-gray-900 dark:text-white')}</span>
-              {/* text-4xl incondicional, SEM xl:text-5xl (pedido explícito
-                  desta tarefa dava a opção "text-4xl a text-5xl" — testei
-                  os dois): a "sangria" do card (--card-bleed, ver
-                  app/globals.css) trava em 72px de cada lado a partir de
-                  ~1354px e NUNCA cresce mais (o container em si também
-                  trava em max-w-6xl) — ou seja, a coluna esquerda tem a
-                  MESMA largura (~426px, medido) em 1366px, 1920px ou
-                  2560px; se text-5xl não coubesse em 2 linhas em 1366px,
-                  não ia caber em nenhuma tela maior também, então
-                  text-4xl é o tamanho certo em TODAS elas, não só nas
-                  menores. Medido: numLines=2 em 1366x768/1440x900. */}
-              <h2 className="mt-3 max-w-[520px] text-4xl font-semibold leading-tight tracking-tight text-gray-900 dark:text-white">
-                {comDestaque('Tudo o que você precisa para [[aprender]]', 'text-primary')}
-              </h2>
-              <p className="mt-4 max-w-[440px] text-base leading-relaxed text-gray-500 dark:text-gray-400">
-                Conheça o que a plataforma oferece para você estudar com organização, no seu ritmo e de onde estiver.
-              </p>
+        {/* grid-cols-[minmax(0,7fr)_minmax(0,7fr)] + gap-x-8 (2rem) — pedido
+            EXATO desta tarefa (era 5fr/7fr assimétrico com gap-x-12/16). */}
+        <div className="hidden lg:grid lg:grid-cols-[minmax(0,7fr)_minmax(0,7fr)] lg:items-start lg:gap-x-8">
+            {/* COLUNA ESQUERDA — sticky. top = altura do header +
+                MARGEM_ATIVACAO_PX + o padding-top REAL do card (ver o
+                useEffect de medição, acima — escreve `--plataforma-pad-top`
+                nesse mesmo elemento; nunca hardcoded aqui. O `64px` no
+                fallback do var() é só uma rede de segurança pro instante
+                antes desse efeito rodar, evitando um `calc()` com `NaN`). */}
+            <div
+              className="sticky flex flex-col"
+              style={{ top: `calc(var(--header-h) + ${MARGEM_ATIVACAO_PX}px + var(--plataforma-pad-top, 64px))` }}
+            >
+              {/* Cabeçalho padronizado (pedido explícito desta tarefa —
+                  item 1): SectionHeader compartilhado, MESMOS tamanhos de
+                  eyebrow/título/texto de apoio da seção de números (nenhuma
+                  classe de tamanho, peso ou espaçamento entre linhas própria
+                  sobrescrevendo aqui — era um span/h2/p com tamanhos
+                  menores, hardcoded só pra esta seção). showActions=false:
+                  os botões saem daqui — vira só o "Ver cursos" (item 5),
+                  posicionado separadamente (fim da coluna, abaixo do
+                  acordeão). */}
+              <SectionHeader
+                eyebrow="Conheça a [[plataforma]]"
+                title="Tudo o que você precisa para [[aprender]]"
+                description="Conheça o que a plataforma oferece para você estudar com organização, no seu ritmo e de onde estiver."
+                align="left"
+                showActions={false}
+              />
 
               {/* Acordeão — role="list" semântico simples (cada tópico é
-                  um <button> com aria-expanded/aria-controls, pedido
-                  explícito). py-3 (era py-4) + textos um pouco menores —
-                  pedido explícito desta tarefa: "deixe a coluna esquerda
-                  compacta... reduza espaçamentos/tamanhos se precisar",
-                  pra caber em 1366x768/1440x900 com a coluna sticky. */}
-              <div className="mt-5" role="list">
+                  um <button> com aria-expanded/aria-controls). Espaçamentos
+                  reduzidos nesta tarefa (mt-5->mt-4, py-3->py-2.5,
+                  mt-1.5->mt-1, mt-2.5->mt-2 — item 1, "NÃO reduza os
+                  tamanhos de fonte do cabeçalho, reduza espaçamentos"):
+                  compensa o título/eyebrow/texto agora maiores (mesma
+                  escala da seção de números), pra continuar cabendo em
+                  1366x768/1440x900 com a coluna sticky. Tamanho dos
+                  PRÓPRIOS títulos/descrições dos tópicos não muda (regra
+                  explícita — "continuam com os tamanhos próprios"). */}
+              <div className="mt-4" role="list">
                 {TOPICOS.map((topico, i) => {
                   const ativo = i === indiceAtivo;
                   return (
-                    <div key={topico.titulo} role="listitem" className="border-b border-black/10 py-3 first:pt-0 dark:border-white/10">
+                    <div key={topico.titulo} role="listitem" className="border-b border-black/10 py-2.5 first:pt-0 dark:border-white/10">
                       <button
                         type="button"
                         aria-expanded={ativo}
@@ -379,12 +496,12 @@ export default function PlataformaSection({ destinoLogado }: { destinoLogado: st
                         style={{ gridTemplateRows: ativo ? '1fr' : '0fr' }}
                       >
                         <div className="overflow-hidden">
-                          <p className="mt-1.5 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{topico.descricao}</p>
+                          <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{topico.descricao}</p>
                           {/* Barra de progresso — aria-hidden (pedido
                               explícito); só existe DOM próprio enquanto
                               este tópico está ativo (a ref é reatribuída
                               pro item ativo a cada troca). */}
-                          <div aria-hidden="true" className="mt-2.5 h-[2px] w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                          <div aria-hidden="true" className="mt-2 h-[2px] w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
                             <div
                               ref={(el) => {
                                 if (ativo) barraRef.current = el;
@@ -399,13 +516,21 @@ export default function PlataformaSection({ destinoLogado }: { destinoLogado: st
                 })}
               </div>
 
-              <CtaButtons destinoLogado={destinoLogado} className="mt-6" />
+              {/* Botão único "Ver cursos" (item 5/6) — posição DESKTOP:
+                  fim da coluna esquerda, abaixo do acordeão. Já está
+                  dentro do bloco `hidden lg:grid`, então não precisa de
+                  nenhum `lg:` extra aqui — nunca coexiste com a variante
+                  mobile (ver o bloco `lg:hidden`, abaixo). mt-5 (era mt-6
+                  no CtaButtons antigo): parte da mesma compactação do
+                  acordeão, acima. */}
+              <BotaoVerCursos className="mt-5" />
             </div>
 
             {/* COLUNA DIREITA — pilha de 4 cartões visuais, rola normal.
-                Altura 380-440px (pedido explícito, era 440-480px — o card
-                ficou mais estreito, uma altura um pouco menor mantém a
-                proporção equilibrada). */}
+                Altura reduzida nesta tarefa (era 380-420px): a coluna
+                ficou mais estreita (7fr de 14, era 7fr de 12 — item 4),
+                uma altura um pouco menor mantém a proporção dos cartões
+                sem esticar/distorcer o conteúdo interno. */}
             <div className="flex flex-col gap-6">
               {TOPICOS.map((topico, i) => {
                 const Visual = VISUAIS[i];
@@ -418,7 +543,7 @@ export default function PlataformaSection({ destinoLogado }: { destinoLogado: st
                     className="transition-opacity duration-[400ms]"
                     style={{ opacity: i === indiceAtivo ? 1 : 0.35 }}
                   >
-                    <MolduraCartao className="h-[380px] xl:h-[420px]">
+                    <MolduraCartao className="h-[340px] xl:h-[380px]">
                       <Visual reduzido={reduzido} />
                     </MolduraCartao>
                   </div>
@@ -431,13 +556,23 @@ export default function PlataformaSection({ destinoLogado }: { destinoLogado: st
               sticky/acordeão — visual em cima, título+descrição sempre
               visíveis embaixo (pedido explícito). ---------- */}
           <div className="lg:hidden">
-            <span className="text-sm text-gray-500 dark:text-gray-400">{comDestaque('Conheça a [[plataforma]]', 'font-semibold text-gray-900 dark:text-white')}</span>
-            <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight text-gray-900 dark:text-white sm:text-4xl">
-              {comDestaque('Tudo o que você precisa para [[aprender]]', 'text-primary')}
-            </h2>
-            <p className="mt-4 max-w-[440px] text-base leading-relaxed text-gray-500 dark:text-gray-400">
-              Conheça o que a plataforma oferece para você estudar com organização, no seu ritmo e de onde estiver.
-            </p>
+            {/* MESMO SectionHeader do desktop, acima (item 1) — nenhum
+                tamanho próprio aqui também. */}
+            <SectionHeader
+              eyebrow="Conheça a [[plataforma]]"
+              title="Tudo o que você precisa para [[aprender]]"
+              description="Conheça o que a plataforma oferece para você estudar com organização, no seu ritmo e de onde estiver."
+              align="left"
+              showActions={false}
+            />
+
+            {/* Botão único "Ver cursos" — posição MOBILE/TABLET (item 6):
+                logo abaixo do texto de apoio, ANTES dos itens/cartões
+                (mt-6 = 24px de respiro, pedido explícito). Nunca aparece
+                junto com a variante desktop acima — este bloco inteiro é
+                `lg:hidden`, o de cima é `hidden lg:grid`, mutuamente
+                exclusivos. */}
+            <BotaoVerCursos className="mt-6" />
 
             <div className="mt-8 flex flex-col gap-8 sm:gap-10">
               {TOPICOS.map((topico, i) => {
@@ -453,8 +588,6 @@ export default function PlataformaSection({ destinoLogado }: { destinoLogado: st
                 );
               })}
             </div>
-
-            <CtaButtons destinoLogado={destinoLogado} className="mt-8" />
           </div>
       </div>
     </Container>

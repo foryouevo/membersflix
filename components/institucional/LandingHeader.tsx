@@ -9,26 +9,25 @@ import { cn, scrollSuaveParaSecao } from '@/lib/utils';
 import Container from '@/components/institucional/Container';
 import BrandLogo from '@/components/institucional/BrandLogo';
 
-// 7 itens do menu, NESTA ordem (pedido explícito desta tarefa: "Clientes"
-// e "Planos" trocaram de lugar — Planos agora vem ANTES de Clientes). id =
-// seção correspondente (ver SECOES/LABELS_SECAO em LandingPageClient.tsx,
-// que tem 9 seções ao todo; "palavras" e "numeros" não têm item de menu
-// próprio, de propósito). Array único, usado tanto pro menu desktop quanto
-// pro painel mobile, pra nunca ficarem dessincronizados.
+// 5 itens do menu, NESTA ordem. id = seção correspondente (ver SECOES/
+// LABELS_SECAO em LandingPageClient.tsx, que tem 7 seções ao todo;
+// "palavras" e "numeros" não têm item de menu próprio, de propósito).
+// Array único, usado tanto pro menu desktop quanto pro painel mobile, pra
+// nunca ficarem dessincronizados.
 const ITENS_MENU = [
   { id: 'inicio', label: 'Início' },
   { id: 'plataforma', label: 'Plataforma' },
   { id: 'cursos', label: 'Cursos' },
   { id: 'planos', label: 'Planos' },
-  { id: 'clientes', label: 'Clientes' },
   { id: 'ajuda', label: 'Ajuda' },
 ] as const;
 
-// "Diferenciais" saiu SÓ daqui (pedido explícito desta tarefa — o pill
-// reduzido, após o scroll, não tinha espaço pra logo + 7 itens + botões
-// sem colar/quebrar linha): a seção e o item continuam existindo no resto
-// da página e no footer (LandingPageClient.tsx/LandingFooter.tsx), só não
-// tem mais atalho próprio no menu do topo.
+// "Diferenciais" saiu do menu numa tarefa anterior (o pill reduzido, após
+// o scroll, não tinha espaço pra logo + 7 itens + botões sem colar/quebrar
+// linha) e a SEÇÃO em si saiu da página inteira numa tarefa posterior
+// (LandingPageClient.tsx/LandingFooter.tsx). "Clientes" saiu do menu E da
+// página inteira (mesmos dois arquivos) nesta tarefa — não sobra nenhuma
+// referência a nenhuma das duas em lugar nenhum do site.
 
 /**
  * Header fixo/flutuante da landing institucional (/ — pedido explícito: pra

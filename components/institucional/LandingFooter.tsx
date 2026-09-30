@@ -18,13 +18,13 @@ import BrandLogo from '@/components/institucional/BrandLogo';
 // ícones genéricos de contorno que a lib mantém por serem MUITO comuns) —
 // MessageCircle (mesmo usado no botão de suporte flutuante) como
 // substituto, não é o logo oficial do WhatsApp.
+// "Diferenciais" e "Clientes" saíram daqui (a seção inteira de cada foi
+// removida da página — LandingPageClient.tsx — não só o item de menu).
 const ITENS_MENU_FOOTER = [
   { id: 'inicio', label: 'Início' },
   { id: 'plataforma', label: 'Plataforma' },
   { id: 'cursos', label: 'Cursos' },
-  { id: 'diferenciais', label: 'Diferenciais' },
   { id: 'planos', label: 'Planos' },
-  { id: 'clientes', label: 'Clientes' },
   { id: 'ajuda', label: 'Ajuda' },
 ] as const;
 

@@ -10,6 +10,7 @@ import DestaquesMarquee from '@/components/institucional/DestaquesMarquee';
 import NumerosSection from '@/components/institucional/NumerosSection';
 import SectionHeader from '@/components/institucional/SectionHeader';
 import PlataformaSection from '@/components/institucional/PlataformaSection';
+import CursosSection from '@/components/institucional/CursosSection';
 
 // 9 seções, NA ORDEM em que aparecem na página. "imagemPlataforma" (que
 // existia como seção PRÓPRIA numa tarefa anterior) saiu daqui nesta tarefa
@@ -18,25 +19,27 @@ import PlataformaSection from '@/components/institucional/PlataformaSection';
 // seção de página separada. "palavras"/"numeros" continuam sem item de
 // menu próprio (ver ITENS_MENU em LandingHeader.tsx), só participam do
 // scroll spy.
-const SECOES = ['inicio', 'palavras', 'numeros', 'plataforma', 'cursos', 'diferenciais', 'planos', 'clientes', 'ajuda'] as const;
+// "diferenciais" saiu numa tarefa anterior (pedido explícito: remover a
+// seção inteira da página, não só o item do menu) e "clientes" saiu nesta
+// tarefa, pelo mesmo motivo — as outras 7 continuam.
+const SECOES = ['inicio', 'palavras', 'numeros', 'plataforma', 'cursos', 'planos', 'ajuda'] as const;
 
 // Título grande mostrado dentro de cada placeholder (pedido explícito de
 // uma tarefa anterior — "só um título grande centralizado indicando o nome
 // da seção"). "inicio" NUNCA usa este título — tem componente PRÓPRIO
 // (HeroSection, ver o map mais abaixo) — a entrada aqui ficou só por
 // completude do tipo Record (não afeta a tela).
-// "palavras", "numeros" e "plataforma" NUNCA usam este título — têm
-// componente PRÓPRIO (DestaquesMarquee/NumerosSection/PlataformaSection,
-// ver o map mais abaixo), mesmo tratamento de "inicio".
+// "palavras", "numeros", "plataforma" e "cursos" NUNCA usam este título —
+// têm componente PRÓPRIO (DestaquesMarquee/NumerosSection/
+// PlataformaSection/CursosSection, ver o map mais abaixo), mesmo
+// tratamento de "inicio".
 const TITULO_SECAO: Record<(typeof SECOES)[number], string> = {
   inicio: 'Início',
   palavras: '',
   numeros: '',
   plataforma: '',
-  cursos: 'Cursos Disponíveis',
-  diferenciais: 'Diferenciais',
+  cursos: '',
   planos: 'Planos',
-  clientes: 'Clientes',
   ajuda: 'Perguntas Frequentes',
 };
 
@@ -125,12 +128,11 @@ export default function LandingPageClient({
   }, []);
 
   return (
-    // dark:bg-background (era dark:bg-[#0a0a0a] — pedido explícito desta
-    // tarefa: fundo escuro unificado pro site inteiro, ver a variável
-    // --background em app/globals.css). Cobre TODAS as seções da página
-    // (hero, #palavras, números, plataforma, cursos, diferenciais,
-    // planos, clientes, ajuda) porque nenhuma delas define um fundo
-    // próprio por cima deste wrapper — sempre herdaram daqui.
+    // dark:bg-background (fundo escuro unificado pro site inteiro, ver a
+    // variável --background em app/globals.css). Cobre TODAS as seções da
+    // página (hero, #palavras, números, plataforma, cursos, planos, ajuda)
+    // porque nenhuma delas define um fundo próprio por cima deste wrapper
+    // — sempre herdaram daqui.
     <div className="bg-white text-gray-900 dark:bg-background dark:text-white">
       <LandingHeader secaoAtiva={secaoAtiva} destinoLogado={destinoLogado} />
 
@@ -236,7 +238,34 @@ export default function LandingPageClient({
                 // esquerda lá dentro.
                 className="scroll-mt-24 overflow-x-clip"
               >
-                <PlataformaSection destinoLogado={destinoLogado} />
+                <PlataformaSection />
+              </section>
+            );
+          }
+          // "cursos" tem componente PRÓPRIO (CursosSection.tsx — carrossel
+          // 3D em loop com autoplay) — nada de min-h-screen/border-b/
+          // placeholder nele. scroll-mt-24 continua aqui (mesma folga de
+          // sempre pro menu fixo não cobrir o topo da seção) — é o MESMO
+          // id ("cursos") que o link do menu (LandingHeader.tsx,
+          // ITENS_MENU) e o botão "Ver cursos" da seção Plataforma
+          // (PlataformaSection.tsx) já usam. overflow-x-clip (mesmo motivo
+          // de "plataforma", acima): o carrossel é full-bleed (ocupa a
+          // largura da JANELA, não do Container) — isso por si só nunca
+          // deveria gerar scroll horizontal na página (a fileira tem
+          // `overflow-hidden` própria, ver CursosSection.tsx), mas esta é
+          // uma segunda rede de segurança contra qualquer sub-pixel de
+          // arredondamento.
+          if (id === 'cursos') {
+            return (
+              <section
+                key={id}
+                id={id}
+                ref={(el) => {
+                  secoesRef.current[id] = el;
+                }}
+                className="scroll-mt-24 overflow-x-clip"
+              >
+                <CursosSection categorias={categorias} />
               </section>
             );
           }

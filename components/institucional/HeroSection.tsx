@@ -11,7 +11,11 @@ import CtaButtons from '@/components/institucional/CtaButtons';
 // é sempre a prop `categorias` (mesmos dados REAIS que alimentam a coluna
 // "Cursos" do footer, LandingFooter.tsx) — nunca duplicada, só reaproveitada
 // aqui, pra nunca dessincronizar dos nichos que o footer mostra.
-const NICHOS_FALLBACK = [
+// `export` (era só local a este arquivo) — CursosSection.tsx (seção
+// "Cursos" da landing, tarefa posterior) reaproveita a MESMA lista como
+// cards provisórios, mesmo motivo: nunca duplicar/dessincronizar dos
+// nichos reais.
+export const NICHOS_FALLBACK = [
   'Criação de Sites',
   'Desenvolvimento Pessoal',
   'Dropshipping',

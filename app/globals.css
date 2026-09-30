@@ -34,6 +34,24 @@
   }
 }
 
+/* Brilho (shimmer) passando nos cards do carrossel "Cursos" enquanto o
+   conteúdo (capa/ícone) ainda não "carregou" na animação de entrada da
+   seção (CursosSection.tsx, fase 2) — desliza um gradiente diagonal claro
+   da esquerda pra direita sobre o card, feito só com background-position
+   (nenhum elemento extra se movendo). MESMO motivo das outras keyframes
+   deste arquivo: a classe `animate-[shimmer-sweep_1.6s_linear_infinite]`
+   só referencia o NOME, precisa existir em algum CSS do projeto. Nunca
+   roda com `prefers-reduced-motion` (a seção pula a fase de "carregando"
+   inteira nesse caso, ver CursosSection.tsx). */
+@keyframes shimmer-sweep {
+  from {
+    background-position: -150% 0;
+  }
+  to {
+    background-position: 150% 0;
+  }
+}
+
 :root {
   /* Altura real do header FLUTUANTE da landing institucional no estado
      INICIAL (topo da página, antes de rolar) — LandingHeader.tsx: o
