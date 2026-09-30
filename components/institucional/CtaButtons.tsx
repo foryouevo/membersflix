@@ -24,7 +24,13 @@ import { cn } from '@/lib/utils';
 // className). BOTAO_PRIMARIO_CLASSES continua com o MESMO resultado final
 // de sempre — é literalmente esta constante + os 4 utilitários de largura,
 // zero mudança visual nos usos existentes (CtaButtons/SectionHeader).
-export const BOTAO_PRIMARIO_TAMANHO = 'btn-primary inline-flex h-11 items-center justify-center px-6 text-sm duration-200 md:h-auto md:py-3 md:text-base';
+// btn-glow (pedido explícito de uma tarefa posterior — "luz" que segue o
+// cursor no hover, ver app/globals.css) — incluída AQUI (no primitivo
+// compartilhado) pra propagar sozinha pra TODOS os botões vermelhos que já
+// usam esta constante (CtaButtons abaixo, SectionHeader.tsx, Ver cursos,
+// Quero este plano ×3 etc.), sem precisar editar cada um. Puramente
+// aditiva — não muda padding/tamanho/radius/posição nenhum.
+export const BOTAO_PRIMARIO_TAMANHO = 'btn-primary btn-glow inline-flex h-11 items-center justify-center px-6 text-sm duration-200 md:h-auto md:py-3 md:text-base';
 export const BOTAO_PRIMARIO_CLASSES = cn(BOTAO_PRIMARIO_TAMANHO, 'w-full max-w-[280px] md:w-auto md:max-w-none');
 // bg-white/text-zinc-800 SEMPRE (não `dark:`) — o botão fica branco nos
 // dois temas, só a borda/sombra muda (no claro, ela é quem evita o botão
@@ -33,14 +39,31 @@ export const BOTAO_SECUNDARIO_CLASSES =
   'inline-flex h-11 w-full max-w-[280px] items-center justify-center rounded-full border border-gray-200 bg-white px-6 text-sm font-semibold text-zinc-800 shadow-sm transition-colors duration-200 hover:bg-gray-50 md:h-auto md:w-auto md:max-w-none md:py-3 md:text-base';
 
 /**
- * Botões de CTA compartilhados — "Criar minha conta grátis" / "Já tenho
- * conta" (ou "Ir para a plataforma", se já logado). Extraídos do hero
+ * Botões de CTA compartilhados — "Criar minha conta grátis" (padrão) / "Já
+ * tenho conta" (ou "Ir para a plataforma", se já logado). Extraídos do hero
  * (HeroSection.tsx) numa tarefa anterior pra serem reutilizados também em
  * SectionHeader.tsx, sem duplicar classes/links em dois lugares. MESMO
  * estilo/altura/border-radius/hover/links de sempre — nada mudou aqui, só
  * saiu do lugar.
+ *
+ * `labelPrimario` (novo — pedido explícito de uma tarefa posterior: só o
+ * hero devia passar a dizer "Criar conta grátis", sem "minha", SEM mexer
+ * em mais nenhum outro lugar que usa este componente): opcional, default
+ * 'Criar minha conta grátis' — o texto de sempre, pra qualquer uso futuro
+ * de SectionHeader sem `actions` (ver fallback lá) continuar exatamente
+ * igual. Só afeta o rótulo do botão PRIMÁRIO deslogado — "Ir para a
+ * plataforma" (logado) e "Já tenho conta" não mudam, não fazem parte do
+ * pedido.
  */
-export default function CtaButtons({ destinoLogado, className }: { destinoLogado: string | null; className?: string }) {
+export default function CtaButtons({
+  destinoLogado,
+  className,
+  labelPrimario = 'Criar minha conta grátis',
+}: {
+  destinoLogado: string | null;
+  className?: string;
+  labelPrimario?: string;
+}) {
   return (
     <div className={cn('flex w-full flex-col items-center gap-3 md:w-auto md:flex-row', className)}>
       {destinoLogado ? (
@@ -50,7 +73,7 @@ export default function CtaButtons({ destinoLogado, className }: { destinoLogado
       ) : (
         <>
           <Link href="/login?form=cadastro" className={BOTAO_PRIMARIO_CLASSES}>
-            Criar minha conta grátis
+            {labelPrimario}
           </Link>
           <Link href="/login" className={BOTAO_SECUNDARIO_CLASSES}>
             Já tenho conta

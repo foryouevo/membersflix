@@ -216,7 +216,7 @@ const VISUAIS: ((props: { reduzido: boolean }) => React.ReactElement)[] = [
  * stretch pra neutralizar lá — `self-start` não atrapalha nesse caso,
  * simplesmente não faz nada).
  */
-function BotaoVerCursos({ className }: { className?: string }) {
+function BotaoVerCursos({ className, aosDelay }: { className?: string; aosDelay?: number }) {
   return (
     <Link
       href="#cursos"
@@ -224,6 +224,8 @@ function BotaoVerCursos({ className }: { className?: string }) {
         e.preventDefault();
         scrollSuaveParaSecao('cursos');
       }}
+      data-aos="fade-up"
+      data-aos-delay={aosDelay}
       className={cn(BOTAO_PRIMARIO_TAMANHO, 'w-fit shrink-0 self-start whitespace-nowrap', className)}
     >
       Ver cursos
@@ -475,14 +477,31 @@ export default function PlataformaSection() {
                 {TOPICOS.map((topico, i) => {
                   const ativo = i === indiceAtivo;
                   return (
-                    <div key={topico.titulo} role="listitem" className="border-b border-black/10 py-2.5 first:pt-0 dark:border-white/10">
+                    <div
+                      key={topico.titulo}
+                      role="listitem"
+                      // Itens do acordeão em cascata (pedido explícito) —
+                      // FILHO da coluna sticky (nunca o elemento sticky em
+                      // si nem um ancestral dele), o caso seguro descrito
+                      // na regra geral desta tarefa pra elementos sticky.
+                      data-aos="fade-up"
+                      data-aos-delay={i * 50}
+                      className="border-b border-black/10 py-2.5 first:pt-0 dark:border-white/10"
+                    >
                       <button
                         type="button"
                         aria-expanded={ativo}
                         aria-controls={`plataforma-desc-${i}`}
                         onClick={() => irParaCartao(i)}
                         className={cn(
-                          'text-left text-sm font-semibold transition-colors duration-300',
+                          // text-base (era text-sm — pedido explícito desta
+                          // tarefa: "aumente ~2px", 14px -> 16px, um degrau
+                          // da escala do Tailwind, sem inventar tamanho
+                          // novo). Continua menor que a descrição da seção
+                          // (SectionHeader, text-lg a partir de md — ver
+                          // comentário da tarefa: "nenhum desses textos
+                          // pode ficar maior").
+                          'text-left text-base font-semibold transition-colors duration-300',
                           ativo ? 'text-gray-900 dark:text-white' : 'text-gray-500 opacity-60 dark:text-gray-400'
                         )}
                       >
@@ -496,7 +515,11 @@ export default function PlataformaSection() {
                         style={{ gridTemplateRows: ativo ? '1fr' : '0fr' }}
                       >
                         <div className="overflow-hidden">
-                          <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">{topico.descricao}</p>
+                          {/* text-sm (era text-xs — mesmo pedido: "~2px a
+                              mais", 12px -> 14px), continua menor que o
+                              título do item ativo acima (text-base/16px) —
+                              hierarquia preservada. */}
+                          <p className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-gray-400">{topico.descricao}</p>
                           {/* Barra de progresso — aria-hidden (pedido
                               explícito); só existe DOM próprio enquanto
                               este tópico está ativo (a ref é reatribuída
@@ -523,7 +546,7 @@ export default function PlataformaSection() {
                   mobile (ver o bloco `lg:hidden`, abaixo). mt-5 (era mt-6
                   no CtaButtons antigo): parte da mesma compactação do
                   acordeão, acima. */}
-              <BotaoVerCursos className="mt-5" />
+              <BotaoVerCursos className="mt-5" aosDelay={TOPICOS.length * 50} />
             </div>
 
             {/* COLUNA DIREITA — pilha de 4 cartões visuais, rola normal.
@@ -535,17 +558,22 @@ export default function PlataformaSection() {
               {TOPICOS.map((topico, i) => {
                 const Visual = VISUAIS[i];
                 return (
-                  <div
-                    key={topico.titulo}
-                    ref={(el) => {
-                      cartoesRef.current[i] = el;
-                    }}
-                    className="transition-opacity duration-[400ms]"
-                    style={{ opacity: i === indiceAtivo ? 1 : 0.35 }}
-                  >
-                    <MolduraCartao className="h-[340px] xl:h-[380px]">
-                      <Visual reduzido={reduzido} />
-                    </MolduraCartao>
+                  // Wrapper EXTRA só pro data-aos (pedido explícito da regra
+                  // geral: "nunca aplique AOS no mesmo elemento que já tem
+                  // transform/opacity controlado por JS" — o div de dentro
+                  // já tem `opacity` escrito via `indiceAtivo`, JS puro).
+                  <div key={topico.titulo} data-aos="fade-up" data-aos-delay={i * 100}>
+                    <div
+                      ref={(el) => {
+                        cartoesRef.current[i] = el;
+                      }}
+                      className="transition-opacity duration-[400ms]"
+                      style={{ opacity: i === indiceAtivo ? 1 : 0.35 }}
+                    >
+                      <MolduraCartao className="h-[340px] xl:h-[380px]">
+                        <Visual reduzido={reduzido} />
+                      </MolduraCartao>
+                    </div>
                   </div>
                 );
               })}
@@ -572,13 +600,13 @@ export default function PlataformaSection() {
                 junto com a variante desktop acima — este bloco inteiro é
                 `lg:hidden`, o de cima é `hidden lg:grid`, mutuamente
                 exclusivos. */}
-            <BotaoVerCursos className="mt-6" />
+            <BotaoVerCursos className="mt-6" aosDelay={100} />
 
             <div className="mt-8 flex flex-col gap-8 sm:gap-10">
               {TOPICOS.map((topico, i) => {
                 const Visual = VISUAIS[i];
                 return (
-                  <div key={topico.titulo}>
+                  <div key={topico.titulo} data-aos="fade-up" data-aos-delay={i * 100}>
                     <MolduraCartao className="h-[260px] sm:h-[300px]">
                       <Visual reduzido={reduzido} />
                     </MolduraCartao>

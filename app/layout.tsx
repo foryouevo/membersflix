@@ -4,6 +4,8 @@ import './globals.css';
 import LoginIntroOverlay from '@/components/LoginIntroOverlay';
 import CookieConsentBanner from '@/components/CookieConsentBanner';
 import ThemeProvider from '@/components/ThemeProvider';
+import AosProvider from '@/components/institucional/AosProvider';
+import ButtonGlow from '@/components/institucional/ButtonGlow';
 
 // next/font: fonte auto-hospedada (o Next baixa os arquivos no build e
 // serve pelo próprio domínio) em vez de um <link>/@import pro Google Fonts
@@ -59,6 +61,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           independente de ordem. O fundo (gradiente + cor) fica só no CSS
           global agora, então esse conflito não existe mais. */}
       <body className="min-h-screen text-on-surface antialiased">
+        {/* Sem JavaScript: nem o AOS nem o WordReveal (CursosSection.tsx e
+            outras seções via SectionHeader.tsx/[data-aos]) rodam — os dois
+            escondem o conteúdo por CSS até a animação disparar (AOS via
+            aos/dist/aos.css; WordReveal via .wr-word em app/globals.css),
+            então sem JS eles ficariam invisíveis pra sempre. Esta regra só
+            existe DENTRO de <noscript> (nunca aplicada com JS ligado — não
+            compete com a cascata normal dos dois). Pedido explícito desta
+            tarefa. */}
+        <noscript>
+          <style>{'[data-aos]{opacity:1 !important; transform:none !important} .wr-word{opacity:1 !important; transform:none !important; filter:none !important}'}</style>
+        </noscript>
+        <AosProvider />
+        {/* Listener global só pros botões `.btn-glow` (app/globals.css) —
+            "luz" que segue o cursor, pedido explícito: "UM listener
+            global... sem listener por botão". Não renderiza nada (return
+            null), só monta o efeito uma vez pro app inteiro. */}
+        <ButtonGlow />
         {/* ThemeProvider (next-themes) envolve TODO o app, mas só tem
             efeito visual onde algum elemento usa o prefixo `dark:`
             (Tailwind, ver darkMode:'class' em tailwind.config.ts) — hoje

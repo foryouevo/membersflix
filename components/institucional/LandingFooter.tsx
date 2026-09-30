@@ -20,12 +20,15 @@ import BrandLogo from '@/components/institucional/BrandLogo';
 // substituto, não é o logo oficial do WhatsApp.
 // "Diferenciais" e "Clientes" saíram daqui (a seção inteira de cada foi
 // removida da página — LandingPageClient.tsx — não só o item de menu).
+// "ajuda" virou "perguntas-frequentes" nesta tarefa (mesmo motivo de
+// ITENS_MENU, LandingHeader.tsx — rótulo "Ajuda" mantido, só o id/âncora
+// mudou).
 const ITENS_MENU_FOOTER = [
   { id: 'inicio', label: 'Início' },
   { id: 'plataforma', label: 'Plataforma' },
   { id: 'cursos', label: 'Cursos' },
   { id: 'planos', label: 'Planos' },
-  { id: 'ajuda', label: 'Ajuda' },
+  { id: 'perguntas-frequentes', label: 'Ajuda' },
 ] as const;
 
 // Os três links legais, todos pra /politicas com uma âncora própria — a
@@ -196,7 +199,7 @@ export default function LandingFooter({
               md:col-span-2 lg:col-span-1: ocupa a linha inteira no
               intermediário (md/tablet), volta a ser 1 coluna normal a
               partir de lg (ver comentário acima). */}
-          <div className="md:col-span-2 lg:col-span-1">
+          <div data-aos="fade-up" data-aos-delay={0} className="md:col-span-2 lg:col-span-1">
             <BrandLogo imgClassName="h-7" />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-gray-600 dark:text-gray-400">
               A plataforma de área de membros para você acessar cursos gravados, evoluir no seu ritmo e aprender com quem já chegou lá.
@@ -276,7 +279,7 @@ export default function LandingFooter({
           {/* Coluna "Navegação" — âncoras pra dentro da própria página,
               mesma navegação por scroll suave do header. SEGUNDA coluna
               no desktop (1fr) agora (era a primeira). */}
-          <div>
+          <div data-aos="fade-up" data-aos-delay={100}>
             <TituloColuna className="mb-4">Navegação</TituloColuna>
             <ul className="space-y-2.5">
               {ITENS_MENU_FOOTER.map((item) => (
@@ -302,7 +305,7 @@ export default function LandingFooter({
               numa tarefa anterior: nomes de categoria mais longos, que
               quebram em 2 linhas, ficavam colados/sobrepostos na
               sub-coluna vizinha com só 1rem de respiro entre elas). */}
-          <div>
+          <div data-aos="fade-up" data-aos-delay={200}>
             <TituloColuna className="mb-4">Cursos</TituloColuna>
             {categorias.length === 0 ? (
               <p className="text-sm text-gray-500">Nenhuma categoria cadastrada ainda.</p>
@@ -326,7 +329,26 @@ export default function LandingFooter({
             Empilha (copyright primeiro, depois os links) no mobile.
             text-[13px] (pedido explícito desta tarefa — era text-sm/14px):
             reduzido só um pouco, sem voltar ao text-xs/12px original. */}
-        <div className="mt-12 flex flex-col items-center gap-4 border-t border-black/5 pt-6 dark:border-white/10 sm:flex-row sm:justify-between">
+        {/* footer-barra-final (app/globals.css) — pedido explícito de uma
+            tarefa posterior: no mobile essa barra ficava invisível
+            (opacity 0 preso, sem a classe `aos-animate`) porque é o
+            ÚLTIMO elemento da página e não sobra rolagem suficiente pro
+            AOS cruzar o próprio ponto de disparo (a barra já nasce dentro
+            da viewport quando a página chega no scroll máximo, sem nunca
+            ter "subido" através da linha de gatilho que o AOS espera
+            detectar via scroll) — bug conhecido do AOS pra elementos
+            colados no fim da página. Correção: SÓ no mobile (abaixo de
+            767px), a regra CSS zera opacity/transform/transition/
+            pointer-events com !important (única forma de vencer o inline
+            style que o AOS escreve), sem remover `data-aos` (desktop
+            continua animando normalmente — testado em janela larga/baixa
+            simulando zoom 80%, aparece certo, sem precisar de
+            `data-aos-anchor-placement` nem remover o efeito lá). */}
+        <div
+          data-aos="fade"
+          data-aos-delay={300}
+          className="footer-barra-final mt-12 flex flex-col items-center gap-4 border-t border-black/5 pt-6 dark:border-white/10 sm:flex-row sm:justify-between"
+        >
           <p className="text-[13px] text-gray-500">© 2026 MembersFlix. Todos os direitos reservados.</p>
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
             {LINKS_LEGAIS.map((link) => (

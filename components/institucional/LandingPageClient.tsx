@@ -11,6 +11,8 @@ import NumerosSection from '@/components/institucional/NumerosSection';
 import SectionHeader from '@/components/institucional/SectionHeader';
 import PlataformaSection from '@/components/institucional/PlataformaSection';
 import CursosSection from '@/components/institucional/CursosSection';
+import PlanosSection from '@/components/institucional/PlanosSection';
+import FaqSection from '@/components/institucional/FaqSection';
 
 // 9 seções, NA ORDEM em que aparecem na página. "imagemPlataforma" (que
 // existia como seção PRÓPRIA numa tarefa anterior) saiu daqui nesta tarefa
@@ -22,25 +24,31 @@ import CursosSection from '@/components/institucional/CursosSection';
 // "diferenciais" saiu numa tarefa anterior (pedido explícito: remover a
 // seção inteira da página, não só o item do menu) e "clientes" saiu nesta
 // tarefa, pelo mesmo motivo — as outras 7 continuam.
-const SECOES = ['inicio', 'palavras', 'numeros', 'plataforma', 'cursos', 'planos', 'ajuda'] as const;
+// "ajuda" virou "perguntas-frequentes" nesta tarefa (pedido explícito de
+// id — o item de MENU continua rotulado "Ajuda", só o id da seção/âncora
+// mudou, ver ITENS_MENU em LandingHeader.tsx e ITENS_MENU_FOOTER em
+// LandingFooter.tsx).
+const SECOES = ['inicio', 'palavras', 'numeros', 'plataforma', 'cursos', 'planos', 'perguntas-frequentes'] as const;
 
 // Título grande mostrado dentro de cada placeholder (pedido explícito de
 // uma tarefa anterior — "só um título grande centralizado indicando o nome
 // da seção"). "inicio" NUNCA usa este título — tem componente PRÓPRIO
 // (HeroSection, ver o map mais abaixo) — a entrada aqui ficou só por
 // completude do tipo Record (não afeta a tela).
-// "palavras", "numeros", "plataforma" e "cursos" NUNCA usam este título —
-// têm componente PRÓPRIO (DestaquesMarquee/NumerosSection/
-// PlataformaSection/CursosSection, ver o map mais abaixo), mesmo
-// tratamento de "inicio".
+// "palavras", "numeros", "plataforma", "cursos", "planos" e
+// "perguntas-frequentes" NUNCA usam este título — todas têm componente
+// PRÓPRIO agora (DestaquesMarquee/NumerosSection/PlataformaSection/
+// CursosSection/PlanosSection/FaqSection, ver o map mais abaixo); as
+// entradas ficam só por completude do tipo Record (nenhuma seção ainda usa
+// o placeholder genérico no fim do map).
 const TITULO_SECAO: Record<(typeof SECOES)[number], string> = {
   inicio: 'Início',
   palavras: '',
   numeros: '',
   plataforma: '',
   cursos: '',
-  planos: 'Planos',
-  ajuda: 'Perguntas Frequentes',
+  planos: '',
+  'perguntas-frequentes': '',
 };
 
 /**
@@ -186,6 +194,7 @@ export default function LandingPageClient({
                   secoesRef.current[id] = el;
                 }}
                 aria-label="Destaques da plataforma"
+                data-aos="fade"
                 className="scroll-mt-24 px-3 pt-0 sm:px-4 lg:px-6"
               >
                 <DestaquesMarquee />
@@ -269,6 +278,46 @@ export default function LandingPageClient({
               </section>
             );
           }
+          // "planos" tem componente PRÓPRIO (PlanosSection.tsx — pedido
+          // explícito desta tarefa: 3 cards de plano). scroll-mt-24 de
+          // sempre — MESMO id que o link "Planos" do menu (LandingHeader.tsx)
+          // e o botão "Ver planos" da seção Cursos (CursosSection.tsx) já
+          // usam.
+          if (id === 'planos') {
+            return (
+              <section
+                key={id}
+                id={id}
+                ref={(el) => {
+                  secoesRef.current[id] = el;
+                }}
+                className="scroll-mt-24"
+              >
+                <PlanosSection />
+              </section>
+            );
+          }
+          // "perguntas-frequentes" tem componente PRÓPRIO (FaqSection.tsx —
+          // pedido explícito desta tarefa: acordeão de FAQ). scroll-mt-24
+          // de sempre — o link do menu continua rotulado "Ajuda"
+          // (LandingHeader.tsx/ITENS_MENU), só o id/âncora é
+          // "perguntas-frequentes" agora (pedido explícito).
+          if (id === 'perguntas-frequentes') {
+            return (
+              <section
+                key={id}
+                id={id}
+                ref={(el) => {
+                  secoesRef.current[id] = el;
+                }}
+                className="scroll-mt-24"
+              >
+                <Container className="py-16 md:py-24">
+                  <FaqSection destinoLogado={destinoLogado} />
+                </Container>
+              </section>
+            );
+          }
           return (
             <section
               key={id}
@@ -281,24 +330,11 @@ export default function LandingPageClient({
               <Container className="flex flex-col items-center">
                 {/* Placeholder (pedido explícito de uma tarefa anterior) —
                     só o nome da seção, pra validar a navegação/scroll-spy
-                    visualmente. Substituir pelo conteúdo de verdade de cada
-                    seção é tarefa futura.
-                    Pedido explícito desta tarefa: essas seções ainda-
-                    placeholder passam a usar o MESMO SectionHeader
-                    compartilhado (mesmo padrão visual do resto do site),
-                    mas SEM inventar texto/destaque/CTA nenhum — eyebrow
-                    continua literalmente "Placeholder" (sem trecho em
-                    destaque) e o título continua o mesmo de sempre
-                    (TITULO_SECAO, sem nenhuma palavra marcada de
-                    vermelho). showActions={false}: sem botões de CTA
-                    aqui — não faz sentido oferecer "Criar conta" embaixo
-                    de um título tipo "Perguntas Frequentes" sem contexto
-                    nenhum ainda.
-                    TODO: quando esta seção ganhar conteúdo de verdade,
-                    definir (a) a palavra do título que vira destaque
-                    vermelho e (b) o texto de apoio (prop `description`) —
-                    nenhum dos dois existe ainda porque não há informação
-                    real da plataforma pra essa seção neste momento. */}
+                    visualmente. Nenhuma seção cai mais aqui hoje (todas as
+                    7 abaixo de "inicio" já têm componente próprio) — o
+                    branch fica só como rede de segurança pra uma seção
+                    nova que venha a ser adicionada em SECOES sem
+                    componente próprio ainda. */}
                 <SectionHeader eyebrow="Placeholder" title={TITULO_SECAO[id]} align="center" showActions={false} />
               </Container>
             </section>

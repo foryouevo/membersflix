@@ -52,6 +52,237 @@
   }
 }
 
+/* .btn-glow — "luz" que segue o cursor nos botões vermelhos (pedido
+   explícito de uma tarefa posterior, inspirado numa referência visual):
+   parado, uma luz suave no canto inferior direito; no hover, a luz
+   intensifica e PASSA A SEGUIR O CURSOR (posição escrita via
+   `--mx`/`--my` por ButtonGlow.tsx, um único listener global — nunca um
+   listener por botão), com contorno interno e halo externo mais claros.
+   Classe ADITIVA (nunca define padding/font-size/border-radius/largura —
+   só position/isolation/overflow/box-shadow/background do brilho): pode
+   ser somada a QUALQUER botão vermelho existente sem mudar tamanho nem
+   posição dele (CLS zero).
+
+   `@property` registra --mx/--my como <length-percentage> ANIMÁVEL (por
+   padrão, custom properties são só texto puro pro navegador, nunca
+   transicionam) — é o que deixa a luz DESLIZAR de volta pro canto padrão
+   ao tirar o mouse, em vez de pular direto. Navegadores sem suporte a
+   @property (fallback, pedido explícito): ainda acham o valor de --mx/--my
+   normalmente, só não animam a TRANSIÇÃO entre um valor e outro — o resto
+   (opacidade, contorno, halo) continua funcionando. */
+@property --mx {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 85%;
+}
+@property --my {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 100%;
+}
+
+.btn-glow {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Contorno fino e claro via box-shadow INSET (nunca `border` — pedido
+     explícito: "para o tamanho do botão não mudar nem 1px", já que
+     `border` ocupa espaço de layout e `box-shadow` não). */
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+  transition: box-shadow 0.4s ease;
+}
+/* A luz em si — pseudo-elemento, nunca o próprio background do botão (que
+   continua sendo o `bg-primary`/gradiente de quem já usa a classe) —
+   `z-index: -1` + `isolation: isolate` no .btn-glow (acima) cria um
+   contexto de empilhamento PRÓPRIO pro botão, então -1 aqui fica atrás do
+   conteúdo (texto/ícone) do botão mas nunca atrás de outros elementos da
+   página por engano. */
+.btn-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  /* color-mix: vermelho mais claro DERIVADO do token #e50914 (`primary`,
+     tailwind.config.ts) — nunca uma cor nova inventada, só o mesmo
+     vermelho misturado com branco, exatamente como pedido. 140px: tamanho
+     pedido explicitamente; opacidade baixa em repouso (.35), mais forte no
+     hover (ver mais abaixo) — nunca 1 inteiro: a 140px de raio o círculo
+     cobre o botão quase inteiro, e um branco/rosado a opacidade total por
+     cima do texto branco comprometeria o contraste (pedido explícito:
+     "se clarear demais, reduza a opacidade"). */
+  background: radial-gradient(140px circle at var(--mx) var(--my), color-mix(in srgb, #e50914 55%, white), transparent 70%);
+  opacity: 0.35;
+  transition: opacity 0.4s ease, --mx 0.4s ease, --my 0.4s ease;
+}
+/* Enquanto o cursor está em cima (ButtonGlow.tsx liga esta classe no
+   pointerover e desliga no pointerout) — SEM transition de --mx/--my: a
+   luz acompanha o cursor 1:1, sem "atrasar" atrás dele. A opacity continua
+   com transition normal (entrar/sair do hover ainda esmaece suave). */
+.btn-glow.is-tracking::before {
+  transition: opacity 0.4s ease;
+}
+
+/* :active vale em QUALQUER dispositivo, inclusive toque (pedido explícito
+   — "ao tocar (:active), a luz acende rápido e volta"), fora de qualquer
+   media query de hover. */
+.btn-glow:active::before {
+  opacity: 0.75;
+}
+
+/* :focus-visible vale em QUALQUER dispositivo (teclado externo num
+   celular/tablet também é um caso real) — MESMO visual do hover (pedido
+   explícito), fora da media query de hover real, abaixo. O outline
+   continua o padrão nativo do navegador (nenhum `outline: none` foi
+   adicionado aqui) — "+ outline visível no padrão do site" já é o default
+   do navegador em cima do :focus-visible. */
+.btn-glow:focus-visible::before {
+  opacity: 0.65;
+}
+.btn-glow:focus-visible {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.45), 0 0 28px 0 rgb(229 9 20 / 0.28);
+}
+.dark .btn-glow:focus-visible {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.45), 0 0 28px 0 rgb(229 9 20 / 0.45);
+}
+
+/* Hover só em dispositivos com PONTEIRO REAL (pedido explícito — mobile
+   dispara :hover num toque e "prende" o efeito até o próximo toque em
+   outro lugar; `hover: hover` nunca bate verdadeiro em touchscreen). Halo
+   externo mais sutil por padrão (tema claro, pedido explícito — "no modo
+   light... reduza a opacidade se ficar pesado") e mais forte só dentro de
+   `.dark` (tema escuro, onde o halo vermelho contra o fundo quase preto
+   não pesa da mesma forma). */
+@media (hover: hover) {
+  .btn-glow:hover::before {
+    opacity: 0.65;
+  }
+  .btn-glow:hover {
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.45), 0 0 28px 0 rgb(229 9 20 / 0.28);
+  }
+  .dark .btn-glow:hover {
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.45), 0 0 28px 0 rgb(229 9 20 / 0.45);
+  }
+  /* Cancela o `hover:bg-primary-hover` de `.btn-primary` (globals.css,
+     @layer components, mais abaixo) SÓ quando as duas classes coexistem
+     (pedido explícito: "remova os estilos de hover antigos que
+     conflitem") — NUNCA mexendo em `.btn-primary` sozinho, que continua
+     usado em telas fora desta tarefa (login/admin/área de membros) sem
+     `.btn-glow`; a troca de cor de fundo sumiria de lá também se a regra
+     mudasse ali. Especificidade: 2 classes (`.btn-glow.btn-primary`)
+     sempre vence 1 classe (`.btn-primary:hover` sozinho), então não
+     depende de ordem de declaração no CSS gerado. */
+  .btn-glow.btn-primary:hover {
+    background-color: #e50914;
+  }
+}
+
+/* prefers-reduced-motion: sem rastreamento nenhum (ButtonGlow.tsx nem
+   anexa os listeners nesse caso) — a luz fica sempre no canto padrão
+   (85%/100%, os initial-value do @property) e só muda de OPACIDADE, sem
+   nenhuma transition (pedido explícito: "sem transition") — troca
+   instantânea entre os estados, nunca animada. */
+@media (prefers-reduced-motion: reduce) {
+  .btn-glow,
+  .btn-glow::before {
+    transition: none !important;
+  }
+}
+
+/* Carrossel de cursos (CursosSection.tsx) — zera QUALQUER transform 3D/
+   rotação nos cartões abaixo do breakpoint mobile (767px, mesmo md do
+   Tailwind), causa raiz de um bug relatado ("cards inclinados no
+   mobile"): o wrapper de ENTRADA de cada card sempre inclui
+   perspective(800px)/rotateX() no `style` inline, mesmo depois de
+   "entrado" (rotateX(0deg) — sem efeito visual, mas viola a regra "no
+   mobile, sem NENHUM perspective/rotate no transform"); e o wrapper 3D
+   interno pode reter um transform desktop antigo se a janela for
+   redimensionada de desktop pra mobile em tempo real (o motor mobile do
+   rAF nunca mais escreve nesse elemento, ver `passo()`). `!important` é
+   necessário aqui porque CSS de classe não vence `style` inline por
+   especificidade — só um `!important` numa media query consegue. */
+@media (max-width: 767px) {
+  .cursos-card-entrada,
+  .cursos-card-3d {
+    transform: none !important;
+  }
+}
+
+/* footer-barra-final (LandingFooter.tsx) — pedido explícito de uma tarefa
+   posterior: no mobile, a barra final do footer (direitos reservados +
+   links legais) é o ÚLTIMO elemento da página, sem rolagem sobrando pro
+   AOS cruzar o próprio ponto de disparo — ela nascia presa em opacity:0,
+   sem a classe `aos-animate` (bug conhecido do AOS com elementos colados
+   no fim da página). `!important` é necessário porque o AOS escreve
+   opacity/transform via `style` inline no elemento — só uma media query
+   com !important vence isso. Não remove `data-aos` do JSX (desktop
+   continua com o efeito normal, testado e funcionando lá). */
+@media (max-width: 767px) {
+  .footer-barra-final {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    pointer-events: auto !important;
+  }
+}
+
+/* WordReveal.tsx (revelação palavra por palavra, pedido explícito desta
+   tarefa) + `.intro-item` (sequência de entrada do hero, mesma tarefa) —
+   as DUAS dentro de `prefers-reduced-motion: no-preference`: fora dela
+   (movimento reduzido), nenhuma das duas classes tem regra nenhuma aqui,
+   então os elementos ficam no estado NORMAL do navegador (opacity 1,
+   transform none) sem precisar de nenhum override extra — é assim que
+   "sem nenhuma animação" fica garantido pra quem pediu menos movimento. */
+@media (prefers-reduced-motion: no-preference) {
+  /* --i (índice contínuo da palavra, inteiro) × --wr-stagger (ms entre
+     palavras) + --wr-delay (ms antes da 1ª palavra) — as duas variáveis
+     vêm do `style` inline de WordReveal.tsx (nunca hardcoded aqui).
+     display:inline-block: necessário pro `transform` funcionar (elementos
+     inline puro ignoram translateY) sem quebrar a quebra de linha natural
+     do texto (cada PALAVRA vira seu próprio bloco inline, o espaço entre
+     elas continua sendo texto normal, fora de qualquer span). */
+  .wr-word {
+    display: inline-block;
+    opacity: 0.12;
+    transform: translateY(0.35em);
+    filter: blur(4px);
+    transition: opacity 0.6s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), filter 0.6s ease;
+    transition-delay: calc(var(--i) * var(--wr-stagger, 45ms) + var(--wr-delay, 0ms));
+  }
+  .wr.is-in .wr-word {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  /* Sequência de entrada do hero (HeroSection.tsx/LandingHeader.tsx) — só
+     pros itens que NÃO são texto (WordReveal cobre título/subtítulo): o
+     header do site, o selo de prova social, os botões e o wrapper da
+     imagem da plataforma. `--intro-y`/`--intro-scale`/`--intro-delay`/
+     `--intro-duration` vêm do `style` inline de quem usa a classe — cada
+     item tem seu próprio deslocamento/atraso/duração (pedido explícito:
+     header -12px/600ms, selo 16px/100ms, botões 20px+scale/1500ms, imagem
+     48px/1000ms), a MESMA keyframe serve pra todos, só as variáveis mudam.
+     `both`: aplica o estado inicial (opacity 0) mesmo ANTES da animação
+     começar (durante o `animation-delay`) — sem isso, o item apareceria
+     no estado final por um instante antes de "sumir" pra tocar a entrada. */
+  @keyframes intro-up {
+    from {
+      opacity: 0;
+      transform: translateY(var(--intro-y, 16px)) scale(var(--intro-scale, 1));
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  .intro-item {
+    animation: intro-up var(--intro-duration, 0.8s) cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--intro-delay, 0ms);
+  }
+}
+
 :root {
   /* Altura real do header FLUTUANTE da landing institucional no estado
      INICIAL (topo da página, antes de rolar) — LandingHeader.tsx: o

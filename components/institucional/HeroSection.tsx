@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import AvataresProvaSocial from '@/components/institucional/AvataresProvaSocial';
 import ImagemPlataformaSection from '@/components/institucional/ImagemPlataformaSection';
 import CtaButtons from '@/components/institucional/CtaButtons';
+import WordReveal from '@/components/institucional/WordReveal';
+import { cn } from '@/lib/utils';
 
 // Fallback estático (pedido explícito: "se o footer não expõe uma lista,
 // use os nomes acima") — só entra em jogo se `categorias` vier vazio (falha
@@ -35,6 +37,29 @@ const VELOC_DIGITAR_MS = 70;
 const VELOC_APAGAR_MS = 40;
 const PAUSA_COMPLETO_MS = 1500;
 
+// Trecho do nicho animado — tratado como "a última palavra da linha 2" da
+// sequência de entrada do hero (pedido explícito de uma tarefa posterior,
+// ver comentário no H1 mais abaixo): linha 1 ("Um só lugar") tem 3
+// palavras (índices 0-2), linha 2 ("todos os cursos") mais 3 (índices
+// 0-2 na PRÓPRIA instância de WordReveal dela, mas conceitualmente
+// 3-5 na cascata contínua) — o nicho é a PRÓXIMA palavra da cascata,
+// índice 6. DELAY/STAGGER aqui são os MESMOS da linha 1 (WordReveal
+// immediate delay={250} stagger={60} no H1, abaixo) — reaproveitados
+// (não duplicados) pra calcular tanto o `--wr-delay`/`--i` do nicho
+// quanto ESPERA_ANTES_DE_DIGITAR_MS logo abaixo, garantindo que os dois
+// nunca dessincronizem.
+const NICHO_DELAY_BASE_MS = 250;
+const NICHO_STAGGER_MS = 60;
+const NICHO_INDICE = 6;
+// Duração aproximada da transição de opacity/filter do .wr-word (ver
+// app/globals.css — "opacity .6s ease, ... filter .6s ease"), pedido
+// explícito: "~600ms". A digitação só começa DEPOIS que a entrada do
+// nicho termina (pedido explícito) — calculado, não por onTransitionEnd
+// (mais simples/robusto, sem depender de qual propriedade dispara o
+// evento primeiro entre opacity/transform/filter).
+const TRANSICAO_ENTRADA_MS = 600;
+const ESPERA_ANTES_DE_DIGITAR_MS = NICHO_DELAY_BASE_MS + NICHO_INDICE * NICHO_STAGGER_MS + TRANSICAO_ENTRADA_MS;
+
 /**
  * Efeito de digitação (typewriter) do trecho destacado do H1 — escreve um
  * nicho, pausa com o texto completo, apaga letra por letra, passa pro
@@ -47,6 +72,13 @@ const PAUSA_COMPLETO_MS = 1500;
  * mostraria, pra nunca haver mismatch de hidratação entre server e client
  * (o H1 estático via `aria-label`, ver HeroSection abaixo, cobre leitor de
  * tela o tempo todo, independente deste hook).
+ *
+ * A digitação em si só começa depois de `ESPERA_ANTES_DE_DIGITAR_MS`
+ * (pedido explícito de uma tarefa posterior — "só deve começar DEPOIS que
+ * a entrada terminar"): antes disso, `texto` fica '' (vazio) — o cursor
+ * piscando aparece sozinho, sem nenhum caractere, exatamente como a tarefa
+ * permite ("pode mostrar só o cursor"). Velocidade de digitação/apagar,
+ * nichos e cores continuam EXATAMENTE os mesmos — só o INÍCIO atrasou.
  */
 function useTypewriter(nichos: string[]) {
   const [montado, setMontado] = useState(false);
@@ -92,7 +124,10 @@ function useTypewriter(nichos: string[]) {
       }
     }
 
-    timer = setTimeout(digitar, VELOC_DIGITAR_MS);
+    // ESPERA_ANTES_DE_DIGITAR_MS (não VELOC_DIGITAR_MS direto, como antes)
+    // — só o atraso INICIAL muda; o resto do loop (digitar/apagar) segue
+    // com os MESMOS tempos de sempre.
+    timer = setTimeout(digitar, ESPERA_ANTES_DE_DIGITAR_MS);
     return () => {
       cancelado = true;
       clearTimeout(timer);
@@ -120,6 +155,25 @@ function useTypewriter(nichos: string[]) {
 export default function HeroSection({ destinoLogado, categorias }: { destinoLogado: string | null; categorias: { id: string; nome: string }[] }) {
   const nichos = useMemo(() => (categorias.length > 0 ? categorias.map((c) => c.nome) : NICHOS_FALLBACK), [categorias]);
   const { texto: nichoAtual, reduzido } = useTypewriter(nichos);
+
+  // Dispara a ENTRADA do nicho (não a digitação — essa espera
+  // ESPERA_ANTES_DE_DIGITAR_MS dentro de useTypewriter, acima) — MESMA
+  // técnica de "montou + 2 requestAnimationFrame" que WordReveal.tsx usa
+  // no modo `immediate` (garante que o navegador já pintou o estado
+  // INICIAL do `.wr-word`, opacity .12/blur, antes da classe `is-in`
+  // entrar, senão a transição CSS não teria um "de" pra sair).
+  const [nichoEntrou, setNichoEntrou] = useState(false);
+  useEffect(() => {
+    let quadro1 = 0;
+    let quadro2 = 0;
+    quadro1 = requestAnimationFrame(() => {
+      quadro2 = requestAnimationFrame(() => setNichoEntrou(true));
+    });
+    return () => {
+      cancelAnimationFrame(quadro1);
+      if (quadro2) cancelAnimationFrame(quadro2);
+    };
+  }, []);
 
   return (
     // SEM Container/max-w (era Container, max-w-6xl — causa raiz de um bug
@@ -208,7 +262,14 @@ export default function HeroSection({ destinoLogado, categorias }: { destinoLoga
                   regressão visual sutil sem ganho nenhum (pedido
                   explícito desta tarefa: "se for arriscado, deixe como
                   está"). */}
-              <div className="flex flex-col items-center gap-2 md:flex-row md:gap-3">
+              {/* Selo (fotos + texto) — 2º item da sequência de entrada do
+                  hero (pedido explícito: "fade + subida 16px, delay
+                  100ms"). intro-item (app/globals.css) — dispara sozinho ao
+                  carregar, sem esperar rolagem nenhuma (nunca AOS aqui). */}
+              <div
+                className="intro-item flex flex-col items-center gap-2 md:flex-row md:gap-3"
+                style={{ '--intro-y': '16px', '--intro-delay': '100ms' } as React.CSSProperties}
+              >
                 <AvataresProvaSocial />
                 {/* text-xs (12px, pedido explícito) no mobile, md:text-sm
                     restaura o tamanho de sempre. whitespace-nowrap
@@ -238,7 +299,21 @@ export default function HeroSection({ destinoLogado, categorias }: { destinoLoga
                 className="mt-4 w-full max-w-4xl text-[clamp(26px,7.5vw,32px)] font-semibold leading-[1.1] tracking-tight text-gray-900 dark:text-white md:mt-6 md:text-[clamp(2.5rem,1.3rem+2.4vw,4rem)] md:leading-[1.05]"
               >
                 <span aria-hidden="true">
-                  <span className="block">Um só lugar</span>
+                  {/* Título — WordReveal palavra por palavra (pedido
+                      explícito, hero item 3): "Um só lugar" e "todos os
+                      cursos" cada um numa instância própria (não dá pra
+                      juntar as duas num WordReveal só, porque entre elas
+                      mora o span do NICHO — texto DINÂMICO, trocado letra a
+                      letra pelo typewriter, useTypewriter acima; passar
+                      esse span por dentro do WordReveal reprocessaria/
+                      recriaria os spans de palavra a cada tecla digitada,
+                      brigando com a própria digitação). delay da 2ª linha
+                      (430ms) continua a MESMA cadência de stagger da 1ª
+                      (250ms + 3 palavras × 60ms), pra ler como uma cascata
+                      única mesmo sendo dois componentes. */}
+                  <WordReveal as="span" immediate delay={250} stagger={60} className="block">
+                    Um só lugar
+                  </WordReveal>
                   {/* Wrapper da linha 2 — no mobile, contém DUAS linhas
                       reais (br força a quebra), cada uma com sua própria
                       altura natural, então não precisa de min-h aqui (só
@@ -248,12 +323,13 @@ export default function HeroSection({ destinoLogado, categorias }: { destinoLoga
                       no span do nicho, que é inline e ignora min-height)
                       reserva a altura certa. */}
                   <span className="mt-1 block md:min-h-[1.2em]">
-                    {/* "todos os cursos" — span comum (inline por padrão,
-                        sem precisar de classe extra): no mobile o <br>
-                        logo depois já força a quebra, independente do
-                        display dela; a partir de md, sem <br>, ela flui
-                        junto com o nicho na mesma linha, como sempre foi. */}
-                    <span className="whitespace-nowrap">todos os cursos</span>
+                    {/* "todos os cursos" — no mobile o <br> logo depois já
+                        força a quebra, independente do display dela; a
+                        partir de md, sem <br>, ela flui junto com o nicho
+                        na mesma linha, como sempre foi. */}
+                    <WordReveal as="span" immediate delay={430} stagger={60} className="whitespace-nowrap">
+                      todos os cursos
+                    </WordReveal>
                     <br className="md:hidden" />
                     {/* min-h-[1.2em] + block (mobile — linha PRÓPRIA do
                         nicho, reserva a altura sozinha aqui); md:inline +
@@ -269,8 +345,28 @@ export default function HeroSection({ destinoLogado, categorias }: { destinoLoga
                         whitespace-nowrap incondicional: nunca quebra em 2
                         linhas, nem no mobile (o nicho precisa ficar
                         inteiro numa linha só) nem a partir de lg
-                        (comportamento de sempre). */}
-                    <span className="mt-1 block min-h-[1.2em] whitespace-nowrap text-[0.9em] md:mt-0 md:inline md:min-h-0 md:text-[1em]">
+                        (comportamento de sempre).
+                        `wr`/`is-in` (era `intro-item` — pedido explícito de
+                        uma tarefa posterior: "o texto animado dos nichos
+                        deve receber o MESMO efeito de entrada das palavras
+                        do título... use a mesma classe/transition do
+                        WordReveal (.wr-word)"; antes ele aparecia nítido
+                        antes do resto por usar uma animação PRÓPRIA
+                        (intro-item), fora da cascata do título — agora usa
+                        literalmente o `.wr-word` de app/globals.css, com
+                        `--i`/`--wr-delay`/`--wr-stagger` calculados como se
+                        fosse a PRÓXIMA palavra depois das 6 do título (ver
+                        NICHO_INDICE/NICHO_DELAY_BASE_MS/NICHO_STAGGER_MS,
+                        acima) — não dá pra usar o componente WordReveal em
+                        si aqui (só a classe/CSS dele): o conteúdo é
+                        DINÂMICO (typewriter, useTypewriter acima),
+                        WordReveal reprocessaria os spans a cada tecla
+                        digitada. `nichoEntrou` (state próprio, acima) faz o
+                        papel do `is-in` que o WordReveal adicionaria
+                        sozinho. */}
+                    <span
+                      className={cn('wr mt-1 block min-h-[1.2em] whitespace-nowrap text-[0.9em] md:mt-0 md:inline md:min-h-0 md:text-[1em]', nichoEntrou && 'is-in')}
+                    >
                       {/* espaço antes do nicho — só visível quando ele
                           está JUNTO de "todos os cursos" na mesma linha
                           (md+); no mobile, esse espaço vira só um espaço
@@ -279,7 +375,12 @@ export default function HeroSection({ destinoLogado, categorias }: { destinoLoga
                           sozinho, sem precisar de nenhuma classe
                           condicional extra. */}
                       <span className="hidden md:inline"> </span>
-                      <span className="text-primary">
+                      {/* min-width via inline-block (herdado de .wr-word)
+                          já evita pulo de layout quando a digitação começa
+                          (pedido explícito) — o span nunca desaparece do
+                          fluxo, só o TEXTO dentro dele muda de ''
+                          (esperando) pra as letras sendo digitadas. */}
+                      <span className="wr-word text-primary" style={{ '--i': NICHO_INDICE, '--wr-delay': `${NICHO_DELAY_BASE_MS}ms`, '--wr-stagger': `${NICHO_STAGGER_MS}ms` } as React.CSSProperties}>
                         {nichoAtual}
                         {/* Cursor some no prefers-reduced-motion (pedido
                             explícito: "mostre apenas um nicho estático")
@@ -303,16 +404,42 @@ export default function HeroSection({ destinoLogado, categorias }: { destinoLoga
                   que o efetivo em >=768px já era text-xl mesmo antes —
                   ver comentário do wrapper "CONTEÚDO", acima, sobre a
                   troca de breakpoint sm->md). */}
-              <p className="mt-3 w-full max-w-[320px] text-sm leading-relaxed text-gray-500 dark:text-gray-400 md:mt-4 md:max-w-[640px] md:text-xl">
+              {/* Subtítulo — WordReveal immediate (pedido explícito, hero
+                  item 3: "começa depois do título, delay ~900ms, stagger
+                  25ms"). */}
+              <WordReveal
+                as="p"
+                immediate
+                delay={900}
+                stagger={25}
+                className="mt-3 w-full max-w-[320px] text-sm leading-relaxed text-gray-500 dark:text-gray-400 md:mt-4 md:max-w-[640px] md:text-xl"
+              >
                 Acesse cursos gravados, evolua no seu ritmo e aprenda com quem já chegou lá.
-              </p>
+              </WordReveal>
 
               {/* 4) Botões — extraídos pra um componente compartilhado
                   nesta tarefa (CtaButtons.tsx, ver comentário lá), pra
                   reutilizar em SectionHeader.tsx sem duplicar
                   classes/links. Mesmo estilo/altura/comportamento de
-                  sempre — só saiu do lugar. */}
-              <CtaButtons destinoLogado={destinoLogado} className="mt-5 md:mt-6" />
+                  sempre — só saiu do lugar. labelPrimario="Criar conta
+                  grátis" (pedido explícito de uma tarefa posterior: só
+                  aqui e na seção Perguntas frequentes, sem "minha" —
+                  destino/estilo/tamanho continuam os mesmos, ver
+                  CtaButtons.tsx).
+                  intro-item (pedido explícito, hero item 3: "fade + subida
+                  20px + scale 0.96 -> 1, delay ~1500ms") num wrapper (a
+                  margem mt-5/md:mt-6, que antes ia direto no className do
+                  CtaButtons, saiu pra cá — mesmo resultado visual, o
+                  colapso de margem entre um <div> bloco simples e seu
+                  único filho não muda nada). Sem pointer-events:none em
+                  nenhum momento — clicável assim que aparece (pedido
+                  explícito: "não deve atrasar a interação"). */}
+              <div
+                className="intro-item mt-5 md:mt-6"
+                style={{ '--intro-y': '20px', '--intro-scale': '0.96', '--intro-delay': '1500ms' } as React.CSSProperties}
+              >
+                <CtaButtons destinoLogado={destinoLogado} labelPrimario="Criar conta grátis" />
+              </div>
             </div>
 
             {/* Mockup da plataforma — FORA do padding horizontal do texto
@@ -333,7 +460,19 @@ export default function HeroSection({ destinoLogado, categorias }: { destinoLoga
                 breakpoint sm->md explicada acima: abaixo de md, tudo
                 conta como mobile agora); lg:mt-12 inalterado (já era
                 lg-only, continua igual). */}
-            <div className="mt-4 w-full px-2 md:mt-10 md:px-0 lg:mt-12">
+            {/* intro-item (pedido explícito, hero item 3: "fade + subida
+                48px, 1000ms, delay ~1700ms") — SEMPRE num wrapper POR FORA
+                do componente que recebe a inclinação por scroll
+                (ImagemPlataformaSection.tsx, wrapperRef/imgBoxRef lá
+                dentro): dois `transform` no MESMO elemento brigariam (um
+                escrito via animation CSS aqui, outro via JS a cada frame de
+                scroll lá dentro) — este <div> é só o PAI, nunca o mesmo nó;
+                a inclinação por scroll continua funcionando exatamente
+                igual, sem nenhuma mudança em ImagemPlataformaSection.tsx. */}
+            <div
+              className="intro-item mt-4 w-full px-2 md:mt-10 md:px-0 lg:mt-12"
+              style={{ '--intro-y': '48px', '--intro-duration': '1000ms', '--intro-delay': '1700ms' } as React.CSSProperties}
+            >
               <ImagemPlataformaSection />
             </div>
           </div>

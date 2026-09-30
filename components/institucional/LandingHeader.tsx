@@ -14,12 +14,15 @@ import BrandLogo from '@/components/institucional/BrandLogo';
 // "palavras" e "numeros" não têm item de menu próprio, de propósito).
 // Array único, usado tanto pro menu desktop quanto pro painel mobile, pra
 // nunca ficarem dessincronizados.
+// "ajuda" virou "perguntas-frequentes" nesta tarefa (pedido explícito de
+// id, ver a nova seção FaqSection.tsx/LandingPageClient.tsx) — o RÓTULO
+// continua "Ajuda" (pedido explícito: "mantenha os rótulos atuais").
 const ITENS_MENU = [
   { id: 'inicio', label: 'Início' },
   { id: 'plataforma', label: 'Plataforma' },
   { id: 'cursos', label: 'Cursos' },
   { id: 'planos', label: 'Planos' },
-  { id: 'ajuda', label: 'Ajuda' },
+  { id: 'perguntas-frequentes', label: 'Ajuda' },
 ] as const;
 
 // "Diferenciais" saiu do menu numa tarefa anterior (o pill reduzido, após
@@ -133,9 +136,13 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
   // logado) se não. Só texto/link mais estreito que os botões grandes de
   // dentro do menu tela cheia — cabe ao lado do ícone de menu na barra.
   const BotaoContaCompacto = () => (
+    // hover:bg-primary-hover removido (pedido explícito de uma tarefa
+    // posterior — conflitava com o novo efeito .btn-glow, ver
+    // app/globals.css/ButtonGlow.tsx: a luz que segue o cursor substitui a
+    // troca de cor de fundo no hover).
     <Link
       href={destinoLogado ?? '/login?form=cadastro'}
-      className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-hover"
+      className="btn-glow rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors"
     >
       {destinoLogado ? 'Plataforma' : 'Criar conta'}
     </Link>
@@ -152,10 +159,22 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
           pointer-events-auto no pill: a faixa vazia ao redor do pill
           (esquerda/direita, acima dele) não deveria capturar clique nenhum. */}
       <header
+        // intro-item (app/globals.css) — 1º item da sequência de entrada do
+        // hero (pedido explícito: "fade + descida leve (translateY -12px
+        // -> 0), 600ms, sem atrasar o uso"). CSS puro via animation (nunca
+        // AOS — o header é `fixed`, e a regra geral desta tarefa proíbe AOS
+        // em elementos fixed/sticky; uma animação de keyframe comum no
+        // mount não tem esse problema, só o IntersectionObserver do AOS
+        // teria). Sem pointer-events:none extra nenhum — o header já
+        // controla isso sozinho (pointer-events-none no wrapper vazio ao
+        // redor do pill, pointer-events-auto no pill em si, ver mais
+        // abaixo), então os links/botões continuam clicáveis assim que
+        // aparecem.
         className={cn(
-          'pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center transition-[padding] duration-300 ease-in-out',
+          'intro-item pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center transition-[padding] duration-300 ease-in-out',
           comFundo ? 'px-3 pt-3 sm:px-4 sm:pt-4' : 'px-0 pt-0'
         )}
+        style={{ '--intro-y': '-12px', '--intro-duration': '600ms', '--intro-delay': '0ms' } as React.CSSProperties}
       >
         {/* max-w-6xl SÓ quando reduzido (era incondicional — regressão
             pega nesta tarefa: no topo da página, em telas bem largas
@@ -270,7 +289,7 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
               <div className="hidden items-center gap-2 md:flex">
                 <BotaoTema />
                 {destinoLogado ? (
-                  <Link href={destinoLogado} className="btn-primary shrink-0 whitespace-nowrap">
+                  <Link href={destinoLogado} className="btn-primary btn-glow shrink-0 whitespace-nowrap">
                     Ir para a plataforma
                   </Link>
                 ) : (
@@ -292,7 +311,7 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
                         "Cadastra-se" já usa, abrindo direto no lado de
                         cadastro do card com flip. shrink-0 + whitespace-
                         nowrap: mesmo motivo do "Entrar" acima. */}
-                    <Link href="/login?form=cadastro" className="btn-primary shrink-0 whitespace-nowrap">
+                    <Link href="/login?form=cadastro" className="btn-primary btn-glow shrink-0 whitespace-nowrap">
                       Criar conta grátis
                     </Link>
                   </>
@@ -379,7 +398,7 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
             um botão só, "Ir para a plataforma". */}
         <div className="shrink-0 space-y-2.5 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-2">
           {destinoLogado ? (
-            <Link href={destinoLogado} onClick={() => setMenuAberto(false)} className="btn-primary block w-full py-3 text-center text-sm">
+            <Link href={destinoLogado} onClick={() => setMenuAberto(false)} className="btn-primary btn-glow block w-full py-3 text-center text-sm">
               Ir para a plataforma
             </Link>
           ) : (
@@ -387,7 +406,7 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
               <Link
                 href="/login?form=cadastro"
                 onClick={() => setMenuAberto(false)}
-                className="btn-primary block w-full py-3 text-center text-sm"
+                className="btn-primary btn-glow block w-full py-3 text-center text-sm"
               >
                 Criar conta grátis
               </Link>

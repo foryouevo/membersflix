@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, MessageCircle, X } from 'lucide-react';
-import { buildSupportWhatsappLink, cn } from '@/lib/utils';
+import { buildSupportWhatsappLink, cn, scrollSuaveParaSecao } from '@/lib/utils';
 
 // Raio/circunferência do anel de progresso (botão "voltar ao topo") — SVG
 // fixo 56x56 (MESMO tamanho do botão de suporte, pedido explícito desta
@@ -228,13 +228,16 @@ export default function LandingFloatingActions({ numeroWhatsapp }: { numeroWhats
         </button>
 
         {/* Botão "suporte" — sempre visível, em destaque (vermelho da
-            marca). */}
+            marca). btn-glow (pedido explícito de uma tarefa posterior —
+            "o botão circular vermelho flutuante do chat também"):
+            hover:scale-105/transition-transform removidos (conflitavam —
+            "nenhum transform no botão" com o novo efeito). */}
         <button
           type="button"
           onClick={() => setPopupAberto((v) => !v)}
           aria-label={popupAberto ? 'Fechar suporte' : 'Falar com o suporte'}
           aria-expanded={popupAberto}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/30 transition-transform hover:scale-105"
+          className="btn-glow flex h-14 w-14 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/30"
         >
           {popupAberto ? <X size={24} /> : <MessageCircle size={24} />}
         </button>
@@ -272,7 +275,7 @@ export default function LandingFloatingActions({ numeroWhatsapp }: { numeroWhats
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setPopupAberto(false)}
-              className="btn-primary flex w-full items-center justify-center gap-2"
+              className="btn-primary btn-glow flex w-full items-center justify-center gap-2"
             >
               <MessageCircle size={16} />
               Falar com o suporte
@@ -285,14 +288,21 @@ export default function LandingFloatingActions({ numeroWhatsapp }: { numeroWhats
 
           <div className="my-4 h-px bg-gray-200 dark:bg-white/10" />
 
-          {/* #ajuda (era link pra /suporte — pedido explícito de uma
-              tarefa anterior): rola até a seção "Perguntas Frequentes" na
-              PRÓPRIA landing em vez de navegar pra outra página. */}
+          {/* #perguntas-frequentes (era link pra /suporte — pedido
+              explícito de uma tarefa anterior: rola até a seção "Perguntas
+              Frequentes" na PRÓPRIA landing em vez de navegar pra outra
+              página; id corrigido nesta tarefa — a seção virou
+              "perguntas-frequentes" numa tarefa posterior, ver
+              LandingPageClient.tsx/LandingHeader.tsx, mas este botão ainda
+              apontava pro id antigo "ajuda", então nunca rolava pra lugar
+              nenhum). scrollSuaveParaSecao (lib/utils.ts, MESMA função que
+              os links do menu usam) no lugar de um scrollIntoView próprio
+              — reaproveita o mecanismo existente em vez de duplicar. */}
           <button
             type="button"
             onClick={() => {
               setPopupAberto(false);
-              document.getElementById('ajuda')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              scrollSuaveParaSecao('perguntas-frequentes');
             }}
             className="block w-full text-left"
           >

@@ -214,10 +214,18 @@ export default function CursosSection({ categorias }: { categorias: { id: string
   const cardInternoRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const posRef = useRef(0); // px acumulados da fileira (desktop: cresce contínuo; mobile: "persegue" posAlvoRef)
-  const posAlvoRef = useRef(0); // SÓ mobile — destino de `posRef` (indiceMobileRef * passoPx)
+  const posAlvoRef = useRef(0); // SÓ mobile — destino de `posRef` (indiceMobileRef * passoPx + centroOffsetRef)
   const indiceMobileRef = useRef(0); // SÓ mobile — índice "lógico" do card alvo, cresce sem limite (ver reset de 1 volta, no passo())
   const proximoAvancoMobileRef = useRef(0); // SÓ mobile — timestamp (performance.now()) do próximo auto-avanço permitido
   const larguraVoltaRef = useRef(0); // largura de 1 cópia da lista (px) — recalculada em resize/mount
+  // centroOffsetRef — pedido explícito de uma tarefa posterior (causa raiz
+  // do "card deslocado pra esquerda" no mobile, ver comentário de medir()
+  // abaixo): SÓ mobile, o deslocamento CONSTANTE que soma ao alvo de cada
+  // índice pra que o CENTRO do card (não a borda esquerda dele) coincida
+  // com o centro do viewport do carrossel. offsetLeft do 1º card + metade
+  // da largura real dele − metade da largura real do container (nunca
+  // window.innerWidth, pedido explícito — pode incluir a barra de rolagem).
+  const centroOffsetRef = useRef(0);
   const multiplicadorAtualRef = useRef(0); // 0..1, suavizado a cada frame em direção ao alvo
   const multiplicadorAlvoRef = useRef(1);
   const inerciaVelRef = useRef(0); // px/s "extra" deixado pelo arrasto no DESKTOP, decaindo até 0
@@ -291,45 +299,111 @@ export default function CursosSection({ categorias }: { categorias: { id: string
     return () => document.removeEventListener('visibilitychange', aoMudarVisibilidade);
   }, [atualizarAlvo]);
 
-  // Mede a largura de UMA volta (a lista original, não duplicada) e se a
-  // largura da janela está abaixo do breakpoint mobile — refeito no
-  // mount e em todo resize, nunca hardcoded. Também detecta a TROCA entre
-  // mobile/desktop (os dois motores usam `posRef` com semânticas
-  // diferentes — contínuo vs. por índice — então cruzar o breakpoint
-  // zera tudo pra não herdar um valor sem sentido do motor anterior).
+  // Mede a largura de UMA volta (a lista original, não duplicada), o
+  // deslocamento de centralização do mobile (`centroOffsetRef`, ver
+  // comentário do ref acima) e se a largura da janela está abaixo do
+  // breakpoint mobile — refeito no mount, em todo resize/orientationchange
+  // (ResizeObserver no PRÓPRIO container, não só `window.resize` — pedido
+  // explícito, mais robusto que um listener de window porque dispara pra
+  // QUALQUER mudança de largura do container, não só a da janela) e depois
+  // que a página termina de carregar (`window.load` — rede de segurança
+  // pedida explicitamente; nesta implementação as imagens não influenciam
+  // a largura/posição dos cards, que usam `aspect-ratio` fixo + <Image
+  // fill>, mas o listener não custa nada e cobre qualquer mudança de fonte/
+  // layout tardia). Também detecta a TROCA entre mobile/desktop (os dois
+  // motores usam `posRef` com semânticas diferentes — contínuo vs. por
+  // índice — então cruzar o breakpoint zera tudo pra não herdar um valor
+  // sem sentido do motor anterior).
+  //
+  // CAUSA RAIZ do "card deslocado pra esquerda" (pedido explícito de uma
+  // tarefa posterior): o alvo de cada índice mobile era `indice * passoPx`
+  // — a posição que alinha a BORDA ESQUERDA do card ao lado ESQUERDO do
+  // viewport (translateX desloca a fileira inteira, então índice 0 sempre
+  // nascia com `posRef = 0`, ou seja, a borda esquerda do 1º card exatamente
+  // em x=0), nunca o CENTRO dele ao centro do viewport — daí a folga sobrar
+  // só do lado direito. `centroOffsetRef` é a correção: soma ao alvo de
+  // QUALQUER índice a distância entre "borda esquerda alinhada" e "centro
+  // alinhado", medida a partir de elementos reais (offsetLeft/offsetWidth
+  // do próprio card, clientWidth do próprio container — nunca
+  // window.innerWidth, que pode incluir a barra de rolagem vertical e ficar
+  // maior que a área realmente visível do carrossel).
   useEffect(() => {
     if (reduzido) return; // sem loop/duplicação no reduced-motion — nada pra medir
 
     function medir() {
       const novoMobile = window.innerWidth < BREAKPOINT_MOBILE;
-      if (novoMobile !== ehMobileRef.current) {
-        ehMobileRef.current = novoMobile;
-        posRef.current = 0;
-        posAlvoRef.current = 0;
-        indiceMobileRef.current = 0;
-        proximoAvancoMobileRef.current = performance.now() + INTERVALO_AUTOAVANCO_MOBILE_MS;
-        if (trackRef.current) trackRef.current.style.transform = 'translate3d(0px, 0, 0)';
-      }
+      const mudouModo = novoMobile !== ehMobileRef.current;
 
       const metade = cardInternoRefs.current.length / 2;
-      if (metade === 0) return;
-      // Largura de 1 volta = posição inicial do primeiro card da 2ª cópia
-      // (índice `metade`) menos a posição do primeiro card da 1ª cópia —
-      // mede o espaço real ocupado por uma cópia inteira, gap incluído,
-      // sem precisar somar largura+gap de cada card manualmente. Sobe DOIS
-      // níveis a partir do ref (que aponta pro wrapper 3D interno):
-      // wrapper 3D -> wrapper de entrada -> item de fato posicionado pelo
-      // `flex` da fileira (o único cujo offsetLeft reflete a posição real
-      // dele na fileira).
-      const primeiro = cardInternoRefs.current[0]?.parentElement?.parentElement;
-      const primeiroDaSegundaCopia = cardInternoRefs.current[metade]?.parentElement?.parentElement;
-      if (primeiro && primeiroDaSegundaCopia) {
-        larguraVoltaRef.current = primeiroDaSegundaCopia.offsetLeft - primeiro.offsetLeft;
+      if (metade > 0) {
+        // Largura de 1 volta = posição inicial do primeiro card da 2ª cópia
+        // (índice `metade`) menos a posição do primeiro card da 1ª cópia —
+        // mede o espaço real ocupado por uma cópia inteira, gap incluído,
+        // sem precisar somar largura+gap de cada card manualmente. Sobe DOIS
+        // níveis a partir do ref (que aponta pro wrapper 3D interno):
+        // wrapper 3D -> wrapper de entrada -> item de fato posicionado pelo
+        // `flex` da fileira (o único cujo offsetLeft/offsetWidth refletem a
+        // posição/largura REAIS dele na fileira).
+        const primeiro = cardInternoRefs.current[0]?.parentElement?.parentElement;
+        const primeiroDaSegundaCopia = cardInternoRefs.current[metade]?.parentElement?.parentElement;
+        if (primeiro && primeiroDaSegundaCopia) {
+          larguraVoltaRef.current = primeiroDaSegundaCopia.offsetLeft - primeiro.offsetLeft;
+        }
+        if (primeiro && containerRef.current) {
+          const larguraViewport = containerRef.current.clientWidth;
+          centroOffsetRef.current = primeiro.offsetLeft + primeiro.offsetWidth / 2 - larguraViewport / 2;
+        }
+      }
+
+      if (mudouModo) {
+        ehMobileRef.current = novoMobile;
+        indiceMobileRef.current = 0;
+        // Limpa qualquer transform 3D que o motor DESKTOP já tenha escrito
+        // nos cartões antes desta troca (ex.: redimensionar a janela de
+        // desktop pra mobile em tempo real) — sem isso, o valor antigo
+        // (perspective/translateZ/rotateY) ficava "preso" no estilo inline
+        // do elemento pra sempre, já que o motor mobile nunca mais escreve
+        // nada ali (ver `passo()`, o `return` antes do loop 3D). A regra
+        // `.cursos-card-3d` em globals.css já cobre isso via CSS também
+        // (defesa em profundidade), mas limpar aqui mantém o estado do
+        // próprio elemento coerente, não só mascarado visualmente.
+        for (let i = 0; i < cardInternoRefs.current.length; i++) {
+          const el = cardInternoRefs.current[i];
+          if (el) el.style.transform = 'none';
+        }
+        proximoAvancoMobileRef.current = performance.now() + INTERVALO_AUTOAVANCO_MOBILE_MS;
+      }
+
+      if (novoMobile && larguraVoltaRef.current > 0) {
+        // Realinha ao índice ATUAL com a geometria mais recente — tanto
+        // numa troca de modo (índice acabou de virar 0) quanto num resize/
+        // orientationchange puro (card/viewport mudaram de largura, ex.:
+        // `78vw` some recalcula sozinho) — nunca deixa `posAlvoRef`
+        // desatualizado em relação ao centro real. Assenta DIRETO (sem
+        // deslizar) quando não está no meio de um arrasto: mudança de
+        // modo/orientação não deveria "animar", só corrigir a posição.
+        const passoPx = larguraVoltaRef.current / cursos.length;
+        const alvo = indiceMobileRef.current * passoPx + centroOffsetRef.current;
+        posAlvoRef.current = alvo;
+        if (mudouModo || !arrastandoRef.current) {
+          posRef.current = alvo;
+          if (trackRef.current) trackRef.current.style.transform = `translate3d(${-alvo}px, 0, 0)`;
+        }
       }
     }
+
     medir();
+    const resizeObserver = new ResizeObserver(medir);
+    if (containerRef.current) resizeObserver.observe(containerRef.current);
     window.addEventListener('resize', medir, { passive: true });
-    return () => window.removeEventListener('resize', medir);
+    window.addEventListener('orientationchange', medir, { passive: true });
+    window.addEventListener('load', medir, { passive: true });
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', medir);
+      window.removeEventListener('orientationchange', medir);
+      window.removeEventListener('load', medir);
+    };
   }, [cursosDuplicados.length, reduzido]);
 
   // Loop principal — só roda se montado, sem reduced-motion e a lista não
@@ -365,7 +439,7 @@ export default function CursosSection({ categorias }: { categorias: { id: string
           // ver aoSoltarPonteiro).
           if (multiplicadorAtualRef.current > 0.5 && agora >= proximoAvancoMobileRef.current) {
             indiceMobileRef.current += 1;
-            posAlvoRef.current = indiceMobileRef.current * passoPx;
+            posAlvoRef.current = indiceMobileRef.current * passoPx + centroOffsetRef.current;
             proximoAvancoMobileRef.current = agora + INTERVALO_AUTOAVANCO_MOBILE_MS;
           }
           // Desliza suavemente até o alvo (mesma suavização exponencial
@@ -500,7 +574,12 @@ export default function CursosSection({ categorias }: { categorias: { id: string
       // vai para o próximo/anterior"), mesmo sem ter passado da metade.
       const passoPx = larguraVoltaRef.current / cursos.length;
       if (passoPx > 0) {
-        const indiceContinuo = posRef.current / passoPx;
+        // Subtrai `centroOffsetRef` antes de dividir por `passoPx` (e soma
+        // de volta depois, na linha final) — `posRef`/`posAlvoRef` guardam
+        // o alvo JÁ com esse deslocamento de centralização somado (ver
+        // comentário de medir(), acima), então converter de volta pra
+        // "índice" precisa primeiro remover essa constante.
+        const indiceContinuo = (posRef.current - centroOffsetRef.current) / passoPx;
         let indiceAlvo = Math.round(indiceContinuo);
         const rapidoDemais = Math.abs(velocidadeArrastoRef.current) > LIMIAR_ARRASTO_RAPIDO_PXS;
         if (rapidoDemais) {
@@ -508,11 +587,11 @@ export default function CursosSection({ categorias }: { categorias: { id: string
           // direção do gesto, mesmo que o arredondamento acima tenha
           // ficado no mesmo índice de onde começou.
           const direcao = velocidadeArrastoRef.current > 0 ? 1 : -1;
-          const indiceInicio = Math.round(posAlvoRef.current / passoPx);
+          const indiceInicio = Math.round((posAlvoRef.current - centroOffsetRef.current) / passoPx);
           if (indiceAlvo === indiceInicio) indiceAlvo = indiceInicio + direcao;
         }
         indiceMobileRef.current = indiceAlvo;
-        posAlvoRef.current = indiceAlvo * passoPx;
+        posAlvoRef.current = indiceAlvo * passoPx + centroOffsetRef.current;
       }
       // "Retoma alguns segundos depois de soltar" (pedido explícito) —
       // empurra o próximo auto-avanço pra frente, em vez de retomar na
@@ -545,7 +624,7 @@ export default function CursosSection({ categorias }: { categorias: { id: string
     if (ehMobileRef.current) {
       const passoPx = larguraVoltaRef.current / cursos.length;
       indiceMobileRef.current += direcao;
-      posAlvoRef.current = indiceMobileRef.current * passoPx;
+      posAlvoRef.current = indiceMobileRef.current * passoPx + centroOffsetRef.current;
       proximoAvancoMobileRef.current = performance.now() + RETOMAR_APOS_ARRASTO_MS;
     } else {
       posRef.current += 300 * direcao;
@@ -579,28 +658,34 @@ export default function CursosSection({ categorias }: { categorias: { id: string
             `actions.secondary`: SectionHeader só renderiza o primário. */}
         <SectionHeader
           eyebrow="Explore os [[cursos]]"
-          title="Encontre o [[curso]] ideal para você"
+          title={'Encontre o [[curso]]\nideal para você'}
           description={`Cursos gravados em ${totalNichos} nichos para você começar pelo assunto que mais faz sentido para o seu momento.`}
           align="center"
           actions={{ primary: { label: 'Ver planos', href: '#planos' } }}
         />
       </Container>
 
-      {/* Viewport do carrossel — largura TOTAL da janela (fora do
-          Container acima, de propósito: nenhum max-w/px envolvendo este
-          div, então ele herda 100% da largura do <main>, sem nenhum
-          truque de "sangria" com margin negativo — a seção em si não tem
-          padding lateral nenhum, ver LandingPageClient.tsx).
-          `overflow-x-clip`: os cards das PONTAS crescem visualmente em
-          cima do efeito 3D (só desktop), e `overflow-hidden` cortava esse
-          crescimento em cima/embaixo; `overflow-x-clip` recorta só o eixo
-          horizontal — nada de scroll horizontal na página — deixando o Y
-          livre. mask-image (WebkitMask pro Safari) esmaece as duas pontas
-          horizontais pra um fade suave em vez de um corte seco —
-          independe do overflow, continua funcionando igual. */}
-      <div
-        ref={containerRef}
-        role="region"
+      {/* Wrapper SÓ pro data-aos (pedido explícito: "o carrossel inteiro
+          fade-up em um wrapper por fora" — nunca no mesmo elemento que já
+          tem transform/opacity controlados por JS a cada frame, ver
+          containerRef/trackRef/cardInternoRefs abaixo; e nunca mexendo na
+          animação de entrada PRÓPRIA de cada card nem no loop/arrasto). */}
+      <div data-aos="fade-up">
+        {/* Viewport do carrossel — largura TOTAL da janela (fora do
+            Container acima, de propósito: nenhum max-w/px envolvendo este
+            div, então ele herda 100% da largura do <main>, sem nenhum
+            truque de "sangria" com margin negativo — a seção em si não tem
+            padding lateral nenhum, ver LandingPageClient.tsx).
+            `overflow-x-clip`: os cards das PONTAS crescem visualmente em
+            cima do efeito 3D (só desktop), e `overflow-hidden` cortava esse
+            crescimento em cima/embaixo; `overflow-x-clip` recorta só o eixo
+            horizontal — nada de scroll horizontal na página — deixando o Y
+            livre. mask-image (WebkitMask pro Safari) esmaece as duas pontas
+            horizontais pra um fade suave em vez de um corte seco —
+            independe do overflow, continua funcionando igual. */}
+        <div
+          ref={containerRef}
+          role="region"
         aria-roledescription="carrossel"
         aria-label="Cursos disponíveis"
         tabIndex={0}
@@ -661,7 +746,14 @@ export default function CursosSection({ categorias }: { categorias: { id: string
                     inteira "atrasaria" tudo de novo, criando uma entrada
                     visualmente estranha do meio da fileira em diante). */}
                 <div
-                  className="transition-[opacity,transform] duration-700 ease-[cubic-bezier(.2,.8,.2,1)]"
+                  // `cursos-card-entrada`: no mobile, app/globals.css zera
+                  // este transform via media query (!important — só assim
+                  // vence o inline style abaixo, que SEMPRE inclui
+                  // perspective()/rotateX() mesmo no estado "entrado", ver
+                  // comentário do investigação desta tarefa). Só a fase de
+                  // entrada (opacity/scale/translateY/rotateX) mora aqui —
+                  // no desktop, continua exatamente como sempre foi.
+                  className="cursos-card-entrada transition-[opacity,transform] duration-700 ease-[cubic-bezier(.2,.8,.2,1)]"
                   style={{
                     transitionDelay: reduzido ? undefined : `${(i % cursos.length) * 70}ms`,
                     opacity: reduzido || entrando ? 1 : 0,
@@ -689,7 +781,15 @@ export default function CursosSection({ categorias }: { categorias: { id: string
                     ref={(el) => {
                       cardInternoRefs.current[i] = el;
                     }}
-                    className="relative overflow-hidden rounded-2xl border border-black/10 bg-gray-100 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.15),0_24px_48px_-12px_rgba(0,0,0,0.25)] dark:border-white/10 dark:bg-[#161616] dark:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.5),0_24px_48px_-12px_rgba(0,0,0,0.6)]"
+                    // `cursos-card-3d`: mesma proteção via CSS que
+                    // `cursos-card-entrada` acima — o rAF (passo(), mais
+                    // acima) já pula a escrita de transform aqui no
+                    // mobile, mas isso sozinho não limpa um transform
+                    // 3D ESCRITO ANTES de uma troca desktop->mobile em
+                    // tempo real (redimensionar a janela); a regra em
+                    // globals.css garante `transform: none` no mobile
+                    // sempre, não importa a ordem/timing do JS.
+                    className="cursos-card-3d relative overflow-hidden rounded-2xl border border-black/10 bg-gray-100 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.15),0_24px_48px_-12px_rgba(0,0,0,0.25)] dark:border-white/10 dark:bg-[#161616] dark:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.5),0_24px_48px_-12px_rgba(0,0,0,0.6)]"
                     style={{
                       // width: 100% — preenche o pai (que TEM largura de
                       // verdade, via CARD_WIDTH_CLASSES no item da
@@ -745,7 +845,20 @@ export default function CursosSection({ categorias }: { categorias: { id: string
                           priority={i < 6}
                           loading={i < 6 ? undefined : 'lazy'}
                           draggable={false}
-                          className="object-cover"
+                          // object-contain no mobile (causa do corte, ver
+                          // investigação desta tarefa: COVER_ASPECT='3/4'
+                          // (0.75) não bate com a proporção real de
+                          // imagemPlataformaMobile.png, ~0.6135 (346x564) —
+                          // com object-cover, a imagem mais "alta" era
+                          // cortada pra caber na caixa mais "larga",
+                          // cortando o rodapé dela). contain mostra a
+                          // imagem INTEIRA, com uma pequena margem lateral
+                          // sobre o fundo do próprio card (bg-gray-100/
+                          // dark:bg-[#161616], já definido no wrapper
+                          // acima) em vez de cortar. md:object-cover
+                          // preserva o desktop exatamente como estava
+                          // (fora do escopo desta tarefa — ver resumo).
+                          className="object-contain md:object-cover"
                           onError={() => marcarErroImagem(curso.slug)}
                         />
                       ) : (
@@ -790,6 +903,7 @@ export default function CursosSection({ categorias }: { categorias: { id: string
             {pausado ? <Play size={16} /> : <Pause size={16} />}
           </button>
         )}
+      </div>
       </div>
     </div>
   );

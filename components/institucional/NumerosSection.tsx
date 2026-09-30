@@ -77,6 +77,7 @@ function NumeroItem({
   ativo,
   atrasoMs,
   className,
+  aosDelay,
 }: {
   Icone: LucideIcon;
   valor: number;
@@ -86,6 +87,7 @@ function NumeroItem({
   ativo: boolean;
   atrasoMs: number;
   className: string;
+  aosDelay: number;
 }) {
   const [montado, setMontado] = useState(false);
   const [reduzido, setReduzido] = useState(false);
@@ -138,6 +140,15 @@ function NumeroItem({
       // — o conteúdo visual (número animado + sufixo) fica aria-hidden,
       // pra leitor de tela nunca anunciar o número no meio da contagem.
       aria-label={`${valorFinalFormatado}${sufixo} ${rotulo}`}
+      // Os 4 números em cascata (pedido explícito, delays 0/100/200/300) —
+      // NÃO substitui o contador que já dispara sozinho ao aparecer (ver
+      // `ativo`/IntersectionObserver do componente principal, abaixo): são
+      // dois observers independentes, um só decide ENTRADA visual (fade-up
+      // do AOS), o outro só decide QUANDO a contagem começa — coincidem no
+      // mesmo threshold aproximado por acaso (o grid inteiro entra junto),
+      // nunca um dependendo do outro.
+      data-aos="fade-up"
+      data-aos-delay={aosDelay}
     >
       {/* Círculo do ícone — 36px mobile/tablet, 40px a partir de lg
           (pedido explícito: "36 a 40px"), fundo vermelho translúcido. */}
@@ -255,7 +266,14 @@ export default function NumerosSection({ categorias, destinoLogado }: { categori
             o espaçamento vem só do padding de cada célula agora. */}
         <div ref={gridRef} className="grid grid-cols-2">
           {numeros.map((n, i) => (
-            <NumeroItem key={n.rotulo} {...n} ativo={ativo} atrasoMs={i * ATRASO_ENTRE_ITENS_MS} className={estiloCelula(i)} />
+            <NumeroItem
+              key={n.rotulo}
+              {...n}
+              ativo={ativo}
+              atrasoMs={i * ATRASO_ENTRE_ITENS_MS}
+              className={estiloCelula(i)}
+              aosDelay={i * 100}
+            />
           ))}
         </div>
       </div>

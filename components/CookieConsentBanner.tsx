@@ -105,7 +105,13 @@ export default function CookieConsentBanner() {
             (flex-col), cada um ocupa 100% da largura igualmente. mt-4
             (era mt-3): pedido explícito. */}
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <button type="button" onClick={() => responder('accepted')} className="btn-primary flex-1 text-center">
+          {/* btn-glow (pedido explícito de uma tarefa posterior — "luz" que
+              segue o cursor nos botões vermelhos do site, ver
+              app/globals.css/components/institucional/ButtonGlow.tsx):
+              este banner aparece em QUALQUER rota (não só a landing), mas
+              o efeito é puramente visual/aditivo — seguro em qualquer
+              tela. */}
+          <button type="button" onClick={() => responder('accepted')} className="btn-primary btn-glow flex-1 text-center">
             Aceitar cookies
           </button>
           <button type="button" onClick={() => responder('rejected')} className="btn-secondary flex-1 text-center">
