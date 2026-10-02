@@ -274,7 +274,22 @@
     }
     to {
       opacity: 1;
-      transform: translateY(0) scale(1);
+      /* `none` (era `translateY(0) scale(1)` — visualmente idêntico, mas
+         NÃO é o mesmo pro CSS): como a animação usa `both` (LandingHeader.tsx/
+         HeroSection.tsx), o estado final fica aplicado PRA SEMPRE depois que
+         a entrada termina — um valor de transform diferente de `none`
+         (mesmo um "no-op" como translateY(0) scale(1)) cria um novo
+         "backdrop root" em qualquer ancestral que o tenha, bloqueando o
+         `backdrop-filter` (efeito de vidro) de QUALQUER elemento descendente
+         de enxergar o que está ATRÁS dele na página de verdade — bug
+         relatado nesta tarefa: o menu (LandingHeader.tsx, `.intro-item` no
+         próprio <header>) tinha o blur aplicado mas não via NADA do
+         conteúdo real da página através dele, só o interior vazio do
+         próprio <header>. `none` interpola normalmente a partir do
+         `translateY(...)/scale(...)` do `from` (tratado como a matriz
+         identidade), sem mudar nada visualmente — só deixa de criar esse
+         root depois que a animação termina. */
+      transform: none;
     }
   }
   .intro-item {

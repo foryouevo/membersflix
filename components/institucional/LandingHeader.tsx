@@ -184,11 +184,45 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
             incondicional quebrava isso silenciosamente em telas grandes
             no estado normal, sem efeito visível em telas menores que
             1152px, por isso passou despercebido até agora). */}
+        {/* Vidro embaçado (frosted glass) no estado reduzido — pedido
+            explícito de uma tarefa posterior: blur(16px) + saturate(1.2)
+            (valores exatos pedidos — por isso `backdrop-blur-[16px]
+            backdrop-saturate-[1.2]` em vez de `backdrop-blur-xl`/
+            `backdrop-saturate-150`, que arredondariam pra 24px/1.5). Fundo
+            semitransparente dentro da faixa pedida (0.55-0.70): claro subiu
+            de 80% pra 65% (estava ACIMA da faixa); escuro já estava em 60%,
+            dentro da faixa, mantido. `backdrop-blur-none` explícito no
+            estado normal (era só omitido, backdrop-filter implícito
+            `none`) — garante que a transição sempre parte de um valor
+            declarado (`blur(0)`), não de "ausência de propriedade".
+            `motion-reduce:transition-none`: só a TRANSIÇÃO para (pedido
+            explícito — "respeite prefers-reduced-motion só pra transição,
+            o blur em si continua") — os valores finais de blur/opacidade
+            continuam sendo aplicados normalmente, só sem animar até lá.
+
+            BUG relatado nesta tarefa (causa raiz do blur não aparecer
+            nenhum pouco, mesmo já existindo `backdrop-blur-md` aqui antes):
+            o <header> ancestral (logo abaixo) tem a classe `.intro-item`,
+            que anima `transform` numa entrada só — com
+            `animation-fill-mode: both`, o estado FINAL da animação ficava
+            PRA SEMPRE aplicado no <header>, e esse estado usava
+            `translateY(0) scale(1)` em vez do keyword `none`. Qualquer
+            transform diferente de `none` num ANCESTRAL cria um novo
+            "backdrop root" — o backdrop-filter deste pill só enxergava o
+            interior (vazio) do próprio <header>, nunca o conteúdo real da
+            página atrás dele. Corrigido na origem (app/globals.css,
+            keyframe `intro-up`: `to { transform: none }`), não aqui. */}
         <div
           className={cn(
-            'pointer-events-auto w-full border transition-all duration-300 ease-in-out',
+            'pointer-events-auto w-full border backdrop-blur-none transition-all duration-300 ease-in-out motion-reduce:transition-none',
             comFundo
-              ? 'max-w-6xl rounded-full border-black/5 bg-white/80 shadow-lg shadow-black/5 backdrop-blur-md dark:border-white/10 dark:bg-black/60 dark:shadow-black/20'
+              ? // dark:bg-black/[0.98] (pedido explícito desta tarefa — era
+                // dark:bg-black/60): opacidade quase total, o blur
+                // (mantido, backdrop-blur-[16px] logo abaixo) fica quase
+                // imperceptível com um fundo tão opaco — esperado, não
+                // compensado aumentando a transparência. Light (bg-white/65)
+                // NÃO muda nesta tarefa (pedido explícito).
+                'max-w-6xl rounded-full border-black/5 bg-white/65 shadow-lg shadow-black/5 backdrop-blur-[16px] backdrop-saturate-[1.2] dark:border-white/10 dark:bg-black/[0.98] dark:shadow-black/20'
               : 'max-w-full rounded-none border-transparent bg-transparent'
           )}
         >
@@ -228,7 +262,23 @@ export default function LandingHeader({ secaoAtiva, destinoLogado }: { secaoAtiv
                   largura nenhuma pro grid, em qualquer tema. */}
               <span
                 className={cn(
-                  'col-start-1 row-start-1 overflow-hidden transition-all duration-300 ease-in-out',
+                  // flex items-center (FALTAVA aqui — causa raiz do bug
+                  // relatado nesta tarefa, "logo descentralizada
+                  // verticalmente"): este span NÃO era flex, então o filho
+                  // (BrandLogo.tsx, um <span inline-flex> em volta da
+                  // <Image>) ficava sujeito ao alinhamento de BASELINE
+                  // padrão de um elemento inline dentro de uma caixa de
+                  // bloco comum — uma imagem alinhada por baseline deixa
+                  // uma folga "de descendente" reservada só embaixo dela
+                  // (como se fosse texto), empurrando o centro ÓTICO da
+                  // logo pra cima do centro geométrico real da barra. O
+                  // span irmão (favicon+"Início", logo abaixo) já tinha
+                  // `flex items-center` — por isso só a logo normal, não a
+                  // reduzida/mobile, ficava visivelmente mais alta que
+                  // "Início"/os botões. min-w-0: evita que o item flex
+                  // (BrandLogo) force uma largura mínima maior que o
+                  // `max-w` deste span durante a transição de entrada/saída.
+                  'col-start-1 row-start-1 flex min-w-0 items-center overflow-hidden transition-all duration-300 ease-in-out',
                   comFundo
                     ? 'pointer-events-none max-w-0 opacity-0 md:pointer-events-auto md:max-w-[220px] md:opacity-100'
                     : 'pointer-events-auto max-w-[220px] opacity-100'
